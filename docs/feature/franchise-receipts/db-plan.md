@@ -122,7 +122,16 @@ install 이관 시 `installations.notes`에는 지금처럼 이관 시점 텍스
 
 ## 4. 후속 작업 (마이그레이션과 별도, "진행" 단계)
 
-1. 백필: `reception_channel_legacy` → `reception_channel_code`/`case_type_code`/`option_code`, `van_company_legacy`(콤마 문자열) → `van_company_codes`(배열), 기존 `memo` 블롭 → `franchise_application_memos` row (기존 `parseMemoEntries` 로직 재사용)
+1. 백필: `090_franchise_receipts_restructure_backfill.sql` (reception_channel_code/option_code/case_type_code, van_company_codes). memo 블롭 → `franchise_application_memos`는 `parseMemoEntries` 로직 재사용이 필요해 별도 Node 스크립트로 진행
 2. `actions.ts`의 `deleteFranchiseRows`: 실제 DELETE → `UPDATE ... SET deleted_at = now()`로 교체
 3. `franchise_applications`를 조회하는 모든 지점(`page.tsx` 포함, 다른 기능에서 조회하는 곳 있는지도 재확인)을 `franchise_applications_active` 뷰로 전환하거나 `deleted_at IS NULL` 조건 추가
 4. 코드 레벨 정리(죽은 컴포넌트/함수 삭제, `src/features/franchise-receipts/`로 이동)와 순서 조율 필요
+
+## 5. 백필 데이터 한계 (결정사항, 2026-07-27)
+
+`reception_channel_legacy`가 `전환`/`승계`/`명변`이었던 이력 약 300여 건은 **원본 신규 건을 연결할 정보가 데이터에 없어서** `case_type_requires_origin` 제약(비-NEW는 반드시 `original_application_id` 필요)을 만족시킬 수 없다. 건수가 많아 수작업 매칭도 비현실적이라, 이 건들은 **`case_type_code`를 NULL로 남기고 넘어가는 것으로 확정**. 데이터 유실은 아니고(`reception_channel_legacy` 원본은 그대로 보존), 새 `case_type_code` 체계로만 못 옮기는 것. 새로 들어오는 건부터는 정상적으로 구분됨.
+
+## 6. 라이브 반영 시 체크리스트 (지금 당장 아님, 잊지 않기 위한 메모)
+
+- **반영 전 반드시 DB 백업** (Supabase `db dump` 또는 대시보드 백업) — dev는 실수해도 롤백 스크립트로 되돌리면 그만이지만 live는 그럴 수 없음
+- 라이브 반영 후 도메인별 클린 스키마 스냅샷 작성 + 기존 001~089를 `supabase/archive/`로 이동 (AGENTS.md 방침)
