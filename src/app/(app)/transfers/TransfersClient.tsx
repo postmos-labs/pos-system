@@ -522,7 +522,7 @@ export default function TransfersClient({
           memo: form.memo || null,
           open_date: form.open_date ? formatDateText(form.open_date) : null,
           install_date: form.install_date ? formatDateText(form.install_date) : null,
-          reception_channel: "전환",
+          reception_channel_legacy: "전환",
           created_by: currentUserId,
         })
         .select()

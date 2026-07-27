@@ -137,7 +137,9 @@ export interface FranchiseApplication {
   address?: string;
   address_detail?: string;
   title?: string;
-  reception_channel?: string;
+  reception_channel_code?: string;
+  reception_channel_legacy?: string;
+  option_code?: string;
   reception_date?: string;
   card_apply_date?: string;
   open_date?: string;

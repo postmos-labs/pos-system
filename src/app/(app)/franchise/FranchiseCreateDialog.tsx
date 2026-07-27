@@ -5,19 +5,12 @@ import { XIcon } from "lucide-react";
 import type { ApplicantType, EquipmentItem, Profile } from "@/types";
 import { APPLICANT_TYPE_LABEL } from "@/types";
 import { formatBusinessNumber, formatPhone } from "@/lib/format";
-import { VAN_COMPANY_OPTIONS } from "@/lib/franchiseCodes";
+import {
+  VAN_COMPANY_OPTIONS,
+  RECEPTION_CHANNEL_OPTIONS,
+  FRANCHISE_OPTION_OPTIONS,
+} from "@/lib/franchiseCodes";
 
-const RECEPTION_CHANNELS = [
-  "토스 홈페이지",
-  "직접 영업",
-  "전환",
-  "토스리드건",
-  "토스프리미엄",
-  "승계",
-  "명변",
-  "랜탈",
-  "할부",
-];
 const EQUIPMENT_CATALOG = [
   "토스프론트",
   "토스단말기",
@@ -49,7 +42,8 @@ export interface FranchiseCreateInput {
   sales_id: string;
   cs_id: string;
   applicant_type: ApplicantType;
-  reception_channel: string;
+  reception_channel_code: string;
+  option_code: string;
   reception_date: string;
   open_date: string;
   install_date: string;
@@ -83,7 +77,8 @@ function initialForm(): FranchiseCreateInput {
     sales_id: "",
     cs_id: "",
     applicant_type: "individual",
-    reception_channel: RECEPTION_CHANNELS[0],
+    reception_channel_code: RECEPTION_CHANNEL_OPTIONS[0].code,
+    option_code: "",
     reception_date: receptionDate,
     open_date: "",
     install_date: "",
@@ -239,14 +234,30 @@ export default function FranchiseCreateDialog({
                 </Field>
                 <Field label="접수채널">
                   <select
-                    value={form.reception_channel}
+                    value={form.reception_channel_code}
                     onChange={(event) =>
-                      setForm({ ...form, reception_channel: event.target.value })
+                      setForm({ ...form, reception_channel_code: event.target.value })
                     }
                     className={selectClass}
                   >
-                    {RECEPTION_CHANNELS.map((channel) => (
-                      <option key={channel}>{channel}</option>
+                    {RECEPTION_CHANNEL_OPTIONS.map((channel) => (
+                      <option key={channel.code} value={channel.code}>
+                        {channel.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="옵션">
+                  <select
+                    value={form.option_code}
+                    onChange={(event) => setForm({ ...form, option_code: event.target.value })}
+                    className={selectClass}
+                  >
+                    <option value="">선택 안함</option>
+                    {FRANCHISE_OPTION_OPTIONS.map((option) => (
+                      <option key={option.code} value={option.code}>
+                        {option.label}
+                      </option>
                     ))}
                   </select>
                 </Field>

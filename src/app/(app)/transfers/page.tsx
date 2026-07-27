@@ -13,7 +13,7 @@ export default async function TransfersPage() {
     supabase
       .from("franchise_applications")
       .select("*, tech:profiles!franchise_applications_tech_id_fkey(id,name,role)")
-      .eq("reception_channel", "전환")
+      .eq("reception_channel_legacy", "전환")
       .is("deleted_at", null)
       .order("updated_at", { ascending: false }),
     supabase

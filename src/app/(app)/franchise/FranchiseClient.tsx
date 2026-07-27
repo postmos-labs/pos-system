@@ -42,7 +42,7 @@ import {
   applyFranchiseStatusSideEffects,
   notifyAndLogFranchiseStatus,
 } from "@/lib/franchiseStatusEffects";
-import { VAN_COMPANY_LABEL } from "@/lib/franchiseCodes";
+import { VAN_COMPANY_LABEL, RECEPTION_CHANNEL_LABEL } from "@/lib/franchiseCodes";
 
 const DOC_CASE_LABEL: Record<DocCase, string> = {
   both: "대표자명+상호명",
@@ -426,7 +426,7 @@ export default function FranchiseClient({
       if (
         !skip.skipChannel &&
         channelFilter &&
-        (row.reception_channel || "미지정") !== channelFilter
+        (row.reception_channel_code || "") !== channelFilter
       )
         return false;
       if (vanFilter && !row.van_company_codes?.includes(vanFilter)) return false;
@@ -794,7 +794,9 @@ export default function FranchiseClient({
         cs_id: form.cs_id || null,
         applicant_type: form.applicant_type,
         status: "doc_waiting",
-        reception_channel: form.reception_channel || null,
+        reception_channel_code: form.reception_channel_code || null,
+        option_code: form.option_code || null,
+        case_type_code: "NEW",
         reception_date: form.reception_date ? formatDateText(form.reception_date) : null,
         open_date: form.open_date ? formatDateText(form.open_date) : null,
         install_date: form.install_date ? formatDateText(form.install_date) : null,
@@ -1082,7 +1084,9 @@ export default function FranchiseClient({
         연락처: r.phone ?? "",
         사업자번호: r.business_number ?? "",
         사업자유형: APPLICANT_TYPE_LABEL[r.applicant_type],
-        접수채널: r.reception_channel ?? "",
+        접수채널: RECEPTION_CHANNEL_LABEL[
+          r.reception_channel_code as keyof typeof RECEPTION_CHANNEL_LABEL
+        ] ?? "",
         상태: FRANCHISE_STATUS_LABEL[r.status],
         VAN사: (r.van_company_codes ?? [])
           .map((code) => VAN_COMPANY_LABEL[code as keyof typeof VAN_COMPANY_LABEL] ?? code)

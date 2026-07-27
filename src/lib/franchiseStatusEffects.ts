@@ -59,64 +59,6 @@ export async function notifyAndLogFranchiseStatus(
   }
 }
 
-export async function createLinkedInstallTicket(
-  row: FranchiseApplication,
-  toast: StatusEffectsToast,
-): Promise<void> {
-  if (!row.business_name || !row.owner_name || !row.phone || !row.address) {
-    toast.warning(
-      "상호명·대표자명·연락처·주소가 모두 입력되지 않아 설치 작업을 자동으로 만들지 못했습니다. 직접 등록해주세요.",
-    );
-    return;
-  }
-  const supabase = createClient();
-  const { data: merchant, error: merchantError } = await supabase
-    .from("merchants")
-    .insert({
-      business_name: row.business_name,
-      owner_name: row.owner_name,
-      business_number: row.business_number || null,
-      phone: row.phone,
-      address: row.address,
-      address_detail: row.address_detail || null,
-      pos_model: row.equipment_items?.length
-        ? row.equipment_items.map((i) => `${i.name} x${i.quantity}`).join(", ")
-        : null,
-      sales_id: row.sales_id || null,
-      memo: row.memo || null,
-      franchise_application_id: row.id,
-    })
-    .select("id")
-    .single();
-
-  if (merchantError || !merchant) {
-    toast.error("가맹점 자동 등록 실패: " + merchantError?.message);
-    return;
-  }
-
-  const { error: ticketError } = await supabase.from("tickets").insert({
-    merchant_id: merchant.id,
-    title: row.title || `${row.business_name} 가맹 설치`,
-    type: "install",
-    status: "tech_pending",
-    sales_id: row.sales_id || null,
-    cs_id: row.cs_id || null,
-    memo: row.memo || null,
-    reception_channel: row.reception_channel || null,
-    open_date: row.open_date || null,
-    install_date: row.install_date || null,
-  });
-
-  if (ticketError) {
-    const { error: cleanupError } = await supabase.from("merchants").delete().eq("id", merchant.id);
-    if (cleanupError) console.error("고아 가맹점 정리 실패:", cleanupError.message);
-    toast.error(
-      "설치 작업 생성 실패로 방금 등록한 가맹점도 함께 취소했습니다: " + ticketError.message,
-    );
-    return;
-  }
-}
-
 export async function autoRegisterMerchant(
   row: FranchiseApplication,
   toast: StatusEffectsToast,

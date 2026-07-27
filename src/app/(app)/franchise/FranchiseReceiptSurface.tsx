@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { ApplicantType, FranchiseApplication, FranchiseStatus, Profile } from "@/types";
 import { APPLICANT_TYPE_LABEL, FRANCHISE_STATUS_LABEL } from "@/types";
+import { RECEPTION_CHANNEL_OPTIONS } from "@/lib/franchiseCodes";
 
 type TableView = "all" | "mine" | "doc_incomplete" | "doc_waiting" | "approved";
 type KpiKey = "today_received" | "doc_waiting" | "doc_incomplete" | "reviewing" | "today_completed";
@@ -76,17 +77,6 @@ interface Props {
   onBulkTransfer: () => void;
 }
 
-const RECEPTION_CHANNELS = [
-  "토스 홈페이지",
-  "직접 영업",
-  "전환",
-  "토스리드건",
-  "토스프리미엄",
-  "승계",
-  "명변",
-  "랜탈",
-  "할부",
-];
 const HIDDEN_STATUSES: FranchiseStatus[] = [
   "internet_apply_done",
   "internet_done",
@@ -385,9 +375,9 @@ export default function FranchiseReceiptSurface(props: Props) {
                 className={selectBase}
               >
                 <option value="">접수 채널 전체</option>
-                {RECEPTION_CHANNELS.map((channel) => (
-                  <option key={channel} value={channel}>
-                    {channel}
+                {RECEPTION_CHANNEL_OPTIONS.map((channel) => (
+                  <option key={channel.code} value={channel.code}>
+                    {channel.label}
                   </option>
                 ))}
               </select>
@@ -554,15 +544,17 @@ export default function FranchiseReceiptSurface(props: Props) {
                     <td className="px-2.5 py-2.5 whitespace-nowrap">
                       <select
                         aria-label="접수 채널"
-                        value={row.reception_channel ?? ""}
+                        value={row.reception_channel_code ?? ""}
                         onChange={(event) =>
-                          props.onSaveField(row, "reception_channel", event.target.value)
+                          props.onSaveField(row, "reception_channel_code", event.target.value)
                         }
                         className="text-foreground h-auto border-none bg-transparent py-0 pr-6 pl-0 text-[12.5px] outline-none"
                       >
                         <option value="">미지정</option>
-                        {RECEPTION_CHANNELS.map((channel) => (
-                          <option key={channel}>{channel}</option>
+                        {RECEPTION_CHANNEL_OPTIONS.map((channel) => (
+                          <option key={channel.code} value={channel.code}>
+                            {channel.label}
+                          </option>
                         ))}
                       </select>
                     </td>

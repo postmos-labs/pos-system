@@ -14,3 +14,25 @@ export type VanCompanyCode = (typeof VAN_COMPANY_OPTIONS)[number]["code"];
 export const VAN_COMPANY_LABEL: Record<VanCompanyCode, string> = Object.fromEntries(
   VAN_COMPANY_OPTIONS.map((option) => [option.code, option.label]),
 ) as Record<VanCompanyCode, string>;
+
+export const RECEPTION_CHANNEL_OPTIONS = [
+  { code: "DIRECT_SALES", label: "직접 영업" },
+  { code: "TOSS_LEAD", label: "토스 리드" },
+] as const;
+
+export type ReceptionChannelCode = (typeof RECEPTION_CHANNEL_OPTIONS)[number]["code"];
+
+export const RECEPTION_CHANNEL_LABEL: Record<ReceptionChannelCode, string> = Object.fromEntries(
+  RECEPTION_CHANNEL_OPTIONS.map((option) => [option.code, option.label]),
+) as Record<ReceptionChannelCode, string>;
+
+export const FRANCHISE_OPTION_OPTIONS = [
+  { code: "RENTAL", label: "렌탈" },
+  { code: "INSTALLMENT", label: "할부" },
+] as const;
+
+export type FranchiseOptionCode = (typeof FRANCHISE_OPTION_OPTIONS)[number]["code"];
+
+export const FRANCHISE_OPTION_LABEL: Record<FranchiseOptionCode, string> = Object.fromEntries(
+  FRANCHISE_OPTION_OPTIONS.map((option) => [option.code, option.label]),
+) as Record<FranchiseOptionCode, string>;

@@ -12,7 +12,7 @@ import {
 } from "@/types";
 import { useState } from "react";
 import { useToast } from "@/components/ui/Toast";
-import { VAN_COMPANY_LABEL } from "@/lib/franchiseCodes";
+import { VAN_COMPANY_LABEL, RECEPTION_CHANNEL_LABEL } from "@/lib/franchiseCodes";
 
 const BACKUP_TABLES: { label: string; table: string; optional?: boolean }[] = [
   { label: "가맹접수", table: "franchise_applications" },
@@ -218,7 +218,9 @@ export default function ExcelDownloadButton() {
         연락처: r.phone ?? "",
         사업자번호: r.business_number ?? "",
         사업자유형: APPLICANT_TYPE_LABEL[r.applicant_type as ApplicantType] ?? r.applicant_type,
-        접수채널: r.reception_channel ?? "",
+        접수채널:
+          RECEPTION_CHANNEL_LABEL[r.reception_channel_code as keyof typeof RECEPTION_CHANNEL_LABEL] ??
+          "",
         상태: FRANCHISE_STATUS_LABEL[r.status as FranchiseStatus] ?? r.status,
         담당영업: r.sales?.name ?? "",
         담당CS: r.cs?.name ?? "",

@@ -13,19 +13,12 @@ import { APPLICANT_TYPE_LABEL, FRANCHISE_STATUS_LABEL } from "@/types";
 import { formatBusinessNumber, formatPhone } from "@/lib/format";
 import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
 import type { ApprovalNote } from "@/lib/approvalNotes";
-import { VAN_COMPANY_OPTIONS } from "@/lib/franchiseCodes";
+import {
+  VAN_COMPANY_OPTIONS,
+  RECEPTION_CHANNEL_OPTIONS,
+  FRANCHISE_OPTION_OPTIONS,
+} from "@/lib/franchiseCodes";
 
-const RECEPTION_CHANNELS = [
-  "토스 홈페이지",
-  "직접 영업",
-  "전환",
-  "토스리드건",
-  "토스프리미엄",
-  "승계",
-  "명변",
-  "랜탈",
-  "할부",
-];
 const EQUIPMENT_CATALOG = [
   "토스프론트",
   "토스단말기",
@@ -374,13 +367,29 @@ export default function FranchiseDetailDrawer({
                 </Field>
                 <Field label="접수채널">
                   <select
-                    value={row.reception_channel ?? ""}
-                    onChange={(event) => onSave("reception_channel", event.target.value)}
+                    value={row.reception_channel_code ?? ""}
+                    onChange={(event) => onSave("reception_channel_code", event.target.value)}
                     className={selectClass}
                   >
                     <option value="">미지정</option>
-                    {RECEPTION_CHANNELS.map((channel) => (
-                      <option key={channel}>{channel}</option>
+                    {RECEPTION_CHANNEL_OPTIONS.map((channel) => (
+                      <option key={channel.code} value={channel.code}>
+                        {channel.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="옵션">
+                  <select
+                    value={row.option_code ?? ""}
+                    onChange={(event) => onSave("option_code", event.target.value)}
+                    className={selectClass}
+                  >
+                    <option value="">선택 안함</option>
+                    {FRANCHISE_OPTION_OPTIONS.map((option) => (
+                      <option key={option.code} value={option.code}>
+                        {option.label}
+                      </option>
                     ))}
                   </select>
                 </Field>
