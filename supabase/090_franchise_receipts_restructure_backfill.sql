@@ -7,6 +7,13 @@
 -- case_type_requires_origin 제약을 만족시킬 수 없다. 이 건들은 case_type_code를 NULL로 남기고
 -- reception_channel_legacy 원본 텍스트로만 과거 구분을 유지한다 (데이터 유실 아님, 신규 구조 미적용일 뿐).
 
+-- 0. reception_date (legacy text, 전부 YYYY-MM-DD 형식 확인됨 -> 바로 캐스팅)
+UPDATE franchise_applications
+SET reception_date = reception_date_legacy::date
+WHERE reception_date IS NULL
+  AND reception_date_legacy IS NOT NULL
+  AND reception_date_legacy ~ '^\d{4}-\d{2}-\d{2}$';
+
 -- 1. reception_channel_code / option_code / case_type_code
 UPDATE franchise_applications
 SET
