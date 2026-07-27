@@ -1,29 +1,7 @@
 "use client";
 
-import {
-  useState,
-  useTransition,
-  useEffect,
-  useRef,
-  useMemo,
-  useCallback,
-  Fragment,
-} from "react";
+import { useState, useTransition, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Plus,
-  Trash2,
-  ChevronDown,
-  ChevronUp,
-  Search,
-  Download,
-  GripVertical,
-  X,
-  ClipboardList,
-  Clock3,
-  AlertTriangle,
-  CheckCircle2,
-} from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
@@ -41,6 +19,7 @@ import type {
   EquipmentItem,
   FranchiseApplication,
   FranchiseApplicationLog,
+  FranchiseApplicationMemo,
   FranchiseStatus,
   Profile,
 } from "@/types";
@@ -49,8 +28,6 @@ import type { DocCase } from "@/lib/solapi";
 import { useToast } from "@/components/ui/Toast";
 import BulkConfirmDialog from "@/components/ui/BulkConfirmDialog";
 import FormModal from "@/components/ui/FormModal";
-import HistoryButton from "@/components/ui/HistoryButton";
-import HistoryIcon from "@/components/ui/HistoryIcon";
 import FranchiseCreateDialog, { type FranchiseCreateInput } from "./FranchiseCreateDialog";
 import FranchiseDetailDrawer from "./FranchiseDetailDrawer";
 import FranchiseMemoDrawer from "./FranchiseMemoDrawer";
@@ -132,131 +109,6 @@ const SELECTABLE_FRANCHISE_STATUSES = (
   Object.keys(FRANCHISE_STATUS_LABEL) as FranchiseStatus[]
 ).filter((s) => !STATUS_DROPDOWN_HIDDEN.includes(s));
 
-// 핀 마커는 핀을 누른 시각을 epoch ms로 담아, 여러 개 고정됐을 때 "먼저 고정한 것"을 확실하게 구분한다
-const PIN_RE = /^PIN:(\d+):/;
-// 이전에 잠깐 쓰였던 구버전 마커들. 기존에 저장된 데이터 호환을 위해 계속 인식한다
-const LEGACY_PIN_MARKER = "PIN::"; // 시각 정보 없음
-const LEGACY_PIN_STAMP_LENGTH = 10; // MMDDHHmmss (초 단위, 연도 없음)
-
-function nowPinStamp(): string {
-  return String(Date.now());
-}
-
-// 구버전 MMDDHHmmss 포맷은 연도 없이 저장돼 있어 올해 기준으로 복원한다
-function pinTimestampToIso(digits: string): string {
-  if (digits.length === LEGACY_PIN_STAMP_LENGTH) {
-    const now = new Date();
-    const month = Number(digits.slice(0, 2)) - 1;
-    const day = Number(digits.slice(2, 4));
-    const hour = Number(digits.slice(4, 6));
-    const minute = Number(digits.slice(6, 8));
-    const second = Number(digits.slice(8, 10));
-    return new Date(now.getFullYear(), month, day, hour, minute, second).toISOString();
-  }
-  return new Date(Number(digits)).toISOString();
-}
-
-// 마커가 붙어 있으면 그 뒤 텍스트를 반환하고, 없으면 null을 반환한다 (신규/구버전 포맷 모두 인식)
-function stripPinPrefix(text: string): string | null {
-  if (text.startsWith(LEGACY_PIN_MARKER)) return text.slice(LEGACY_PIN_MARKER.length);
-  const m = text.match(PIN_RE);
-  return m ? text.slice(m[0].length) : null;
-}
-
-// 앞에 PIN 마커가 붙어 있으면 상단 고정된 항목이다. 표시용 텍스트에서는 마커를 떼어낸다
-function stripPin(text: string): { pinned: boolean; pinnedAt: string | null; text: string } {
-  const m = text.match(PIN_RE);
-  if (m) return { pinned: true, pinnedAt: pinTimestampToIso(m[1]), text: text.slice(m[0].length) };
-  if (text.startsWith(LEGACY_PIN_MARKER))
-    return { pinned: true, pinnedAt: null, text: text.slice(LEGACY_PIN_MARKER.length) };
-  return { pinned: false, pinnedAt: null, text };
-}
-
-// 스탬프(`[이름 MM. DD. HH:mm]`)가 붙은 항목뿐 아니라, 스탬프 도입 전에 저장된 맨 텍스트도 하나의 항목으로 살려서 반환한다
-function parseMemoEntries(
-  memo: string | undefined,
-  fallbackAt: string,
-): { at: string; user: string; text: string; pinned: boolean; pinnedAt: string | null }[] {
-  if (!memo?.trim()) return [];
-  const re = /\[(.+?) (\d{2})\. (\d{2})\. (\d{2}):(\d{2})\]/g;
-  const matches = [...memo.matchAll(re)];
-  if (matches.length === 0) {
-    const { pinned, pinnedAt, text } = stripPin(memo.trim());
-    return [{ at: fallbackAt, user: "-", text, pinned, pinnedAt }];
-  }
-  const entries: {
-    at: string;
-    user: string;
-    text: string;
-    pinned: boolean;
-    pinnedAt: string | null;
-  }[] = [];
-  const leadingRaw = memo.slice(0, matches[0].index).trim();
-  if (leadingRaw) {
-    const { pinned, pinnedAt, text } = stripPin(leadingRaw);
-    entries.push({ at: fallbackAt, user: "-", text, pinned, pinnedAt });
-  }
-  matches.forEach((m, i) => {
-    const [, userRaw, month, day, hour, minute] = m;
-    const { pinned, pinnedAt, text: user } = stripPin(userRaw);
-    const start = m.index! + m[0].length;
-    const end = i + 1 < matches.length ? matches[i + 1].index! : memo.length;
-    const text = memo.slice(start, end).trim();
-    if (!text) return;
-    const now = new Date();
-    const at = new Date(
-      now.getFullYear(),
-      Number(month) - 1,
-      Number(day),
-      Number(hour),
-      Number(minute),
-    ).toISOString();
-    entries.push({ at, user, text, pinned, pinnedAt });
-  });
-  return entries;
-}
-
-// parseMemoEntries와 동일한 순서로 원본 텍스트(스탬프 포함)를 블록 단위로 쪼갠다.
-function splitMemoBlocks(memo: string | undefined | null): string[] {
-  if (!memo?.trim()) return [];
-  const re = /\[(.+?) (\d{2})\. (\d{2})\. (\d{2}):(\d{2})\]/g;
-  const matches = [...memo.matchAll(re)];
-  if (matches.length === 0) return [memo.trim()];
-  const blocks: string[] = [];
-  const leading = memo.slice(0, matches[0].index).trim();
-  if (leading) blocks.push(leading);
-  matches.forEach((m, i) => {
-    const start = m.index!;
-    const end = i + 1 < matches.length ? matches[i + 1].index! : memo.length;
-    const block = memo.slice(start, end).trim();
-    if (block) blocks.push(block);
-  });
-  return blocks;
-}
-function removeMemoEntry(memo: string | undefined | null, index: number): string {
-  const blocks = splitMemoBlocks(memo);
-  return blocks.filter((_, i) => i !== index).join("\n");
-}
-
-// index번째 블록에 PIN 마커(핀 시각 포함)를 붙이거나 떼어내 상단 고정 여부를 토글한다
-function togglePinEntry(memo: string | undefined | null, index: number): string {
-  const blocks = splitMemoBlocks(memo);
-  const target = blocks[index];
-  if (target === undefined) return blocks.join("\n");
-  const stampRe = /^\[(.+?) (\d{2})\. (\d{2})\. (\d{2}):(\d{2})\]/;
-  const m = target.match(stampRe);
-  if (m) {
-    const user = m[1];
-    const unpinned = stripPinPrefix(user);
-    const newUser = unpinned !== null ? unpinned : `PIN:${nowPinStamp()}:${user}`;
-    blocks[index] = `[${newUser} ${m[2]}. ${m[3]}. ${m[4]}:${m[5]}]${target.slice(m[0].length)}`;
-  } else {
-    const unpinned = stripPinPrefix(target);
-    blocks[index] = unpinned !== null ? unpinned : `PIN:${nowPinStamp()}:${target}`;
-  }
-  return blocks.join("\n");
-}
-
 const DEFAULT_WIDTHS: Record<string, number> = {
   reception_date: 100,
   reception_channel: 90,
@@ -320,6 +172,7 @@ export default function FranchiseClient({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [logsByRow, setLogsByRow] = useState<Record<string, FranchiseApplicationLog[]>>({});
   const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
+  const [memosByRow, setMemosByRow] = useState<Record<string, FranchiseApplicationMemo[]>>({});
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
@@ -1116,19 +969,9 @@ export default function FranchiseClient({
   }
 
   const saveField = useCallback(
-    async (
-      row: FranchiseApplication,
-      field: keyof FranchiseApplication,
-      value: string,
-      raw?: boolean,
-    ) => {
+    async (row: FranchiseApplication, field: keyof FranchiseApplication, value: string) => {
       const supabase = createClient();
-      let saveValue: string | null = value || null;
-      if (field === "memo" && value && !raw) {
-        const stamp = `[${currentUserName} ${new Date().toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })}]`;
-        const prev = (row.memo ?? "").trim();
-        saveValue = prev ? `${prev}\n${stamp} ${value}` : `${stamp} ${value}`;
-      }
+      const saveValue: string | null = value || null;
       const { error } = await supabase
         .from("franchise_applications")
         .update({ [field]: saveValue })
@@ -1170,30 +1013,8 @@ export default function FranchiseClient({
         ),
       );
     },
-    [currentUserName],
+    [],
   );
-
-  // 히스토리 패널의 메모 삭제/핀 토글. realtime 구독이 테이블 변경마다 전체 행을 다시 받아와
-  // updated_at 기준으로 병합하기 때문에(mergeRowsPreservingIdentity), 다른 필드 저장과 동일하게
-  // DB 반영이 끝난 뒤에만 로컬 상태를 갱신한다 (선반영하면 그 사이 refresh가 로컬 값을 되돌려버림)
-  const saveMemoRaw = useCallback(async (row: FranchiseApplication, newMemo: string) => {
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("franchise_applications")
-      .update({ memo: newMemo || null })
-      .eq("id", row.id);
-    if (error) {
-      toast.error("수정 실패: " + error.message);
-      return;
-    }
-    setLocalRows((prev) =>
-      prev.map((r) =>
-        r.id === row.id
-          ? { ...r, memo: newMemo || undefined, updated_at: new Date().toISOString() }
-          : r,
-      ),
-    );
-  }, []);
 
   async function saveEquipmentItems(row: FranchiseApplication, items: EquipmentItem[]) {
     const supabase = createClient();
@@ -1658,6 +1479,78 @@ export default function FranchiseClient({
         .order("created_at", { ascending: false });
       setLogsByRow((prev) => ({ ...prev, [row.id]: data ?? [] }));
     }
+  }
+
+  async function openHistory(row: FranchiseApplication) {
+    setHistoryOpenId(row.id);
+    if (memosByRow[row.id]) return;
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("franchise_application_memos")
+      .select("*, user:profiles(name)")
+      .eq("franchise_application_id", row.id)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false });
+    if (error) {
+      toast.error("히스토리 불러오기 실패: " + error.message);
+      return;
+    }
+    setMemosByRow((prev) => ({ ...prev, [row.id]: data ?? [] }));
+  }
+
+  async function addMemo(row: FranchiseApplication, content: string) {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("franchise_application_memos")
+      .insert({
+        franchise_application_id: row.id,
+        user_id: currentUserId,
+        author_name: currentUserName,
+        content,
+      })
+      .select("*, user:profiles(name)")
+      .single();
+    if (error) {
+      toast.error("히스토리 등록 실패: " + error.message);
+      return;
+    }
+    setMemosByRow((prev) => ({ ...prev, [row.id]: [data, ...(prev[row.id] ?? [])] }));
+  }
+
+  async function toggleMemoPin(row: FranchiseApplication, memo: FranchiseApplicationMemo) {
+    const supabase = createClient();
+    const nextPinnedAt = memo.pinned_at ? null : new Date().toISOString();
+    const { error } = await supabase
+      .from("franchise_application_memos")
+      .update({ pinned_at: nextPinnedAt })
+      .eq("id", memo.id);
+    if (error) {
+      toast.error("고정 변경 실패: " + error.message);
+      return;
+    }
+    setMemosByRow((prev) => ({
+      ...prev,
+      [row.id]: (prev[row.id] ?? []).map((m) =>
+        m.id === memo.id ? { ...m, pinned_at: nextPinnedAt } : m,
+      ),
+    }));
+  }
+
+  async function deleteMemo(row: FranchiseApplication, memo: FranchiseApplicationMemo) {
+    if (!confirm("이 메모를 삭제하시겠습니까?")) return;
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("franchise_application_memos")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", memo.id);
+    if (error) {
+      toast.error("삭제 실패: " + error.message);
+      return;
+    }
+    setMemosByRow((prev) => ({
+      ...prev,
+      [row.id]: (prev[row.id] ?? []).filter((m) => m.id !== memo.id),
+    }));
   }
 
   const canNotifyConfirm = statusConfirm
@@ -2189,7 +2082,10 @@ export default function FranchiseClient({
         onCsChange={updateCs}
         onStatusChange={handleStatusChange}
         onOpenDetail={toggleExpand}
-        onOpenMemo={setHistoryOpenId}
+        onOpenMemo={(id) => {
+          const row = localRows.find((r) => r.id === id);
+          if (row) void openHistory(row);
+        }}
         onPageChange={setPage}
         onSelectAllFiltered={selectAllFiltered}
         onBulkStatus={() => setBulkStatusModal(true)}
@@ -2266,7 +2162,7 @@ export default function FranchiseClient({
               onOpenInstalls={() => router.push("/installs")}
               onLinkInternet={() => linkToInternet(row)}
               onOpenInternet={() => router.push("/internet")}
-              onOpenHistory={() => setHistoryOpenId(row.id)}
+              onOpenHistory={() => void openHistory(row)}
             />
           );
         })()}
@@ -2275,26 +2171,14 @@ export default function FranchiseClient({
         (() => {
           const row = localRows.find((r) => r.id === historyOpenId);
           if (!row) return null;
-          const entries = parseMemoEntries(row.memo, row.created_at).map((entry, index) => ({
-            ...entry,
-            index,
-          }));
           return (
             <FranchiseMemoDrawer
               row={row}
-              entries={entries}
+              entries={memosByRow[row.id]}
               onClose={() => setHistoryOpenId(null)}
-              onAdd={(content) => saveField(row, "memo", content)}
-              onDelete={(index) => {
-                if (
-                  !confirm(
-                    "\uC774 \uBA54\uBAA8\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?",
-                  )
-                )
-                  return;
-                return saveMemoRaw(row, removeMemoEntry(row.memo, index));
-              }}
-              onTogglePin={(index) => saveMemoRaw(row, togglePinEntry(row.memo, index))}
+              onAdd={(content) => addMemo(row, content)}
+              onDelete={(memo) => deleteMemo(row, memo)}
+              onTogglePin={(memo) => toggleMemoPin(row, memo)}
             />
           );
         })()}

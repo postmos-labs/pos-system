@@ -3,25 +3,16 @@
 import { useState } from "react";
 import { Pin, Trash2, X } from "lucide-react";
 import HistoryIcon from "@/components/ui/HistoryIcon";
-import type { FranchiseApplication } from "@/types";
+import type { FranchiseApplication, FranchiseApplicationMemo } from "@/types";
 import { APPLICANT_TYPE_LABEL } from "@/types";
-
-export interface FranchiseMemoEntry {
-  index: number;
-  at: string;
-  user: string;
-  text: string;
-  pinned: boolean;
-  pinnedAt: string | null;
-}
 
 interface Props {
   row: FranchiseApplication;
-  entries: FranchiseMemoEntry[];
+  entries: FranchiseApplicationMemo[] | undefined;
   onClose: () => void;
   onAdd: (content: string) => void | Promise<void>;
-  onTogglePin: (index: number) => void | Promise<void>;
-  onDelete: (index: number) => void | Promise<void>;
+  onTogglePin: (memo: FranchiseApplicationMemo) => void | Promise<void>;
+  onDelete: (memo: FranchiseApplicationMemo) => void | Promise<void>;
 }
 
 function formatEntryDate(value: string) {
@@ -38,12 +29,14 @@ export default function FranchiseMemoDrawer({
   onDelete,
 }: Props) {
   const [draft, setDraft] = useState("");
-  const sortedEntries = [...entries].sort((a, b) => {
-    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-    if (a.pinned && b.pinned) {
-      return new Date(b.pinnedAt ?? b.at).getTime() - new Date(a.pinnedAt ?? a.at).getTime();
+  const sortedEntries = [...(entries ?? [])].sort((a, b) => {
+    const aPinned = !!a.pinned_at;
+    const bPinned = !!b.pinned_at;
+    if (aPinned !== bPinned) return aPinned ? -1 : 1;
+    if (aPinned && bPinned) {
+      return new Date(b.pinned_at ?? b.created_at).getTime() - new Date(a.pinned_at ?? a.created_at).getTime();
     }
-    return new Date(b.at).getTime() - new Date(a.at).getTime();
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
   function submit() {
@@ -92,45 +85,52 @@ export default function FranchiseMemoDrawer({
         />
       </div>
       <div className="px-5 py-4 overflow-y-auto flex-1 min-h-0">
-        {sortedEntries.length === 0 ? (
+        {entries === undefined ? (
+          <p className="text-[15pt] text-slate-400">불러오는 중...</p>
+        ) : sortedEntries.length === 0 ? (
           <p className="text-[15pt] text-slate-400">이력이 없습니다.</p>
         ) : (
           <ul className="space-y-2.5">
-            {sortedEntries.map((entry) => (
-              <li
-                key={`${entry.index}-${entry.at}`}
-                className={`text-[15pt] group ${entry.pinned ? "text-amber-200" : "text-slate-200"}`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-slate-400">
-                    {formatEntryDate(entry.at)}
-                    {" · "}
-                    <span className="font-semibold text-blue-300">{entry.user || "-"}</span>
+            {sortedEntries.map((entry) => {
+              const pinned = !!entry.pinned_at;
+              return (
+                <li
+                  key={entry.id}
+                  className={`text-[15pt] group ${pinned ? "text-amber-200" : "text-slate-200"}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-slate-400">
+                      {formatEntryDate(entry.created_at)}
+                      {" · "}
+                      <span className="font-semibold text-blue-300">
+                        {entry.user?.name || entry.author_name || "-"}
+                      </span>
+                    </div>
+                    <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => onTogglePin(entry)}
+                        aria-label={pinned ? "고정 해제" : "상단 고정"}
+                        className={
+                          pinned
+                            ? "text-amber-300 hover:text-amber-200"
+                            : "text-slate-500 hover:text-amber-300"
+                        }
+                      >
+                        <Pin size={14} className={pinned ? "fill-current" : ""} />
+                      </button>
+                      <button
+                        onClick={() => onDelete(entry)}
+                        aria-label="히스토리 삭제"
+                        className="text-slate-500 hover:text-red-400"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => onTogglePin(entry.index)}
-                      aria-label={entry.pinned ? "고정 해제" : "상단 고정"}
-                      className={
-                        entry.pinned
-                          ? "text-amber-300 hover:text-amber-200"
-                          : "text-slate-500 hover:text-amber-300"
-                      }
-                    >
-                      <Pin size={14} className={entry.pinned ? "fill-current" : ""} />
-                    </button>
-                    <button
-                      onClick={() => onDelete(entry.index)}
-                      aria-label="히스토리 삭제"
-                      className="text-slate-500 hover:text-red-400"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-                <div className="whitespace-pre-wrap break-words">{entry.text}</div>
-              </li>
-            ))}
+                  <div className="whitespace-pre-wrap break-words">{entry.content}</div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

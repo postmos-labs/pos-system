@@ -230,6 +230,18 @@ export interface FranchiseApplicationLog {
   user?: Profile;
 }
 
+export interface FranchiseApplicationMemo {
+  id: string;
+  franchise_application_id: string;
+  user_id?: string;
+  author_name?: string;
+  content: string;
+  pinned_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  user?: Pick<Profile, "name">;
+}
+
 export interface Notification {
   id: string;
   user_id: string;
