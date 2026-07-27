@@ -130,7 +130,22 @@ src/lib/franchiseStatusEffects.ts   상태 변경 시 사이드이펙트(알림�
       (db-plan.md도 뷰/조건 추가 둘 다 허용했음). franchise/dashboard/installs/
       calendar/layout/kpi/transfers/equipment-select 전체 조회 지점 반영.
       커밋 bc9b0b1
-- [ ] `reception_channel_code`/`case_type_code`/`option_code` UI 반영 — 진행 예정 (dev DB
-      백필 적용 여부 재확인 필요)
+- [x] (2026-07-28) `reception_channel_code`/`option_code` UI 반영 — 이 작업 중 **live 버그
+      발견**: `reception_channel` 컬럼이 이미 `reception_channel_legacy`로 rename됐는데
+      van_company(8be9a0c)와 달리 이 컬럼은 코드 전반에서 그대로 참조되고 있어서 실제로는
+      깨져 있었음 (가맹 신규 접수 생성이 dev DB에서 실패하는 상태였을 것). `franchiseCodes.ts`에
+      `RECEPTION_CHANNEL_OPTIONS`/`FRANCHISE_OPTION_OPTIONS` 추가하고, 생성/상세/목록
+      필터/엑셀 다운로드 전체를 `reception_channel_code` + `option_code` 기준으로 전환.
+      `case_type_code`(전환/승계/명변)는 `original_application_id` 연결 UI가 별도로
+      필요해 이번 배치에서 보류 — 신규 건은 전부 `case_type_code: "NEW"`로 고정.
+      부수적으로 `franchiseStatusEffects.ts`의 `createLinkedInstallTicket`이 task 1
+      이후 프로젝트 전체에서 완전히 죽은 코드가 된 것을 확인해 삭제. `transfers`
+      페이지(기술지원 이관, `reception_channel="전환"`으로 필터링하는 별도 기능)는
+      이번 case_type 마이그레이션 대상이 아니라서 `reception_channel_legacy` 참조로만
+      최소 수정. 커밋 6fc7c17
+  - **후속 필요**: `case_type_code` UI(전환/승계/명변 생성 시 원본 신규 건 검색·연결
+    피커) — 별도 작업으로 남음
+  - **미검증**: 이번에도 Supabase 연결 정보가 없어 브라우저 실기동 확인은 못 함 (tsc
+    타입체크만 확인). 특히 가맹 신규 접수 생성 폼은 실제 DB에서 꼭 한 번 눌러서 확인 필요
 - [ ] 이후 리팩토링 계획(`src/features/franchise-receipts/` 이동)은 위 항목들 정리 후 별도 문서로
 - [ ] 리팩토링 착수 시 `src/features/**`에 ESLint override로 `@typescript-eslint/no-explicit-any: error` 등 엄격 규칙 적용 (전역 174건 기존 오류는 그대로 두고, 새로 옮기는 기능부터 깨끗하게 시작)
