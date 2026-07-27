@@ -126,3 +126,23 @@ DROP TRIGGER IF EXISTS franchise_application_memos_updated_at ON franchise_appli
 CREATE TRIGGER franchise_application_memos_updated_at
   BEFORE UPDATE ON franchise_application_memos
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ============================================================
+-- 4. RLS — franchise_applications 기존 정책과 동일한 패턴(인증된 사용자 전체 CRUD,
+--    세부 권한은 앱 레벨에서 체크)을 따르되, codes는 참조 데이터라 쓰기는 앱에 안 열어둠
+-- ============================================================
+
+ALTER TABLE codes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "authenticated read" ON codes;
+CREATE POLICY "authenticated read" ON codes FOR SELECT TO authenticated USING (true);
+-- insert/update/delete 정책 없음 = authenticated로는 못 바꿈, service_role(마이그레이션/관리 스크립트)만 가능
+
+ALTER TABLE franchise_application_memos ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "authenticated read" ON franchise_application_memos;
+DROP POLICY IF EXISTS "authenticated insert" ON franchise_application_memos;
+DROP POLICY IF EXISTS "authenticated update" ON franchise_application_memos;
+DROP POLICY IF EXISTS "authenticated delete" ON franchise_application_memos;
+CREATE POLICY "authenticated read"   ON franchise_application_memos FOR SELECT TO authenticated USING (true);
+CREATE POLICY "authenticated insert" ON franchise_application_memos FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "authenticated update" ON franchise_application_memos FOR UPDATE TO authenticated USING (true);
+CREATE POLICY "authenticated delete" ON franchise_application_memos FOR DELETE TO authenticated USING (true);
