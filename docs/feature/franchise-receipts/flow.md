@@ -122,7 +122,14 @@ src/lib/franchiseStatusEffects.ts   상태 변경 시 사이드이펙트(알림�
     이번 배치 범위 밖으로 남겨둠, 후속 처리 필요
   - **미검증**: 이 세션 환경에 Supabase 연결 정보(.env)가 없어 브라우저 실기동 확인은
     못 함 (tsc 타입체크만 통과 확인). dev 서버에서 직접 눌러보고 문제 있으면 알려줄 것
-- [ ] soft delete(`deleted_at`) + `franchise_applications_active` 뷰 전환 — 진행 예정
+- [x] (2026-07-28) soft delete 전환 — `deleteFranchiseRows`가 실제 DELETE 대신
+      `deleted_at` UPDATE 수행. `franchise_applications_active` 뷰는 만들어뒀지만
+      실제로는 안 씀 — 조회 지점 다수가 `sales:profiles!..._fkey` 같은 PostgREST
+      FK embed 조인을 쓰는데, 뷰로 바꾸면 이 FK 관계 추론이 깨질 위험이 있어
+      각 조회 쿼리에 `.is("deleted_at", null)` 조건을 개별 추가하는 쪽으로 결정
+      (db-plan.md도 뷰/조건 추가 둘 다 허용했음). franchise/dashboard/installs/
+      calendar/layout/kpi/transfers/equipment-select 전체 조회 지점 반영.
+      커밋 bc9b0b1
 - [ ] `reception_channel_code`/`case_type_code`/`option_code` UI 반영 — 진행 예정 (dev DB
       백필 적용 여부 재확인 필요)
 - [ ] 이후 리팩토링 계획(`src/features/franchise-receipts/` 이동)은 위 항목들 정리 후 별도 문서로
