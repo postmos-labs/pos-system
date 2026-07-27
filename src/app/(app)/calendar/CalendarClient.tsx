@@ -108,6 +108,7 @@ const LEGEND_ITEMS = [
   { category: "설치 관리", color: "bg-fuchsia-500" },
   { category: "우국상 오픈", color: "bg-cyan-500" },
   { category: "우국상 설치(월요일)", color: "bg-amber-500" },
+  { category: "AS", color: "bg-red-500" },
   { category: "메모", color: "bg-violet-500" },
 ] as const;
 
@@ -117,6 +118,7 @@ const MANUAL_CATEGORY_OPTIONS = [
   { value: "오픈", color: "bg-blue-500" },
   { value: "카드신청", color: "bg-orange-500" },
   { value: "택배발송", color: "bg-rose-500" },
+  { value: "AS", color: "bg-red-500" },
   { value: "메모", color: "bg-violet-500" },
 ] as const;
 const MANUAL_CATEGORY_COLOR: Record<string, string> = Object.fromEntries(
