@@ -7,19 +7,16 @@ import {
   useRef,
   useMemo,
   useCallback,
-  memo,
   Fragment,
 } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus,
   Trash2,
-  Pin,
   ChevronDown,
   ChevronUp,
   Search,
   Download,
-  Calendar,
   GripVertical,
   X,
   ClipboardList,
@@ -54,7 +51,7 @@ import BulkConfirmDialog from "@/components/ui/BulkConfirmDialog";
 import FormModal from "@/components/ui/FormModal";
 import HistoryButton from "@/components/ui/HistoryButton";
 import HistoryIcon from "@/components/ui/HistoryIcon";
-import FranchiseCreateDialog from "./FranchiseCreateDialog";
+import FranchiseCreateDialog, { type FranchiseCreateInput } from "./FranchiseCreateDialog";
 import FranchiseDetailDrawer from "./FranchiseDetailDrawer";
 import FranchiseMemoDrawer from "./FranchiseMemoDrawer";
 import FranchiseReceiptSurface from "./FranchiseReceiptSurface";
@@ -65,7 +62,6 @@ import {
 import { appendApprovalNote, type ApprovalNote } from "@/lib/approvalNotes";
 import {
   docCaseOf,
-  createLinkedInstallTicket as createLinkedInstallTicketShared,
   applyFranchiseStatusSideEffects,
   notifyAndLogFranchiseStatus,
 } from "@/lib/franchiseStatusEffects";
@@ -76,49 +72,6 @@ const DOC_CASE_LABEL: Record<DocCase, string> = {
   business_only: "상호명만",
   owner_only: "대표자명만",
   phone_only: "번호만",
-};
-
-const RECEPTION_CHANNELS = [
-  "토스 홈페이지",
-  "직접 영업",
-  "전환",
-  "토스리드건",
-  "토스프리미엄",
-  "승계",
-  "명변",
-  "랜탈",
-  "할부",
-];
-const EQUIPMENT_CATALOG = [
-  "토스프론트",
-  "포스기",
-  "인터넷",
-  "키오스크",
-  "영수증프린터",
-  "주방프린터기",
-  "키오스크리더기",
-  "무선단말기",
-  "금전함",
-  "태블릿",
-  "테이블오더",
-  "보조배터리",
-  "원격",
-];
-const VAN_COMPANIES = ["코세스2", "코세스1", "코벤", "기가맹"];
-const INTERNET_PROVIDERS = ["3S", "백메가"];
-
-function parseVanList(value: string) {
-  return value
-    ? value
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : [];
-}
-
-const AUTO_FORMAT: Partial<Record<keyof FranchiseApplication, (raw: string) => string>> = {
-  phone: formatPhone,
-  business_number: formatBusinessNumber,
 };
 
 interface Props {
@@ -170,32 +123,6 @@ const COMPLETED_STATUS_SET = new Set<FranchiseStatus>([
   "completed",
 ]);
 
-const EMPTY_FORM = {
-  business_name: "",
-  owner_name: "",
-  phone: "",
-  business_number: "",
-  equipmentItems: [] as EquipmentItem[],
-  address: "",
-  address_detail: "",
-  title: "",
-  sales_id: "",
-  cs_id: "",
-  applicant_type: "individual" as ApplicantType,
-  reception_channel: "",
-  reception_date: "",
-  open_date: "",
-  install_date: "",
-  van_company_codes: [] as string[],
-  internet: "",
-  memo: "",
-  sendDocNotify: false,
-};
-
-function defaultCreateForm() {
-  return { ...EMPTY_FORM, reception_date: new Date().toISOString().slice(0, 10) };
-}
-
 const STATUS_DROPDOWN_HIDDEN: FranchiseStatus[] = [
   "internet_apply_done",
   "internet_done",
@@ -204,186 +131,6 @@ const STATUS_DROPDOWN_HIDDEN: FranchiseStatus[] = [
 const SELECTABLE_FRANCHISE_STATUSES = (
   Object.keys(FRANCHISE_STATUS_LABEL) as FranchiseStatus[]
 ).filter((s) => !STATUS_DROPDOWN_HIDDEN.includes(s));
-
-const ALIMTALK_LOG_LABEL: Record<string, string> = {
-  doc_request: "서류 안내",
-  doc_incomplete: "서류미비",
-  card_apply_done: "카드접수완료",
-  card_done: "카드가맹완료",
-  internet_apply_done: "인터넷접수완료",
-  internet_done: "인터넷개통완료",
-  toss_review_apply_done: "토스심사접수완료",
-  toss_review_done: "토스심사완료",
-};
-
-const INSTALL_LOG_LABEL: Record<string, string> = {
-  install_transfer: "기술지원 이관",
-  install_retransfer: "기술지원 재이관",
-  install_rejected: "기술지원 반려",
-  card_done: "설치완료 (가맹접수 자동갱신)",
-};
-
-function EquipmentCart({
-  items,
-  onChange,
-}: {
-  items: EquipmentItem[];
-  onChange: (items: EquipmentItem[]) => void;
-}) {
-  const [product, setProduct] = useState(EQUIPMENT_CATALOG[0]);
-  const [qty, setQty] = useState(1);
-
-  function add() {
-    const existing = items.find((i) => i.name === product);
-    if (existing)
-      onChange(items.map((i) => (i.name === product ? { ...i, quantity: i.quantity + qty } : i)));
-    else onChange([...items, { name: product, quantity: qty }]);
-    setQty(1);
-  }
-
-  return (
-    <div onClick={(e) => e.stopPropagation()}>
-      <div className="flex gap-1.5">
-        <select
-          value={product}
-          onChange={(e) => setProduct(e.target.value)}
-          className="text-sm border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          {EQUIPMENT_CATALOG.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
-        <input
-          type="number"
-          min={1}
-          value={qty}
-          onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
-          className="w-14 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-center"
-        />
-        <button
-          type="button"
-          onClick={add}
-          className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-medium hover:bg-slate-200"
-        >
-          추가
-        </button>
-      </div>
-      {items.length > 0 && (
-        <ul className="mt-2 space-y-1">
-          {items.map((it) => (
-            <li
-              key={it.name}
-              className="flex justify-between items-center bg-slate-50 rounded-lg px-2.5 py-1.5 text-xs"
-            >
-              <span>
-                {it.name} × {it.quantity}
-              </span>
-              <button
-                type="button"
-                onClick={() => onChange(items.filter((i) => i.name !== it.name))}
-                className="text-red-400 hover:text-red-600"
-              >
-                삭제
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function VanMultiSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const selected = parseVanList(value);
-  function toggle(name: string) {
-    const next = selected.includes(name) ? selected.filter((s) => s !== name) : [...selected, name];
-    onChange(next.join(","));
-  }
-  return (
-    <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
-      {VAN_COMPANIES.map((v) => (
-        <label
-          key={v}
-          className="flex items-center gap-1 text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 cursor-pointer"
-        >
-          <input
-            type="checkbox"
-            checked={selected.includes(v)}
-            onChange={() => toggle(v)}
-            className="accent-blue-600"
-          />
-          {v}
-        </label>
-      ))}
-    </div>
-  );
-}
-
-interface EditableTextProps {
-  row: FranchiseApplication;
-  field: keyof FranchiseApplication;
-  placeholder: string;
-  type?: string;
-  onSave: (row: FranchiseApplication, field: keyof FranchiseApplication, value: string) => void;
-}
-const EditableText = memo(function EditableText({
-  row,
-  field,
-  placeholder,
-  type = "text",
-  onSave,
-}: EditableTextProps) {
-  const [value, setValue] = useState((row[field] as string) ?? "");
-  const autoFormat = AUTO_FORMAT[field];
-  return (
-    <input
-      type={type}
-      value={value}
-      placeholder={placeholder}
-      onChange={(e) => setValue(autoFormat ? autoFormat(e.target.value) : e.target.value)}
-      onBlur={() => {
-        if (value !== ((row[field] as string) ?? "")) onSave(row, field, value);
-      }}
-      onClick={(e) => e.stopPropagation()}
-      className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1 -mx-1 text-sm"
-    />
-  );
-});
-
-interface EditableMemoProps {
-  row: FranchiseApplication;
-  onSave: (row: FranchiseApplication, field: keyof FranchiseApplication, value: string) => void;
-}
-const EditableMemo = memo(function EditableMemo({ row, onSave }: EditableMemoProps) {
-  const [value, setValue] = useState("");
-  return (
-    <textarea
-      value={value}
-      placeholder="새 히스토리 입력..."
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={() => {
-        if (value.trim()) {
-          onSave(row, "memo", value);
-          setValue("");
-        }
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          if (value.trim()) {
-            onSave(row, "memo", value);
-            setValue("");
-          }
-        }
-      }}
-      onClick={(e) => e.stopPropagation()}
-      rows={2}
-      className="w-full bg-transparent border border-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-2 py-1 text-sm resize-y"
-    />
-  );
-});
 
 // 핀 마커는 핀을 누른 시각을 epoch ms로 담아, 여러 개 고정됐을 때 "먼저 고정한 것"을 확실하게 구분한다
 const PIN_RE = /^PIN:(\d+):/;
@@ -510,286 +257,6 @@ function togglePinEntry(memo: string | undefined | null, index: number): string 
   return blocks.join("\n");
 }
 
-// 비고 + 상태 변경 이력을 한 화면(플로팅 창)에서 시간순으로 합쳐 보여준다
-interface HistoryPanelProps {
-  row: FranchiseApplication;
-  logs: FranchiseApplicationLog[] | undefined;
-  onSave: (row: FranchiseApplication, field: keyof FranchiseApplication, value: string) => void;
-  onDeleteMemo: (row: FranchiseApplication, newMemo: string) => void;
-  onTogglePin: (row: FranchiseApplication, newMemo: string) => void;
-  onClose: () => void;
-}
-const HistoryPanel = memo(function HistoryPanel({
-  row,
-  logs,
-  onSave,
-  onDeleteMemo,
-  onTogglePin,
-  onClose,
-}: HistoryPanelProps) {
-  function deleteMemoEntry(index: number) {
-    if (!confirm("이 메모를 삭제하시겠습니까?")) return;
-    onDeleteMemo(row, removeMemoEntry(row.memo, index));
-  }
-
-  function togglePin(index: number) {
-    onTogglePin(row, togglePinEntry(row.memo, index));
-  }
-
-  const timeline = [
-    ...parseMemoEntries(row.memo, row.created_at).map((entry, i) => ({
-      at: entry.at,
-      pinned: entry.pinned,
-      pinnedAt: entry.pinnedAt,
-      node: (
-        <li
-          key={`memo-${entry.at}-${entry.text}`}
-          className={`text-[15pt] text-slate-200 group ${entry.pinned ? "border-l-2 border-amber-400 pl-2" : ""}`}
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div className="text-slate-400">
-              {new Date(entry.at).toLocaleString("ko-KR")} · {entry.user}
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <button
-                onClick={() => togglePin(i)}
-                aria-label={entry.pinned ? "고정 해제" : "상단 고정"}
-                className={`transition-opacity ${entry.pinned ? "text-amber-400 opacity-100" : "text-slate-500 hover:text-amber-300 opacity-0 group-hover:opacity-100"}`}
-              >
-                <Pin size={14} className={entry.pinned ? "fill-amber-400" : ""} />
-              </button>
-              <button
-                onClick={() => deleteMemoEntry(i)}
-                aria-label="메모 삭제"
-                className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          </div>
-          <div>{entry.text}</div>
-        </li>
-      ),
-    })),
-    ...(logs ?? []).map((log) => {
-      const isAlimtalk = log.to_status?.startsWith("alimtalk:");
-      const isInstallEvent = log.to_status && INSTALL_LOG_LABEL[log.to_status];
-      if (isAlimtalk) {
-        const key = log.to_status!.replace("alimtalk:", "");
-        return {
-          at: log.created_at,
-          pinned: false,
-          pinnedAt: null,
-          node: (
-            <li key={log.id} className="text-[15pt] text-blue-400">
-              <div className="text-slate-400">
-                {new Date(log.created_at).toLocaleString("ko-KR")} ·{" "}
-                {log.user_name ?? log.user?.name ?? "알수없음"}
-              </div>
-              <div>알림톡 발송 ({ALIMTALK_LOG_LABEL[key] ?? key})</div>
-            </li>
-          ),
-        };
-      }
-      if (isInstallEvent) {
-        return {
-          at: log.created_at,
-          pinned: false,
-          pinnedAt: null,
-          node: (
-            <li key={log.id} className="text-[15pt] text-purple-400 font-medium">
-              <div className="text-slate-400 font-normal">
-                {new Date(log.created_at).toLocaleString("ko-KR")} ·{" "}
-                {log.user_name ?? log.user?.name ?? "알수없음"}
-              </div>
-              <div>{INSTALL_LOG_LABEL[log.to_status!]}</div>
-            </li>
-          ),
-        };
-      }
-      return {
-        at: log.created_at,
-        pinned: false,
-        pinnedAt: null,
-        node: (
-          <li key={log.id} className="text-[15pt] text-slate-300">
-            <div className="text-slate-400">
-              {new Date(log.created_at).toLocaleString("ko-KR")} ·{" "}
-              {log.user_name ?? log.user?.name ?? "알수없음"}
-            </div>
-            <div>
-              {log.from_status
-                ? (FRANCHISE_STATUS_LABEL[log.from_status as FranchiseStatus] ?? log.from_status)
-                : "-"}{" "}
-              →{" "}
-              {log.to_status
-                ? (FRANCHISE_STATUS_LABEL[log.to_status as FranchiseStatus] ?? log.to_status)
-                : "-"}
-            </div>
-          </li>
-        ),
-      };
-    }),
-  ].sort((a, b) => {
-    if (a.pinned && b.pinned)
-      return new Date(a.pinnedAt ?? 0).getTime() - new Date(b.pinnedAt ?? 0).getTime();
-    if (a.pinned !== b.pinned) return Number(b.pinned) - Number(a.pinned);
-    return new Date(b.at).getTime() - new Date(a.at).getTime();
-  });
-
-  return (
-    <div className="fixed bottom-6 right-6 z-50 w-[36rem] max-w-[calc(100vw-3rem)] h-[95vh] max-h-[95vh] flex flex-col bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-700">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700">
-        <p className="flex items-center gap-2 text-base font-semibold">
-          <HistoryIcon size={32} />
-          히스토리 · {row.business_name || row.owner_name || "-"}
-        </p>
-        <button
-          onClick={onClose}
-          className="text-slate-400 hover:text-white p-1 rounded transition-colors"
-          aria-label="닫기"
-        >
-          <X size={20} />
-        </button>
-      </div>
-      <div className="px-5 py-4 border-b border-slate-700">
-        <label className="text-xs font-semibold text-slate-400">히스토리 추가</label>
-        <EditableMemo row={row} onSave={onSave} />
-      </div>
-      <div className="px-5 py-4 overflow-y-auto flex-1 min-h-0">
-        {!logs ? (
-          <p className="text-[15pt] text-slate-400">불러오는 중...</p>
-        ) : timeline.length === 0 ? (
-          <p className="text-[15pt] text-slate-400">이력이 없습니다.</p>
-        ) : (
-          <ul className="space-y-2.5">{timeline.map((entry) => entry.node)}</ul>
-        )}
-      </div>
-    </div>
-  );
-});
-
-interface DateFieldProps {
-  row: FranchiseApplication;
-  field: keyof FranchiseApplication;
-  onSave: (row: FranchiseApplication, field: keyof FranchiseApplication, value: string) => void;
-}
-const DateField = memo(function DateField({ row, field, onSave }: DateFieldProps) {
-  const [value, setValue] = useState((row[field] as string) ?? "");
-  const dateInputRef = useRef<HTMLInputElement>(null);
-  const isoValue = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
-
-  function openPicker(e: React.MouseEvent) {
-    e.stopPropagation();
-    const el = dateInputRef.current;
-    if (!el) return;
-    const withPicker = el as HTMLInputElement & { showPicker?: () => void };
-    if (typeof withPicker.showPicker === "function") withPicker.showPicker();
-    else el.focus();
-  }
-
-  function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
-    const next = e.target.value;
-    setValue(next);
-    onSave(row, field, next);
-  }
-
-  return (
-    <div className="flex items-center gap-1 w-full" onClick={(e) => e.stopPropagation()}>
-      <input
-        value={value}
-        onChange={(e) => setValue(formatDateText(e.target.value))}
-        onBlur={() => {
-          if (value !== ((row[field] as string) ?? "")) onSave(row, field, value);
-        }}
-        placeholder="-"
-        className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1 -mx-1 text-sm"
-      />
-      <button
-        type="button"
-        onClick={openPicker}
-        tabIndex={-1}
-        aria-label="날짜 선택"
-        className="shrink-0 text-slate-400 hover:text-blue-500"
-      >
-        <Calendar size={14} />
-      </button>
-      <input
-        ref={dateInputRef}
-        type="date"
-        value={isoValue}
-        onChange={handlePick}
-        tabIndex={-1}
-        className="w-0 h-0 opacity-0 absolute pointer-events-none"
-      />
-    </div>
-  );
-});
-
-interface DateFormFieldProps {
-  value: string;
-  onChange: (value: string) => void;
-}
-const DateFormField = memo(function DateFormField({ value, onChange }: DateFormFieldProps) {
-  const dateInputRef = useRef<HTMLInputElement>(null);
-  const isoValue = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
-
-  function openPicker() {
-    const el = dateInputRef.current;
-    if (!el) return;
-    const withPicker = el as HTMLInputElement & { showPicker?: () => void };
-    if (typeof withPicker.showPicker === "function") withPicker.showPicker();
-    else el.focus();
-  }
-
-  return (
-    <div className="flex items-center gap-1">
-      <input
-        value={value}
-        onChange={(e) => onChange(formatDateText(e.target.value))}
-        className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
-      <button
-        type="button"
-        onClick={openPicker}
-        aria-label="날짜 선택"
-        className="shrink-0 text-slate-400 hover:text-blue-500"
-      >
-        <Calendar size={14} />
-      </button>
-      <input
-        ref={dateInputRef}
-        type="date"
-        value={isoValue}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-0 h-0 opacity-0 absolute pointer-events-none"
-      />
-    </div>
-  );
-});
-
-const NEXT_STATUS: Partial<Record<FranchiseStatus, FranchiseStatus>> = {
-  doc_waiting: "card_apply_done",
-  doc_incomplete: "card_apply_done",
-  card_apply_done: "toss_review_apply_done",
-  toss_review_apply_done: "toss_review_done",
-  toss_review_done: "card_done",
-  card_done: "completed",
-};
-
-const MAIN_COLUMNS = [
-  { key: "reception_date", label: "접수날짜" },
-  { key: "reception_channel", label: "접수채널" },
-  { key: "applicant_type", label: "사업자유형" },
-  { key: "business_name", label: "상호명" },
-  { key: "owner_name", label: "대표자" },
-  { key: "phone", label: "연락처" },
-  { key: "creator", label: "등록자" },
-  { key: "cs_id", label: "담당자" },
-  { key: "internet_status", label: "인터넷" },
-  { key: "status", label: "상태" },
-  { key: "memo", label: "메모" },
-] as const;
 const DEFAULT_WIDTHS: Record<string, number> = {
   reception_date: 100,
   reception_channel: 90,
@@ -805,195 +272,6 @@ const DEFAULT_WIDTHS: Record<string, number> = {
 };
 const COL_WIDTHS_STORAGE_KEY = "franchise_col_widths";
 const PAGE_SIZE = 50;
-
-interface CreateFormProps {
-  onSubmit: (form: typeof EMPTY_FORM) => Promise<boolean>;
-  submitting: boolean;
-  onClose: () => void;
-}
-const CreateForm = memo(function CreateForm({ onSubmit, submitting, onClose }: CreateFormProps) {
-  const [form, setForm] = useState(defaultCreateForm);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const success = await onSubmit(form);
-    if (success) setForm(defaultCreateForm());
-  }
-
-  return (
-    <FormModal title="프랜차이즈 정보 입력" onClose={onClose} maxWidthClassName="max-w-3xl">
-      <form onSubmit={handleSubmit} className="flex flex-wrap gap-3 items-end">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-500">접수날짜</label>
-          <DateFormField
-            value={form.reception_date}
-            onChange={(v) => setForm({ ...form, reception_date: v })}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-500">접수채널</label>
-          <select
-            value={form.reception_channel}
-            onChange={(e) => setForm({ ...form, reception_channel: e.target.value })}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">선택 안함</option>
-            {RECEPTION_CHANNELS.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-500">사업자 유형</label>
-          <select
-            value={form.applicant_type}
-            onChange={(e) => setForm({ ...form, applicant_type: e.target.value as ApplicantType })}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {(Object.keys(APPLICANT_TYPE_LABEL) as ApplicantType[]).map((t) => (
-              <option key={t} value={t}>
-                {APPLICANT_TYPE_LABEL[t]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-500">상호명</label>
-          <input
-            value={form.business_name}
-            onChange={(e) => setForm({ ...form, business_name: e.target.value })}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-40 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-500">대표자명</label>
-          <input
-            value={form.owner_name}
-            onChange={(e) => setForm({ ...form, owner_name: e.target.value })}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-500">사업자번호</label>
-          <input
-            value={form.business_number}
-            onChange={(e) =>
-              setForm({ ...form, business_number: formatBusinessNumber(e.target.value) })
-            }
-            placeholder="000-00-00000"
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-500">연락처</label>
-          <input
-            value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: formatPhone(e.target.value) })}
-            placeholder="010-0000-0000"
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-36 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-500">인터넷</label>
-          <select
-            value={form.internet}
-            onChange={(e) => setForm({ ...form, internet: e.target.value })}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-28 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">선택 안함</option>
-            {INTERNET_PROVIDERS.map((v) => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-500">VAN사 (중복선택 가능)</label>
-          <VanMultiSelect
-            value={form.van_company_codes.join(",")}
-            onChange={(v) => setForm({ ...form, van_company_codes: v ? v.split(",") : [] })}
-          />
-        </div>
-        {form.applicant_type !== "giga_individual" && form.applicant_type !== "giga_corporate" && (
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-slate-500">오픈예정일</label>
-            <DateFormField
-              value={form.open_date}
-              onChange={(v) => setForm({ ...form, open_date: v })}
-            />
-          </div>
-        )}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-500">설치 및 발송일</label>
-          <DateFormField
-            value={form.install_date}
-            onChange={(v) => setForm({ ...form, install_date: v })}
-          />
-        </div>
-        <div className="flex flex-col gap-1 w-full">
-          <label className="text-xs font-medium text-slate-500">상품</label>
-          <EquipmentCart
-            items={form.equipmentItems}
-            onChange={(items) => setForm({ ...form, equipmentItems: items })}
-          />
-        </div>
-        <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
-          <label className="text-xs font-medium text-slate-500">주소</label>
-          <input
-            value={form.address}
-            onChange={(e) => setForm({ ...form, address: e.target.value })}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-500">상세주소</label>
-          <input
-            value={form.address_detail}
-            onChange={(e) => setForm({ ...form, address_detail: e.target.value })}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-slate-500">작업제목</label>
-          <input
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-36 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
-          <label className="text-xs font-medium text-slate-500">비고</label>
-          <input
-            value={form.memo}
-            onChange={(e) => setForm({ ...form, memo: e.target.value })}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.sendDocNotify}
-              onChange={(e) => setForm({ ...form, sendDocNotify: e.target.checked })}
-              className="w-4 h-4 accent-blue-600"
-            />
-            등록 즉시 서류안내 알림톡 발송
-          </label>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-4 py-2 rounded-lg transition-colors"
-          >
-            {submitting ? "등록 중..." : "등록"}
-          </button>
-        </div>
-      </form>
-    </FormModal>
-  );
-});
 
 export default function FranchiseClient({
   rows,
@@ -1628,7 +906,7 @@ export default function FranchiseClient({
     setSelected(new Set());
   }, [selected, toast]);
 
-  async function handleCreate(form: typeof EMPTY_FORM): Promise<boolean> {
+  async function handleCreate(form: FranchiseCreateInput): Promise<boolean> {
     if (form.phone || form.business_name || form.business_number) {
       const dupe = localRows.find(
         (r) =>
@@ -1712,10 +990,6 @@ export default function FranchiseClient({
       ...prev,
     ]);
     return true;
-  }
-
-  async function createLinkedInstallTicket(row: FranchiseApplication) {
-    await createLinkedInstallTicketShared(row, toast);
   }
 
   async function updateStatus(
