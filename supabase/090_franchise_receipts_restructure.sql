@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS franchise_application_memos (
   id                        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   franchise_application_id  uuid NOT NULL REFERENCES franchise_applications(id) ON DELETE CASCADE,
   user_id                   uuid REFERENCES profiles(id),
+  author_name               text, -- user_id 매칭 실패/모호한 경우를 위한 원문 작성자명 fallback (과거 메모 블롭엔 이름만 있고 user_id가 없었음)
   content                   text NOT NULL,
   pinned_at                 timestamptz,
   created_at                timestamptz NOT NULL DEFAULT now(),
