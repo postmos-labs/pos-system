@@ -441,6 +441,7 @@ export default function InstallsClient({ profile, techUsers, initialInstalls, mi
     notes: string
   } | null>(null)
   const [completeModal, setCompleteModal] = useState<{ id: string; notes: string } | null>(null)
+  const completeNotesRef = useRef<HTMLTextAreaElement>(null)
   const [completePhotos, setCompletePhotos] = useState<File[]>([])
   const [completing, setCompleting] = useState(false)
   const [completionApprovals, setCompletionApprovals] = useState(initialCompletionApprovals)
@@ -776,7 +777,8 @@ export default function InstallsClient({ profile, techUsers, initialInstalls, mi
     if (completingRef.current) return
     completingRef.current = true
     setCompleting(true)
-    const { id, notes } = completeModal
+    const { id } = completeModal
+    const notes = completeNotesRef.current?.value ?? completeModal.notes
     const approvalNote = notes.trim()
     const prevInst = installs.find(i => i.id === id)
     const prevNotes = (prevInst?.notes ?? '').trim()
@@ -2130,8 +2132,9 @@ export default function InstallsClient({ profile, techUsers, initialInstalls, mi
             <div className="flex flex-col gap-1">
               <label className="text-xs text-slate-500">비고</label>
               <textarea
-                value={completeModal.notes}
-                onChange={e => setCompleteModal(prev => prev ? { ...prev, notes: e.target.value } : prev)}
+                key={completeModal.id}
+                ref={completeNotesRef}
+                defaultValue={completeModal.notes}
                 placeholder="현장 비고를 남겨주세요"
                 rows={6}
                 className={INPUT + ' resize-none'}
