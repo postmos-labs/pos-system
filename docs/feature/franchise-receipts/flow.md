@@ -106,6 +106,24 @@ src/lib/franchiseStatusEffects.ts   상태 변경 시 사이드이펙트(알림�
 
 ## 6. 다음 단계
 
-- [ ] 위 5번 DB 확인 결과 받으면 `db-schema.md`에 실제 스키마 스냅샷 기록
-- [ ] 이후 리팩토링 계획(`src/features/franchise-receipts/` 이동 + 죽은 코드 제거)은 flow 확정 후 별도 문서로 정리
+- [x] 위 5번 DB 확인 결과 받으면 `db-schema.md`에 실제 스키마 스냅샷 기록
+- [x] (2026-07-28) `FranchiseClient.tsx` 죽은 코드 삭제 — 원래 알려진 8개 컴포넌트 외에,
+      함께 죽어있던 `ALIMTALK_LOG_LABEL`/`INSTALL_LOG_LABEL`/`MAIN_COLUMNS`/`NEXT_STATUS`/
+      `createLinkedInstallTicket` 래퍼, 그리고 이후 unused로 드러난 아이콘 import 다수
+      (Pin/Calendar/Plus/Trash2 등)도 같이 제거. 3013줄 → 2303줄. 커밋 f83c852
+- [x] (2026-07-28) memo 테이블 전환 — `FranchiseMemoDrawer`가 `franchise_applications.memo`
+      blob 파싱 대신 `franchise_application_memos` 테이블을 직접 읽고/씀 (조회는 드로어를
+      열 때, 추가/삭제(soft delete)/고정은 row 단위). PIN 마커 파싱 헬퍼 전부와 `saveMemoRaw`,
+      `saveField`의 memo append 분기 제거. 커밋 1780a5d
+  - **알려진 갭**: `FranchiseReceiptSurface`의 목록 "메모" 컬럼 아이콘(있음/없음 표시)이
+    여전히 `row.memo`(legacy blob)만 보고 판단함. 새 메모는 이제 `memo` 컬럼에 안 쌓이므로,
+    새로 추가된 메모만 있는 건은 이 아이콘이 계속 "없음"으로 표시됨 — 목록에 메모 유무를
+    정확히 반영하려면 `page.tsx`에서 건별 메모 존재 여부를 함께 조회해서 내려줘야 함.
+    이번 배치 범위 밖으로 남겨둠, 후속 처리 필요
+  - **미검증**: 이 세션 환경에 Supabase 연결 정보(.env)가 없어 브라우저 실기동 확인은
+    못 함 (tsc 타입체크만 통과 확인). dev 서버에서 직접 눌러보고 문제 있으면 알려줄 것
+- [ ] soft delete(`deleted_at`) + `franchise_applications_active` 뷰 전환 — 진행 예정
+- [ ] `reception_channel_code`/`case_type_code`/`option_code` UI 반영 — 진행 예정 (dev DB
+      백필 적용 여부 재확인 필요)
+- [ ] 이후 리팩토링 계획(`src/features/franchise-receipts/` 이동)은 위 항목들 정리 후 별도 문서로
 - [ ] 리팩토링 착수 시 `src/features/**`에 ESLint override로 `@typescript-eslint/no-explicit-any: error` 등 엄격 규칙 적용 (전역 174건 기존 오류는 그대로 두고, 새로 옮기는 기능부터 깨끗하게 시작)
