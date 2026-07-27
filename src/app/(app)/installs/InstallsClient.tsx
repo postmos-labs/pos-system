@@ -789,6 +789,7 @@ export default function InstallsClient({
         "*, sales:profiles!franchise_applications_sales_id_fkey(name), cs:profiles!franchise_applications_cs_id_fkey(name)",
       )
       .eq("id", franchiseId)
+      .is("deleted_at", null)
       .single();
     setFranchiseDetail(data ?? null);
     setLoadingDetail(false);
@@ -1097,6 +1098,7 @@ export default function InstallsClient({
         .from("franchise_applications")
         .select("cs_id, business_name, owner_name, status")
         .eq("id", inst.franchise_application_id)
+        .is("deleted_at", null)
         .single();
 
       const name = fa?.business_name || fa?.owner_name || "미입력";
@@ -1639,7 +1641,8 @@ export default function InstallsClient({
       const { data } = await supabase
         .from("franchise_applications")
         .select("id, business_name, owner_name")
-        .eq("install_date", today);
+        .eq("install_date", today)
+        .is("deleted_at", null);
       if (data && data.length > 0) {
         setTodayScheduled(data);
         localStorage.setItem("install_schedule_check", today);

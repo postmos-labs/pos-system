@@ -12,7 +12,10 @@ export async function deleteFranchiseRows(ids: string[]) {
   const supabase = createAdminClient();
   for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
     const chunk = ids.slice(i, i + CHUNK_SIZE);
-    const { error } = await supabase.from("franchise_applications").delete().in("id", chunk);
+    const { error } = await supabase
+      .from("franchise_applications")
+      .update({ deleted_at: new Date().toISOString() })
+      .in("id", chunk);
     if (error) return { error: error.message };
   }
   return { error: null };

@@ -94,6 +94,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const { data: upcomingFranchise } = await supabase
       .from("franchise_applications")
       .select("id, business_name, open_date, install_date")
+      .is("deleted_at", null)
       .neq("status", "toss_review_done")
       .or("open_date.not.is.null,install_date.not.is.null");
 

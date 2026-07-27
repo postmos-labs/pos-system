@@ -48,6 +48,7 @@ export async function requestFranchiseTransfer(franchiseApplicationId: string, n
         .from("franchise_applications")
         .select("status")
         .eq("id", franchiseApplicationId)
+        .is("deleted_at", null)
         .single(),
       admin
         .from("franchise_transfer_approvals")
@@ -382,6 +383,7 @@ export async function approveFranchiseTransfer(
         "id, business_name, owner_name, phone, equipment_items, memo, address, install_date, status",
       )
       .eq("id", franchiseApplicationId)
+      .is("deleted_at", null)
       .single(),
   ]);
   if (!approval || !franchise) return { error: "처리할 승인 요청이 없습니다." };

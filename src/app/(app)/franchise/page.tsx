@@ -49,6 +49,7 @@ export default async function FranchisePage({ searchParams }: Props) {
       .select(
         "*, sales:profiles!franchise_applications_sales_id_fkey(id,name,role), cs:profiles!franchise_applications_cs_id_fkey(id,name,role), creator:profiles!franchise_applications_created_by_fkey(id,name,role)",
       )
+      .is("deleted_at", null)
       .order("updated_at", { ascending: false }),
     supabase
       .from("profiles")

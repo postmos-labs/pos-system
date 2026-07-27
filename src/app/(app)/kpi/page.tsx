@@ -93,6 +93,7 @@ export default async function KpiPage() {
     supabase
       .from("franchise_applications")
       .select("cs_id")
+      .is("deleted_at", null)
       .not("cs_id", "is", null)
       .not("status", "in", "(card_done,internet_done,toss_review_done,completed)")
       .lt("updated_at", staleBefore),

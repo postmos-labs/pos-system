@@ -130,6 +130,7 @@ export default function ExcelDownloadButton() {
               .select(
                 "*, sales:profiles!franchise_applications_sales_id_fkey(name), cs:profiles!franchise_applications_cs_id_fkey(name)",
               )
+              .is("deleted_at", null)
               .order("created_at", { ascending: false }),
           },
           {

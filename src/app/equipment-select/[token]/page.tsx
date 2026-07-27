@@ -17,6 +17,7 @@ export default async function EquipmentSelectPage({ params }: Props) {
       "id, business_name, owner_name, equipment_select_token, selected_equipment, equipment_selected_at",
     )
     .eq("equipment_select_token", token)
+    .is("deleted_at", null)
     .single();
 
   if (!row) notFound();

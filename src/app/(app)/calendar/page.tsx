@@ -33,6 +33,7 @@ export default async function CalendarPage() {
       .select(
         "id, business_name, status, open_date, install_date, sales_id, sales:profiles!franchise_applications_sales_id_fkey(name)",
       )
+      .is("deleted_at", null)
       .neq("status", "toss_review_done")
       .or("open_date.not.is.null,install_date.not.is.null"),
     supabase

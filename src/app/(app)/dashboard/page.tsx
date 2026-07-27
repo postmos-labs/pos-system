@@ -97,6 +97,7 @@ export default async function DashboardPage() {
     .select(
       "*, sales:profiles!franchise_applications_sales_id_fkey(name), cs:profiles!franchise_applications_cs_id_fkey(name)",
     )
+    .is("deleted_at", null)
     .order("updated_at", { ascending: false });
   if (p.role === "sales") franchiseQuery = franchiseQuery.eq("sales_id", userId);
   if (p.role === "cs") franchiseQuery = franchiseQuery.eq("cs_id", userId);
@@ -111,6 +112,7 @@ export default async function DashboardPage() {
     let q = supabase
       .from("franchise_applications")
       .select("id", { count: "exact", head: true })
+      .is("deleted_at", null)
       .eq("status", status);
     if (p.role === "sales") q = q.eq("sales_id", userId);
     if (p.role === "cs") q = q.eq("cs_id", userId);
@@ -120,6 +122,7 @@ export default async function DashboardPage() {
   const unassignedFranchiseQuery = supabase
     .from("franchise_applications")
     .select("id", { count: "exact", head: true })
+    .is("deleted_at", null)
     .is("cs_id", null)
     .not("status", "in", "(card_done,internet_done)");
 
@@ -144,6 +147,7 @@ export default async function DashboardPage() {
       ? supabase
           .from("franchise_applications")
           .select("id, business_name, owner_name, address")
+          .is("deleted_at", null)
           .eq("install_date", today)
       : null;
 
@@ -151,6 +155,7 @@ export default async function DashboardPage() {
   let staleQuery = supabase
     .from("franchise_applications")
     .select("id", { count: "exact", head: true })
+    .is("deleted_at", null)
     .lt("updated_at", staleDate)
     .not("status", "in", "(card_done,internet_done)");
   if (p.role === "sales") staleQuery = staleQuery.eq("sales_id", userId);
@@ -167,6 +172,7 @@ export default async function DashboardPage() {
   const monthlyFranchiseQuery = supabase
     .from("franchise_applications")
     .select("created_at, status")
+    .is("deleted_at", null)
     .gte("created_at", sixMonthsAgo.toISOString());
 
   const avgDaysQuery = supabase
