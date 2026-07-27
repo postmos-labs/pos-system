@@ -12,6 +12,7 @@ import {
 } from "@/types";
 import { useState } from "react";
 import { useToast } from "@/components/ui/Toast";
+import { VAN_COMPANY_LABEL } from "@/lib/franchiseCodes";
 
 const BACKUP_TABLES: { label: string; table: string; optional?: boolean }[] = [
   { label: "가맹접수", table: "franchise_applications" },
@@ -222,7 +223,9 @@ export default function ExcelDownloadButton() {
         담당CS: r.cs?.name ?? "",
         주소: r.address ?? "",
         인터넷: r.internet ?? "",
-        VAN사: r.van_company ?? "",
+        VAN사: ((r.van_company_codes as string[]) ?? [])
+          .map((code) => VAN_COMPANY_LABEL[code as keyof typeof VAN_COMPANY_LABEL] ?? code)
+          .join(", "),
         오픈예정일: r.open_date ?? "",
         설치발송일: r.install_date ?? "",
         비고: r.memo ?? "",

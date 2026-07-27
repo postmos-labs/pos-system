@@ -13,6 +13,7 @@ import { APPLICANT_TYPE_LABEL, FRANCHISE_STATUS_LABEL } from "@/types";
 import { formatBusinessNumber, formatPhone } from "@/lib/format";
 import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
 import type { ApprovalNote } from "@/lib/approvalNotes";
+import { VAN_COMPANY_OPTIONS } from "@/lib/franchiseCodes";
 
 const RECEPTION_CHANNELS = [
   "토스 홈페이지",
@@ -42,7 +43,6 @@ const EQUIPMENT_CATALOG = [
   "보조배터리",
   "원격",
 ];
-const VAN_COMPANIES = ["코세스2", "코세스1", "코벤", "기가맹"];
 const INTERNET_PROVIDERS = ["3S", "백메가"];
 const HIDDEN_STATUSES: FranchiseStatus[] = [
   "internet_apply_done",
@@ -66,6 +66,7 @@ interface Props {
   onClose: () => void;
   onSave: (field: keyof FranchiseApplication, value: string) => void | Promise<void>;
   onEquipmentChange: (items: EquipmentItem[]) => void | Promise<void>;
+  onVanCompanyChange: (codes: string[]) => void | Promise<void>;
   onApplicantTypeChange: (value: ApplicantType) => void | Promise<void>;
   onCsChange: (value: string) => void | Promise<void>;
   onSalesChange: (value: string) => void | Promise<void>;
@@ -255,6 +256,7 @@ export default function FranchiseDetailDrawer({
   onClose,
   onSave,
   onEquipmentChange,
+  onVanCompanyChange,
   onApplicantTypeChange,
   onCsChange,
   onStatusChange,
@@ -271,12 +273,7 @@ export default function FranchiseDetailDrawer({
   const [productSelect, setProductSelect] = useState(EQUIPMENT_CATALOG[0]);
   const [productQty, setProductQty] = useState(1);
   const products = row.equipment_items ?? [];
-  const vans = row.van_company
-    ? row.van_company
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean)
-    : [];
+  const vans = row.van_company_codes ?? [];
   const colors = tone(row.status);
 
   function addProduct() {
@@ -285,13 +282,9 @@ export default function FranchiseDetailDrawer({
   function removeProduct(index: number) {
     onEquipmentChange(products.filter((_, itemIndex) => itemIndex !== index));
   }
-  function toggleVan(company: string) {
-    onSave(
-      "van_company",
-      (vans.includes(company)
-        ? vans.filter((value) => value !== company)
-        : [...vans, company]
-      ).join(", "),
+  function toggleVan(code: string) {
+    onVanCompanyChange(
+      vans.includes(code) ? vans.filter((value) => value !== code) : [...vans, code],
     );
   }
 
@@ -532,16 +525,16 @@ export default function FranchiseDetailDrawer({
                 VAN사 (중복선택 가능)
               </div>
               <div className="flex flex-wrap gap-2">
-                {VAN_COMPANIES.map((company) => {
-                  const active = vans.includes(company);
+                {VAN_COMPANY_OPTIONS.map((option) => {
+                  const active = vans.includes(option.code);
                   return (
                     <button
-                      key={company}
+                      key={option.code}
                       type="button"
-                      onClick={() => toggleVan(company)}
+                      onClick={() => toggleVan(option.code)}
                       className={`h-8 rounded-full border px-3.5 text-xs font-semibold ${active ? "border-primary bg-primary-muted text-primary" : "border-border bg-card text-foreground hover:border-primary/50"}`}
                     >
-                      {company}
+                      {option.label}
                     </button>
                   );
                 })}

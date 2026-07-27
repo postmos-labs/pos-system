@@ -5,6 +5,7 @@ import { XIcon } from "lucide-react";
 import type { ApplicantType, EquipmentItem, Profile } from "@/types";
 import { APPLICANT_TYPE_LABEL } from "@/types";
 import { formatBusinessNumber, formatPhone } from "@/lib/format";
+import { VAN_COMPANY_OPTIONS } from "@/lib/franchiseCodes";
 
 const RECEPTION_CHANNELS = [
   "토스 홈페이지",
@@ -34,7 +35,6 @@ const EQUIPMENT_CATALOG = [
   "보조배터리",
   "원격",
 ];
-const VAN_COMPANIES = ["코세스2", "코세스1", "코벤", "기가맹"];
 const INTERNET_PROVIDERS = ["3S", "백메가"];
 
 export interface FranchiseCreateInput {
@@ -53,7 +53,7 @@ export interface FranchiseCreateInput {
   reception_date: string;
   open_date: string;
   install_date: string;
-  van_company: string;
+  van_company_codes: string[];
   internet: string;
   memo: string;
   sendDocNotify: boolean;
@@ -87,7 +87,7 @@ function initialForm(): FranchiseCreateInput {
     reception_date: receptionDate,
     open_date: "",
     install_date: "",
-    van_company: "",
+    van_company_codes: [],
     internet: "",
     memo: "",
     sendDocNotify: false,
@@ -121,12 +121,7 @@ export default function FranchiseCreateDialog({
   const [form, setForm] = useState(initialForm);
   const [productSelect, setProductSelect] = useState(EQUIPMENT_CATALOG[0]);
   const [productQty, setProductQty] = useState(1);
-  const vanSelected = form.van_company
-    ? form.van_company
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean)
-    : [];
+  const vanSelected = form.van_company_codes;
 
   function addProduct() {
     setForm((current) => ({
@@ -142,11 +137,11 @@ export default function FranchiseCreateDialog({
     }));
   }
 
-  function toggleVan(company: string) {
-    const next = vanSelected.includes(company)
-      ? vanSelected.filter((value) => value !== company)
-      : [...vanSelected, company];
-    setForm((current) => ({ ...current, van_company: next.join(", ") }));
+  function toggleVan(code: string) {
+    const next = vanSelected.includes(code)
+      ? vanSelected.filter((value) => value !== code)
+      : [...vanSelected, code];
+    setForm((current) => ({ ...current, van_company_codes: next }));
   }
 
   async function handleSubmit() {
@@ -406,16 +401,16 @@ export default function FranchiseCreateDialog({
                 VAN사 (중복선택 가능)
               </div>
               <div className="flex flex-wrap gap-2">
-                {VAN_COMPANIES.map((company) => {
-                  const active = vanSelected.includes(company);
+                {VAN_COMPANY_OPTIONS.map((option) => {
+                  const active = vanSelected.includes(option.code);
                   return (
                     <button
-                      key={company}
+                      key={option.code}
                       type="button"
-                      onClick={() => toggleVan(company)}
+                      onClick={() => toggleVan(option.code)}
                       className={`h-8 rounded-full border px-3.5 text-xs font-semibold ${active ? "border-primary bg-primary-muted text-primary" : "border-border bg-card text-foreground hover:border-primary/50"}`}
                     >
-                      {company}
+                      {option.label}
                     </button>
                   );
                 })}

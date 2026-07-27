@@ -142,7 +142,7 @@ export interface FranchiseApplication {
   card_apply_date?: string;
   open_date?: string;
   install_date?: string;
-  van_company?: string;
+  van_company_codes?: string[];
   internet?: string;
   program?: string;
   sales_id?: string;

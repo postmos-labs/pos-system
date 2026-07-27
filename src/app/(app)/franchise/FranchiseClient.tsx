@@ -69,6 +69,7 @@ import {
   applyFranchiseStatusSideEffects,
   notifyAndLogFranchiseStatus,
 } from "@/lib/franchiseStatusEffects";
+import { VAN_COMPANY_LABEL } from "@/lib/franchiseCodes";
 
 const DOC_CASE_LABEL: Record<DocCase, string> = {
   both: "대표자명+상호명",
@@ -185,7 +186,7 @@ const EMPTY_FORM = {
   reception_date: "",
   open_date: "",
   install_date: "",
-  van_company: "",
+  van_company_codes: [] as string[],
   internet: "",
   memo: "",
   sendDocNotify: false,
@@ -912,8 +913,8 @@ const CreateForm = memo(function CreateForm({ onSubmit, submitting, onClose }: C
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">VAN사 (중복선택 가능)</label>
           <VanMultiSelect
-            value={form.van_company}
-            onChange={(v) => setForm({ ...form, van_company: v })}
+            value={form.van_company_codes.join(",")}
+            onChange={(v) => setForm({ ...form, van_company_codes: v ? v.split(",") : [] })}
           />
         </div>
         {form.applicant_type !== "giga_individual" && form.applicant_type !== "giga_corporate" && (
@@ -1297,14 +1298,7 @@ export default function FranchiseClient({
         (row.reception_channel || "미지정") !== channelFilter
       )
         return false;
-      if (
-        vanFilter &&
-        !row.van_company
-          ?.split(",")
-          .map((s) => s.trim())
-          .includes(vanFilter)
-      )
-        return false;
+      if (vanFilter && !row.van_company_codes?.includes(vanFilter)) return false;
       if (dateFrom || dateTo) {
         const createdLocalDate = format(new Date(row.created_at), "yyyy-MM-dd");
         if (dateFrom && createdLocalDate < dateFrom) return false;
@@ -1673,7 +1667,7 @@ export default function FranchiseClient({
         reception_date: form.reception_date ? formatDateText(form.reception_date) : null,
         open_date: form.open_date ? formatDateText(form.open_date) : null,
         install_date: form.install_date ? formatDateText(form.install_date) : null,
-        van_company: form.van_company || null,
+        van_company_codes: form.van_company_codes,
         internet: form.internet || null,
         memo: form.memo || null,
         created_by: currentUserId,
@@ -1955,6 +1949,25 @@ export default function FranchiseClient({
     );
   }
 
+  async function saveVanCompanyCodes(row: FranchiseApplication, codes: string[]) {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("franchise_applications")
+      .update({ van_company_codes: codes })
+      .eq("id", row.id);
+    if (error) {
+      toast.error("수정 실패: " + error.message);
+      return;
+    }
+    setLocalRows((prev) =>
+      prev.map((r) =>
+        r.id === row.id
+          ? { ...r, van_company_codes: codes, updated_at: new Date().toISOString() }
+          : r,
+      ),
+    );
+  }
+
   async function notifyAndLog(
     franchiseId: string,
     logKey: string,
@@ -1976,7 +1989,9 @@ export default function FranchiseClient({
         사업자유형: APPLICANT_TYPE_LABEL[r.applicant_type],
         접수채널: r.reception_channel ?? "",
         상태: FRANCHISE_STATUS_LABEL[r.status],
-        VAN사: r.van_company ?? "",
+        VAN사: (r.van_company_codes ?? [])
+          .map((code) => VAN_COMPANY_LABEL[code as keyof typeof VAN_COMPANY_LABEL] ?? code)
+          .join(", "),
         인터넷: r.internet ?? "",
         주소: r.address ?? "",
         오픈예정일: r.open_date ?? "",
@@ -2936,6 +2951,7 @@ export default function FranchiseClient({
               onClose={() => setExpandedId(null)}
               onSave={(field, value) => saveField(row, field, value)}
               onEquipmentChange={(items) => saveEquipmentItems(row, items)}
+              onVanCompanyChange={(codes) => saveVanCompanyCodes(row, codes)}
               onApplicantTypeChange={(value) => updateApplicantType(row, value)}
               onCsChange={(value) => updateCs(row, value)}
               onSalesChange={(value) => updateSales(row, value)}
