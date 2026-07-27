@@ -10,18 +10,18 @@ npm install
 
 `npm install` 시 `husky`가 자동으로 git hook을 설치합니다 (`prepare` 스크립트).
 
-## 2. 개발용 Supabase 프로젝트 만들기
+## 2. 개발용 Supabase 프로젝트
 
-**주의: 운영(prod) Supabase 프로젝트의 키를 로컬 `.env`에 절대 사용하지 마세요.** 로컬 개발은 반드시 본인 소유의 별도 Supabase 프로젝트를 사용합니다.
+**주의: 운영(prod) Supabase 프로젝트의 키를 로컬 `.env`에 절대 사용하지 마세요.**
 
-1. [supabase.com](https://supabase.com)에서 새 프로젝트 생성 (무료 티어로 충분)
-2. 프로젝트 대시보드 → `SQL Editor`에서 `supabase/` 폴더의 `NNN_*.sql` 파일을 번호 순서대로 실행 (`001_schema.sql`부터 시작)
-   - 파일명 앞 번호는 실제 적용된 시간순(git 히스토리 기준)이며, 새 마이그레이션을 추가할 때는 가장 큰 번호 다음 번호를 이어서 사용
-   - 현재는 자동화된 마이그레이션 러너가 없어 수동 적용
-3. `Project Settings → API`에서 아래 값을 확인
-   - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
-   - `anon public` 키 → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `service_role` 키 → `SUPABASE_SERVICE_ROLE_KEY` (절대 클라이언트 코드/커밋에 노출 금지)
+팀에서 공유하는 dev Supabase 프로젝트를 사용합니다 (각자 새로 만들지 않음). 접근 권한이 없다면 프로젝트를 이미 띄운 팀원에게 초대를 요청하세요.
+
+- 새 마이그레이션을 추가할 때는 `supabase/` 폴더에서 가장 큰 번호 다음 번호를 이어서 파일을 만들고, 공유 dev 프로젝트의 `SQL Editor`에서 직접 실행 (현재는 자동화된 마이그레이션 러너가 없어 수동 적용)
+- 여러 명이 같은 dev DB를 쓰므로 스키마 변경(컬럼 삭제/타입 변경 등)은 팀원에게 미리 공유하고 진행 (동시에 건드리면 충돌 가능)
+- `Project Settings → API`에서 아래 값을 확인해 팀원에게 공유받습니다
+  - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
+  - `anon public` 키 → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `service_role` 키 → `SUPABASE_SERVICE_ROLE_KEY` (절대 클라이언트 코드/커밋에 노출 금지)
 
 ## 3. 환경 변수 설정
 
