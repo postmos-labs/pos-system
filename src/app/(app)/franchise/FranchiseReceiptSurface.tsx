@@ -162,21 +162,35 @@ function statusTone(status: FranchiseStatus) {
 }
 
 const MEMO_STAMP_RE = /\[(.+?) (\d{2})\. (\d{2})\. (\d{2}):(\d{2})\]/g;
+const PIN_RE = /^PIN:(\d+):/;
+const LEGACY_PIN_MARKER = "PIN::";
 
-function memoEntries(memo: string | undefined | null): string[] {
+function hasPinMarker(text: string): boolean {
+  return text.startsWith(LEGACY_PIN_MARKER) || PIN_RE.test(text);
+}
+
+// 메모 드로어에서 상단 고정(북마크)한 항목만 표에 노출하기 위해 항목별 pinned 여부를 함께 반환한다
+function pinnedMemoEntries(memo: string | undefined | null): string[] {
   if (!memo?.trim()) return [];
   const matches = [...memo.matchAll(MEMO_STAMP_RE)];
-  if (matches.length === 0) return [memo.trim()];
-  const entries: string[] = [];
-  const leading = memo.slice(0, matches[0].index).trim();
-  if (leading) entries.push(leading);
-  matches.forEach((m, i) => {
-    const start = m.index! + m[0].length;
-    const end = i + 1 < matches.length ? matches[i + 1].index! : memo.length;
-    const text = memo.slice(start, end).trim();
-    if (text) entries.push(text);
-  });
-  return entries.reverse();
+  const entries: { text: string; pinned: boolean }[] = [];
+  if (matches.length === 0) {
+    const trimmed = memo.trim();
+    entries.push({ text: trimmed, pinned: hasPinMarker(trimmed) });
+  } else {
+    const leading = memo.slice(0, matches[0].index).trim();
+    if (leading) entries.push({ text: leading, pinned: hasPinMarker(leading) });
+    matches.forEach((m, i) => {
+      const start = m.index! + m[0].length;
+      const end = i + 1 < matches.length ? matches[i + 1].index! : memo.length;
+      const text = memo.slice(start, end).trim();
+      if (text) entries.push({ text, pinned: hasPinMarker(m[1]) });
+    });
+  }
+  return entries
+    .filter((entry) => entry.pinned)
+    .reverse()
+    .map((entry) => entry.text);
 }
 
 function pageRange(current: number, total: number) {
@@ -495,7 +509,7 @@ export default function FranchiseReceiptSurface(props: Props) {
               )}
               {props.rows.map((row) => {
                 const tone = statusTone(row.status);
-                const memos = memoEntries(row.memo);
+                const memos = pinnedMemoEntries(row.memo);
                 return (
                   <tr
                     key={row.id}
