@@ -169,17 +169,29 @@ function hasPinMarker(text: string): boolean {
   return text.startsWith(LEGACY_PIN_MARKER) || PIN_RE.test(text);
 }
 
+// PIN 마커가 붙어 있으면 pinned=true와 함께 마커를 뗀 텍스트를 반환한다
+function stripPinPrefix(text: string): { pinned: boolean; text: string } {
+  if (text.startsWith(LEGACY_PIN_MARKER))
+    return { pinned: true, text: text.slice(LEGACY_PIN_MARKER.length) };
+  const m = text.match(PIN_RE);
+  if (m) return { pinned: true, text: text.slice(m[0].length) };
+  return { pinned: false, text };
+}
+
 // 메모 드로어에서 상단 고정(북마크)한 항목만 표에 노출하기 위해 항목별 pinned 여부를 함께 반환한다
 function pinnedMemoEntries(memo: string | undefined | null): string[] {
   if (!memo?.trim()) return [];
   const matches = [...memo.matchAll(MEMO_STAMP_RE)];
   const entries: { text: string; pinned: boolean }[] = [];
   if (matches.length === 0) {
-    const trimmed = memo.trim();
-    entries.push({ text: trimmed, pinned: hasPinMarker(trimmed) });
+    const { pinned, text } = stripPinPrefix(memo.trim());
+    entries.push({ text, pinned });
   } else {
-    const leading = memo.slice(0, matches[0].index).trim();
-    if (leading) entries.push({ text: leading, pinned: hasPinMarker(leading) });
+    const leadingRaw = memo.slice(0, matches[0].index).trim();
+    if (leadingRaw) {
+      const { pinned, text } = stripPinPrefix(leadingRaw);
+      entries.push({ text, pinned });
+    }
     matches.forEach((m, i) => {
       const start = m.index! + m[0].length;
       const end = i + 1 < matches.length ? matches[i + 1].index! : memo.length;
