@@ -53,6 +53,7 @@ interface CalendarInstallRow {
   status: string;
   scheduled_date?: string | null;
   assigned_to?: string | null;
+  delivery_type?: string | null;
   assignee?: { name: string } | null;
 }
 
@@ -109,8 +110,21 @@ const LEGEND_ITEMS = [
   { category: "우국상 오픈", color: "bg-cyan-500" },
   { category: "우국상 설치(월요일)", color: "bg-amber-500" },
   { category: "AS", color: "bg-red-500" },
+  { category: "명변", color: "bg-teal-600" },
+  { category: "전환", color: "bg-pink-500" },
+  { category: "택배발송", color: "bg-rose-500" },
   { category: "메모", color: "bg-violet-500" },
 ] as const;
+
+const INSTALL_CATEGORY_BY_DELIVERY_TYPE: Record<
+  string,
+  { label: string; color: string; statusColor: string }
+> = {
+  as: { label: "AS", color: "bg-red-500", statusColor: "bg-red-50 text-red-600" },
+  name_change: { label: "명변", color: "bg-teal-600", statusColor: "bg-teal-50 text-teal-600" },
+  transfer: { label: "전환", color: "bg-pink-500", statusColor: "bg-pink-50 text-pink-600" },
+  delivery: { label: "택배발송", color: "bg-rose-500", statusColor: "bg-rose-50 text-rose-600" },
+};
 
 const MANUAL_CATEGORY_OPTIONS = [
   { value: "일정", color: "bg-indigo-500" },
@@ -316,16 +330,21 @@ export default function CalendarClient({
       const date = toYMD(row.scheduled_date);
       if (!date) continue;
       if (!map[date]) map[date] = [];
+      const special = row.delivery_type
+        ? INSTALL_CATEGORY_BY_DELIVERY_TYPE[row.delivery_type]
+        : undefined;
+      const label = special?.label ?? "설치";
+      const color = special?.color ?? "bg-fuchsia-500";
       map[date].push({
         date,
-        label: "설치",
-        category: "설치 관리",
-        color: "bg-fuchsia-500",
+        label,
+        category: special ? label : "설치 관리",
+        color,
         href: `/installs?id=${row.id}`,
         businessName: row.customer_name || "고객명 미입력",
-        subtitle: "설치 관리",
+        subtitle: special ? label : "설치 관리",
         statusLabel: INSTALL_STATUS_LABEL[row.status] ?? row.status,
-        statusColor: "bg-fuchsia-50 text-fuchsia-600",
+        statusColor: special?.statusColor ?? "bg-fuchsia-50 text-fuchsia-600",
         techName: row.assignee?.name,
         newTab: true,
         ownerIds: row.assigned_to ? [row.assigned_to] : [],
@@ -396,7 +415,10 @@ export default function CalendarClient({
               (ev) =>
                 (ev.category === "설치 관리" ||
                   ev.category === "설치" ||
-                  ev.category === "택배발송") &&
+                  ev.category === "택배발송" ||
+                  ev.category === "AS" ||
+                  ev.category === "명변" ||
+                  ev.category === "전환") &&
                 ev.ownerIds.length > 0,
             );
       if (filtered.length) map[date] = filtered;

@@ -47,7 +47,7 @@ export default async function CalendarPage() {
     supabase
       .from("installations")
       .select(
-        "id, customer_name, status, scheduled_date, assigned_to, assignee:profiles!installations_assigned_to_fkey(name)",
+        "id, customer_name, status, scheduled_date, assigned_to, delivery_type, assignee:profiles!installations_assigned_to_fkey(name)",
       )
       .not("scheduled_date", "is", null),
     supabase.from("profiles").select("id, name").eq("role", "tech"),
