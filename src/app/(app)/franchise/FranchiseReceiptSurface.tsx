@@ -95,8 +95,6 @@ const HIDDEN_STATUSES: FranchiseStatus[] = [
 const STATUS_OPTIONS = (Object.keys(FRANCHISE_STATUS_LABEL) as FranchiseStatus[]).filter(
   (status) => !HIDDEN_STATUSES.includes(status),
 );
-const STAGES = ["서류", "VAN", "토스", "완료"];
-
 const buttonBase =
   "focus-visible:ring-primary/30 inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border font-semibold transition-colors outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50";
 const secondaryButton = `${buttonBase} border-border bg-card text-foreground hover:bg-muted h-9 px-4 text-sm`;
@@ -163,44 +161,22 @@ function statusTone(status: FranchiseStatus) {
   };
 }
 
-function StageProgress({ status }: { status: FranchiseStatus }) {
-  const tone = statusTone(status);
-  const fraction = (index: number) => index / (STAGES.length - 1);
-  return (
-    <div className="flex w-full flex-col gap-1.5">
-      <div className="relative h-2.5 w-full">
-        <div className="bg-border absolute top-1/2 right-0 left-0 h-0.5 -translate-y-1/2" />
-        {tone.stage > 0 && (
-          <div
-            className={`absolute top-1/2 left-0 h-0.5 -translate-y-1/2 ${tone.solid}`}
-            style={{ width: `${fraction(tone.stage) * 100}%` }}
-          />
-        )}
-        {STAGES.map((label, index) => (
-          <div
-            key={label}
-            className={`absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 ${index < tone.stage ? `${tone.solid} ${tone.border}` : index === tone.stage ? `bg-card ${tone.border}` : "bg-card border-border-strong"}`}
-            style={{ left: `${fraction(index) * 100}%` }}
-          />
-        ))}
-      </div>
-      <div className="relative h-3 w-full">
-        {STAGES.map((label, index) => (
-          <span
-            key={label}
-            className={`text-muted-foreground absolute top-0 text-[9.5px] whitespace-nowrap ${index === 0 ? "left-0" : index === STAGES.length - 1 ? "right-0" : "-translate-x-1/2"}`}
-            style={
-              index === 0 || index === STAGES.length - 1
-                ? undefined
-                : { left: `${fraction(index) * 100}%` }
-            }
-          >
-            {label}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
+const MEMO_STAMP_RE = /\[(.+?) (\d{2})\. (\d{2})\. (\d{2}):(\d{2})\]/g;
+
+function memoEntries(memo: string | undefined | null): string[] {
+  if (!memo?.trim()) return [];
+  const matches = [...memo.matchAll(MEMO_STAMP_RE)];
+  if (matches.length === 0) return [memo.trim()];
+  const entries: string[] = [];
+  const leading = memo.slice(0, matches[0].index).trim();
+  if (leading) entries.push(leading);
+  matches.forEach((m, i) => {
+    const start = m.index! + m[0].length;
+    const end = i + 1 < matches.length ? matches[i + 1].index! : memo.length;
+    const text = memo.slice(start, end).trim();
+    if (text) entries.push(text);
+  });
+  return entries.reverse();
 }
 
 function pageRange(current: number, total: number) {
@@ -485,17 +461,15 @@ export default function FranchiseReceiptSurface(props: Props) {
                 </th>
                 {[
                   "접수일",
-                  "등록일",
+                  "오픈 예정일",
                   "접수 채널",
-                  "사업자 유형",
                   "상호명",
                   "대표자",
                   "연락처",
-                  "등록자",
                   "담당자",
                   "인터넷",
                   "상태",
-                  "진행률",
+                  "비고",
                   "메모",
                 ].map((label) => (
                   <th
@@ -511,7 +485,7 @@ export default function FranchiseReceiptSurface(props: Props) {
               {props.rows.length === 0 && (
                 <tr className="border-border border-b">
                   <td
-                    colSpan={14}
+                    colSpan={12}
                     style={{ height: 50 * 49 }}
                     className="text-muted-foreground text-center text-sm"
                   >
@@ -521,6 +495,7 @@ export default function FranchiseReceiptSurface(props: Props) {
               )}
               {props.rows.map((row) => {
                 const tone = statusTone(row.status);
+                const memos = memoEntries(row.memo);
                 return (
                   <tr
                     key={row.id}
@@ -546,10 +521,16 @@ export default function FranchiseReceiptSurface(props: Props) {
                         className="h-auto border-none bg-transparent px-0 text-[12.5px] outline-none"
                       />
                     </td>
-                    <td className="text-muted-foreground px-2.5 py-2.5 whitespace-nowrap">
-                      {new Date(row.created_at).toLocaleDateString("ko-KR", {
-                        timeZone: "Asia/Seoul",
-                      })}
+                    <td className="px-2.5 py-2.5 whitespace-nowrap">
+                      <input
+                        aria-label="오픈 예정일"
+                        type="date"
+                        value={row.open_date ?? ""}
+                        onChange={(event) =>
+                          props.onSaveField(row, "open_date", event.target.value)
+                        }
+                        className="h-auto border-none bg-transparent px-0 text-[12.5px] outline-none"
+                      />
                     </td>
                     <td className="px-2.5 py-2.5 whitespace-nowrap">
                       <select
@@ -566,23 +547,7 @@ export default function FranchiseReceiptSurface(props: Props) {
                         ))}
                       </select>
                     </td>
-                    <td className="px-2.5 py-2.5 whitespace-nowrap">
-                      <select
-                        aria-label="사업자 유형"
-                        value={row.applicant_type}
-                        onChange={(event) =>
-                          props.onApplicantTypeChange(row, event.target.value as ApplicantType)
-                        }
-                        className="text-foreground h-auto border-none bg-transparent py-0 pr-6 pl-0 text-[12.5px] outline-none"
-                      >
-                        {(Object.keys(APPLICANT_TYPE_LABEL) as ApplicantType[]).map((type) => (
-                          <option key={type} value={type}>
-                            {APPLICANT_TYPE_LABEL[type]}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="max-w-[140px] px-2.5 py-2.5 font-semibold">
+                    <td className="max-w-[200px] px-2.5 py-2.5 font-semibold">
                       <button
                         type="button"
                         onClick={() => props.onOpenDetail(row)}
@@ -600,9 +565,6 @@ export default function FranchiseReceiptSurface(props: Props) {
                       title="클릭하여 복사"
                     >
                       {row.phone || "-"}
-                    </td>
-                    <td className="text-muted-foreground px-2.5 py-2.5 whitespace-nowrap">
-                      {row.creator?.name ?? "-"}
                     </td>
                     <td className="px-2.5 py-2.5 whitespace-nowrap">
                       <select
@@ -641,8 +603,18 @@ export default function FranchiseReceiptSurface(props: Props) {
                         ))}
                       </select>
                     </td>
-                    <td className="min-w-[120px] px-2.5 py-2.5">
-                      <StageProgress status={row.status} />
+                    <td className="text-foreground min-w-[200px] px-2.5 py-2.5">
+                      {memos.length > 0 ? (
+                        <ul className="list-disc space-y-0.5 pl-4">
+                          {memos.map((entry, index) => (
+                            <li key={index} className="break-words whitespace-pre-wrap">
+                              {entry}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        "-"
+                      )}
                     </td>
                     <td className="px-2.5 py-2.5 align-middle" title={row.memo || "메모 없음"}>
                       <button
@@ -662,7 +634,7 @@ export default function FranchiseReceiptSurface(props: Props) {
               {props.rows.length > 0 &&
                 Array.from({ length: Math.max(0, 50 - props.rows.length) }).map((_, index) => (
                   <tr key={`filler-${index}`} aria-hidden="true" className="border-border border-b">
-                    <td colSpan={14} style={{ height: 49 }} />
+                    <td colSpan={12} style={{ height: 49 }} />
                   </tr>
                 ))}
             </tbody>
