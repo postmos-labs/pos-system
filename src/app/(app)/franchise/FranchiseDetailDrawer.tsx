@@ -497,9 +497,11 @@ export default function FranchiseDetailDrawer({
                     </select>
                   </Field>
                   <Field label="구분">
-                    <div className="flex h-9 items-center text-sm">
-                      {row.case_type ? FRANCHISE_CASE_TYPE_LABEL[row.case_type] : "미지정"}
-                    </div>
+                    <select value={row.case_type ?? ""} disabled className={selectClass}>
+                      <option value={row.case_type ?? ""}>
+                        {row.case_type ? FRANCHISE_CASE_TYPE_LABEL[row.case_type] : "미지정"}
+                      </option>
+                    </select>
                   </Field>
                   <Field label="옵션">
                     <div className="flex h-9 items-center gap-3">

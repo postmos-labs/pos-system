@@ -491,9 +491,11 @@ export default function FranchiseCreateDialog({
                         </select>
                       </Field>
                       <Field label="구분">
-                        <div className="flex h-9 items-center text-sm">
-                          {FRANCHISE_CASE_TYPE_LABEL[form.case_type]}
-                        </div>
+                        <select value={form.case_type} disabled className={selectClass}>
+                          <option value={form.case_type}>
+                            {FRANCHISE_CASE_TYPE_LABEL[form.case_type]}
+                          </option>
+                        </select>
                       </Field>
                       <Field label="옵션">
                         <div className="flex h-9 items-center gap-3">
