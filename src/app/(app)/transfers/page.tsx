@@ -13,7 +13,7 @@ export default async function TransfersPage() {
     supabase
       .from("franchise_applications")
       .select("*, tech:profiles!franchise_applications_tech_id_fkey(id,name,role)")
-      .eq("reception_channel", "전환")
+      .eq("case_type", "conversion")
       .order("updated_at", { ascending: false }),
     supabase
       .from("profiles")
@@ -42,7 +42,7 @@ export default async function TransfersPage() {
       <div>
         <h1 className="text-xl font-bold text-slate-900">전환건</h1>
         <p className="text-sm text-slate-500 mt-0.5">
-          가맹 접수 중 접수채널이 &quot;전환&quot;인 건만 모아보기
+          가맹 접수 중 구분이 &quot;전환&quot;인 건만 모아보기
         </p>
       </div>
       {error ? (
