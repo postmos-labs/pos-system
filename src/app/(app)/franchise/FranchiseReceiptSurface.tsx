@@ -11,6 +11,7 @@ import {
   FileTextIcon,
   FileWarningIcon,
   ListFilterIcon,
+  PercentIcon,
   PlusIcon,
   SearchIcon,
   StickyNoteIcon,
@@ -43,6 +44,10 @@ interface Props {
   page: number;
   totalPages: number;
   kpiCounts: Record<KpiKey, number>;
+  successRateStats: {
+    day1: { rate: number | null; total: number };
+    day30: { rate: number | null; total: number };
+  };
   activeKpi: KpiKey | null;
   tableView: TableView;
   tableViewCounts: Record<TableView, number>;
@@ -303,7 +308,7 @@ export default function FranchiseReceiptSurface(props: Props) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-6">
         {kpis.map((kpi) => {
           const Icon = kpi.icon;
           return (
@@ -328,6 +333,31 @@ export default function FranchiseReceiptSurface(props: Props) {
             </button>
           );
         })}
+        <div
+          title="접수 등록 건 중 카드가맹접수/토스심사접수완료 단계 이상에 도달한 비율"
+          className="border-border bg-card shadow-card flex min-h-24 items-center gap-3 rounded-xl border px-5"
+        >
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-fuchsia-500/12 text-fuchsia-600">
+            <PercentIcon className="size-5" />
+          </span>
+          <span className="min-w-0">
+            <span className="text-muted-foreground block truncate text-xs">접수 성공률</span>
+            <span className="text-foreground mt-1 flex items-baseline gap-2.5">
+              <span className="text-base font-bold">
+                {props.successRateStats.day1.rate === null
+                  ? "-"
+                  : `${props.successRateStats.day1.rate}%`}
+                <small className="text-muted-foreground ml-1 text-[10px] font-medium">1일</small>
+              </span>
+              <span className="text-base font-bold">
+                {props.successRateStats.day30.rate === null
+                  ? "-"
+                  : `${props.successRateStats.day30.rate}%`}
+                <small className="text-muted-foreground ml-1 text-[10px] font-medium">30일</small>
+              </span>
+            </span>
+          </span>
+        </div>
       </div>
 
       <div className="border-border bg-card flex flex-col gap-2.5 rounded-xl border p-3.5">
