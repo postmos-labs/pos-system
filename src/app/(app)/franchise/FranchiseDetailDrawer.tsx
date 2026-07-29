@@ -434,97 +434,105 @@ export default function FranchiseDetailDrawer({
 
             <div>
               <div className="text-foreground mb-2.5 text-[13px] font-bold">기본 정보</div>
-              <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
-                <Field label="상호명">
-                  <EditableInput
-                    value={row.business_name}
-                    onSave={(value) => onSave("business_name", value)}
-                  />
-                </Field>
-                <Field label="대표자명">
-                  <EditableInput
-                    value={row.owner_name}
-                    onSave={(value) => onSave("owner_name", value)}
-                  />
-                </Field>
-                <Field label="연락처">
-                  <EditableInput
-                    value={row.phone}
-                    formatter={formatPhone}
-                    onSave={(value) => onSave("phone", value)}
-                  />
-                </Field>
-                <Field label="사업자번호">
-                  <EditableInput
-                    value={row.business_number}
-                    placeholder="000-00-00000"
-                    formatter={formatBusinessNumber}
-                    onSave={(value) => onSave("business_number", value)}
-                  />
-                </Field>
-                <Field label="채널">
-                  <select
-                    value={row.channel ?? ""}
-                    onChange={(event) => onSave("channel", event.target.value)}
-                    className={selectClass}
-                  >
-                    <option value="">미지정</option>
-                    {(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map((c) => (
-                      <option key={c} value={c}>
-                        {FRANCHISE_CHANNEL_LABEL[c]}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="구분">
-                  <div className="flex h-9 items-center text-sm">
-                    {row.case_type ? FRANCHISE_CASE_TYPE_LABEL[row.case_type] : "미지정"}
-                  </div>
-                </Field>
-                <Field label="옵션">
-                  <div className="flex h-9 items-center gap-3">
-                    <label className="text-foreground flex cursor-pointer items-center gap-1.5 text-sm select-none">
-                      <input
-                        type="checkbox"
-                        checked={!!row.is_rental}
-                        onChange={(event) => onOptionsChange({ is_rental: event.target.checked })}
-                        className="accent-primary size-[15px] cursor-pointer"
-                      />
-                      렌탈
-                    </label>
-                    <label className="text-foreground flex cursor-pointer items-center gap-1.5 text-sm select-none">
-                      <input
-                        type="checkbox"
-                        checked={!!row.is_installment}
-                        onChange={(event) =>
-                          onOptionsChange({ is_installment: event.target.checked })
-                        }
-                        className="accent-primary size-[15px] cursor-pointer"
-                      />
-                      할부
-                    </label>
-                  </div>
-                </Field>
-                <Field label="사업자 유형">
-                  <select
-                    value={row.applicant_type}
-                    onChange={(event) => onApplicantTypeChange(event.target.value as ApplicantType)}
-                    className={selectClass}
-                  >
-                    {(Object.keys(APPLICANT_TYPE_LABEL) as ApplicantType[]).map((type) => (
-                      <option key={type} value={type}>
-                        {APPLICANT_TYPE_LABEL[type]}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+              <div className="flex flex-col gap-3.5">
+                <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
+                  <Field label="상호명">
+                    <EditableInput
+                      value={row.business_name}
+                      onSave={(value) => onSave("business_name", value)}
+                    />
+                  </Field>
+                  <Field label="대표자명">
+                    <EditableInput
+                      value={row.owner_name}
+                      onSave={(value) => onSave("owner_name", value)}
+                    />
+                  </Field>
+                  <Field label="연락처">
+                    <EditableInput
+                      value={row.phone}
+                      formatter={formatPhone}
+                      onSave={(value) => onSave("phone", value)}
+                    />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                  <Field label="사업자 유형">
+                    <select
+                      value={row.applicant_type}
+                      onChange={(event) =>
+                        onApplicantTypeChange(event.target.value as ApplicantType)
+                      }
+                      className={selectClass}
+                    >
+                      {(Object.keys(APPLICANT_TYPE_LABEL) as ApplicantType[]).map((type) => (
+                        <option key={type} value={type}>
+                          {APPLICANT_TYPE_LABEL[type]}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="사업자번호">
+                    <EditableInput
+                      value={row.business_number}
+                      placeholder="000-00-00000"
+                      formatter={formatBusinessNumber}
+                      onSave={(value) => onSave("business_number", value)}
+                    />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+                  <Field label="채널">
+                    <select
+                      value={row.channel ?? ""}
+                      onChange={(event) => onSave("channel", event.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="">미지정</option>
+                      {(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map((c) => (
+                        <option key={c} value={c}>
+                          {FRANCHISE_CHANNEL_LABEL[c]}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="구분">
+                    <div className="flex h-9 items-center text-sm">
+                      {row.case_type ? FRANCHISE_CASE_TYPE_LABEL[row.case_type] : "미지정"}
+                    </div>
+                  </Field>
+                  <Field label="옵션">
+                    <div className="flex h-9 items-center gap-3">
+                      <label className="text-foreground flex cursor-pointer items-center gap-1.5 text-sm select-none">
+                        <input
+                          type="checkbox"
+                          checked={!!row.is_rental}
+                          onChange={(event) => onOptionsChange({ is_rental: event.target.checked })}
+                          className="accent-primary size-[15px] cursor-pointer"
+                        />
+                        렌탈
+                      </label>
+                      <label className="text-foreground flex cursor-pointer items-center gap-1.5 text-sm select-none">
+                        <input
+                          type="checkbox"
+                          checked={!!row.is_installment}
+                          onChange={(event) =>
+                            onOptionsChange({ is_installment: event.target.checked })
+                          }
+                          className="accent-primary size-[15px] cursor-pointer"
+                        />
+                        할부
+                      </label>
+                    </div>
+                  </Field>
+                </div>
               </div>
             </div>
 
             <div>
               <div className="text-foreground mb-2.5 text-[13px] font-bold">상품</div>
               <div className="flex gap-2">
-                <div className="max-w-xs flex-1">
+                <div className="flex-1">
                   <select
                     value={productSelect}
                     onChange={(event) => setProductSelect(event.target.value)}
@@ -574,71 +582,79 @@ export default function FranchiseDetailDrawer({
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
-              <Field label="주소">
-                <EditableInput
-                  value={row.address}
-                  placeholder="주소 입력"
-                  onSave={(value) => onSave("address", value)}
-                />
-              </Field>
-              <Field label="상세주소">
-                <EditableInput
-                  value={row.address_detail}
-                  placeholder="상세주소 입력"
-                  onSave={(value) => onSave("address_detail", value)}
-                />
-              </Field>
-              <Field label="오픈예정일">
-                <input
-                  type="date"
-                  value={row.open_date ?? ""}
-                  onChange={(event) => onSave("open_date", event.target.value)}
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="설치 및 발송일">
-                <input
-                  type="date"
-                  value={row.install_date ?? ""}
-                  onChange={(event) => onSave("install_date", event.target.value)}
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="카드가맹접수일">
-                <input
-                  type="date"
-                  value={row.card_apply_date ?? ""}
-                  onChange={(event) => onSave("card_apply_date", event.target.value)}
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="인터넷">
-                <select
-                  value={row.internet ?? ""}
-                  onChange={(event) => onSave("internet", event.target.value)}
-                  className={selectClass}
-                >
-                  <option value="">미설정</option>
-                  {INTERNET_PROVIDERS.map((provider) => (
-                    <option key={provider}>{provider}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="담당자">
-                <select
-                  value={row.cs_id ?? ""}
-                  onChange={(event) => onCsChange(event.target.value)}
-                  className={selectClass}
-                >
-                  <option value="">미배정</option>
-                  {csProfiles.map((profile) => (
-                    <option key={profile.id} value={profile.id}>
-                      {profile.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+            <div className="flex flex-col gap-3.5">
+              <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
+                <div className="sm:col-span-2">
+                  <Field label="주소">
+                    <EditableInput
+                      value={row.address}
+                      placeholder="주소 입력"
+                      onSave={(value) => onSave("address", value)}
+                    />
+                  </Field>
+                </div>
+                <Field label="상세주소">
+                  <EditableInput
+                    value={row.address_detail}
+                    placeholder="상세주소 입력"
+                    onSave={(value) => onSave("address_detail", value)}
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+                <Field label="오픈예정일">
+                  <input
+                    type="date"
+                    value={row.open_date ?? ""}
+                    onChange={(event) => onSave("open_date", event.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="카드가맹접수일">
+                  <input
+                    type="date"
+                    value={row.card_apply_date ?? ""}
+                    onChange={(event) => onSave("card_apply_date", event.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="설치 및 발송일">
+                  <input
+                    type="date"
+                    value={row.install_date ?? ""}
+                    onChange={(event) => onSave("install_date", event.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                <Field label="인터넷">
+                  <select
+                    value={row.internet ?? ""}
+                    onChange={(event) => onSave("internet", event.target.value)}
+                    className={selectClass}
+                  >
+                    <option value="">미설정</option>
+                    {INTERNET_PROVIDERS.map((provider) => (
+                      <option key={provider}>{provider}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="담당자">
+                  <select
+                    value={row.cs_id ?? ""}
+                    onChange={(event) => onCsChange(event.target.value)}
+                    className={selectClass}
+                  >
+                    <option value="">미배정</option>
+                    {csProfiles.map((profile) => (
+                      <option key={profile.id} value={profile.id}>
+                        {profile.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
             </div>
 
             <div>

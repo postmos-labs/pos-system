@@ -400,152 +400,166 @@ export default function FranchiseCreateDialog({
                 )}
                 <div>
                   <div className="text-foreground mb-2.5 text-[13px] font-bold">기본 정보</div>
-                  <div className="grid grid-cols-1 gap-3.5 md:grid-cols-4">
-                    <Field label="상호명">
-                      <input
-                        placeholder="상호명 입력"
-                        value={form.business_name}
-                        onChange={(event) =>
-                          setForm({ ...form, business_name: event.target.value })
-                        }
-                        className={inputClass}
-                      />
-                    </Field>
-                    <Field label="대표자명">
-                      <input
-                        placeholder="대표자명 입력"
-                        value={form.owner_name}
-                        onChange={(event) => setForm({ ...form, owner_name: event.target.value })}
-                        className={inputClass}
-                      />
-                    </Field>
-                    <Field label="연락처">
-                      <input
-                        placeholder="010-0000-0000"
-                        value={form.phone}
-                        onChange={(event) =>
-                          setForm({ ...form, phone: formatPhone(event.target.value) })
-                        }
-                        className={inputClass}
-                      />
-                    </Field>
-                    <Field label="사업자번호">
-                      <input
-                        placeholder="000-00-00000"
-                        value={form.business_number}
-                        onChange={(event) =>
-                          setForm({
-                            ...form,
-                            business_number: formatBusinessNumber(event.target.value),
-                          })
-                        }
-                        className={inputClass}
-                      />
-                    </Field>
+                  <div className="flex flex-col gap-3.5">
+                    <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
+                      <Field label="상호명">
+                        <input
+                          placeholder="상호명 입력"
+                          value={form.business_name}
+                          onChange={(event) =>
+                            setForm({ ...form, business_name: event.target.value })
+                          }
+                          className={inputClass}
+                        />
+                      </Field>
+                      <Field label="대표자명">
+                        <input
+                          placeholder="대표자명 입력"
+                          value={form.owner_name}
+                          onChange={(event) => setForm({ ...form, owner_name: event.target.value })}
+                          className={inputClass}
+                        />
+                      </Field>
+                      <Field label="연락처">
+                        <input
+                          placeholder="010-0000-0000"
+                          value={form.phone}
+                          onChange={(event) =>
+                            setForm({ ...form, phone: formatPhone(event.target.value) })
+                          }
+                          className={inputClass}
+                        />
+                      </Field>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
+                      <Field label="사업자 유형">
+                        <select
+                          value={form.applicant_type}
+                          onChange={(event) =>
+                            setForm({
+                              ...form,
+                              applicant_type: event.target.value as ApplicantType,
+                            })
+                          }
+                          className={selectClass}
+                        >
+                          {(Object.keys(APPLICANT_TYPE_LABEL) as ApplicantType[]).map((type) => (
+                            <option key={type} value={type}>
+                              {APPLICANT_TYPE_LABEL[type]}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="사업자번호">
+                        <input
+                          placeholder="000-00-00000"
+                          value={form.business_number}
+                          onChange={(event) =>
+                            setForm({
+                              ...form,
+                              business_number: formatBusinessNumber(event.target.value),
+                            })
+                          }
+                          className={inputClass}
+                        />
+                      </Field>
+                    </div>
                   </div>
                 </div>
 
                 <div>
                   <div className="text-foreground mb-2.5 text-[13px] font-bold">접수 정보</div>
-                  <div className="grid grid-cols-1 gap-3.5 md:grid-cols-4">
-                    <Field label="접수날짜">
-                      <input
-                        type="date"
-                        value={form.reception_date}
-                        onChange={(event) =>
-                          setForm({ ...form, reception_date: event.target.value })
-                        }
-                        className={inputClass}
-                      />
-                    </Field>
-                    <Field label="채널">
-                      <select
-                        value={form.channel}
-                        onChange={(event) =>
-                          setForm({ ...form, channel: event.target.value as FranchiseChannel | "" })
-                        }
-                        className={selectClass}
-                      >
-                        <option value="">선택 안함</option>
-                        {(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map((c) => (
-                          <option key={c} value={c}>
-                            {FRANCHISE_CHANNEL_LABEL[c]}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label="구분">
-                      <div className="flex h-9 items-center text-sm">
-                        {FRANCHISE_CASE_TYPE_LABEL[form.case_type]}
-                      </div>
-                    </Field>
-                    <Field label="옵션">
-                      <div className="flex h-9 items-center gap-3">
-                        <label className="text-foreground flex cursor-pointer items-center gap-1.5 text-sm select-none">
-                          <input
-                            type="checkbox"
-                            checked={form.is_rental}
-                            onChange={(event) =>
-                              setForm({ ...form, is_rental: event.target.checked })
-                            }
-                            className="accent-primary size-[15px] cursor-pointer"
-                          />
-                          렌탈
-                        </label>
-                        <label className="text-foreground flex cursor-pointer items-center gap-1.5 text-sm select-none">
-                          <input
-                            type="checkbox"
-                            checked={form.is_installment}
-                            onChange={(event) =>
-                              setForm({ ...form, is_installment: event.target.checked })
-                            }
-                            className="accent-primary size-[15px] cursor-pointer"
-                          />
-                          할부
-                        </label>
-                      </div>
-                    </Field>
-                    <Field label="사업자 유형">
-                      <select
-                        value={form.applicant_type}
-                        onChange={(event) =>
-                          setForm({ ...form, applicant_type: event.target.value as ApplicantType })
-                        }
-                        className={selectClass}
-                      >
-                        {(Object.keys(APPLICANT_TYPE_LABEL) as ApplicantType[]).map((type) => (
-                          <option key={type} value={type}>
-                            {APPLICANT_TYPE_LABEL[type]}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label="인터넷">
-                      <select
-                        value={form.internet}
-                        onChange={(event) => setForm({ ...form, internet: event.target.value })}
-                        className={selectClass}
-                      >
-                        <option value="">미설정</option>
-                        {INTERNET_PROVIDERS.map((provider) => (
-                          <option key={provider}>{provider}</option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label="담당자">
-                      <select
-                        value={form.cs_id}
-                        onChange={(event) => setForm({ ...form, cs_id: event.target.value })}
-                        className={selectClass}
-                      >
-                        <option value="">미배정</option>
-                        {csProfiles.map((profile) => (
-                          <option key={profile.id} value={profile.id}>
-                            {profile.name}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
+                  <div className="flex flex-col gap-3.5">
+                    <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
+                      <Field label="채널">
+                        <select
+                          value={form.channel}
+                          onChange={(event) =>
+                            setForm({
+                              ...form,
+                              channel: event.target.value as FranchiseChannel | "",
+                            })
+                          }
+                          className={selectClass}
+                        >
+                          <option value="">선택 안함</option>
+                          {(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map((c) => (
+                            <option key={c} value={c}>
+                              {FRANCHISE_CHANNEL_LABEL[c]}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="구분">
+                        <div className="flex h-9 items-center text-sm">
+                          {FRANCHISE_CASE_TYPE_LABEL[form.case_type]}
+                        </div>
+                      </Field>
+                      <Field label="옵션">
+                        <div className="flex h-9 items-center gap-3">
+                          <label className="text-foreground flex cursor-pointer items-center gap-1.5 text-sm select-none">
+                            <input
+                              type="checkbox"
+                              checked={form.is_rental}
+                              onChange={(event) =>
+                                setForm({ ...form, is_rental: event.target.checked })
+                              }
+                              className="accent-primary size-[15px] cursor-pointer"
+                            />
+                            렌탈
+                          </label>
+                          <label className="text-foreground flex cursor-pointer items-center gap-1.5 text-sm select-none">
+                            <input
+                              type="checkbox"
+                              checked={form.is_installment}
+                              onChange={(event) =>
+                                setForm({ ...form, is_installment: event.target.checked })
+                              }
+                              className="accent-primary size-[15px] cursor-pointer"
+                            />
+                            할부
+                          </label>
+                        </div>
+                      </Field>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
+                      <Field label="접수날짜">
+                        <input
+                          type="date"
+                          value={form.reception_date}
+                          onChange={(event) =>
+                            setForm({ ...form, reception_date: event.target.value })
+                          }
+                          className={inputClass}
+                        />
+                      </Field>
+                      <Field label="인터넷">
+                        <select
+                          value={form.internet}
+                          onChange={(event) => setForm({ ...form, internet: event.target.value })}
+                          className={selectClass}
+                        >
+                          <option value="">미설정</option>
+                          {INTERNET_PROVIDERS.map((provider) => (
+                            <option key={provider}>{provider}</option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="담당자">
+                        <select
+                          value={form.cs_id}
+                          onChange={(event) => setForm({ ...form, cs_id: event.target.value })}
+                          className={selectClass}
+                        >
+                          <option value="">미배정</option>
+                          {csProfiles.map((profile) => (
+                            <option key={profile.id} value={profile.id}>
+                              {profile.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    </div>
                   </div>
                 </div>
 
@@ -610,7 +624,7 @@ export default function FranchiseCreateDialog({
                         placeholder="주소 입력"
                         value={form.address}
                         onChange={(event) => setForm({ ...form, address: event.target.value })}
-                        className={inputClass}
+                        className={`${inputClass} md:col-span-2`}
                       />
                     </Field>
                     <Field label="상세주소">
@@ -623,31 +637,23 @@ export default function FranchiseCreateDialog({
                         className={inputClass}
                       />
                     </Field>
-                    <Field label="오픈예정일">
-                      <input
-                        type="date"
-                        value={form.open_date}
-                        onChange={(event) => setForm({ ...form, open_date: event.target.value })}
-                        className={inputClass}
-                      />
-                    </Field>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
+                  <Field label="오픈예정일">
+                    <input
+                      type="date"
+                      value={form.open_date}
+                      onChange={(event) => setForm({ ...form, open_date: event.target.value })}
+                      className={inputClass}
+                    />
+                  </Field>
                   <Field label="설치 및 발송일">
                     <input
                       type="date"
                       value={form.install_date}
                       onChange={(event) => setForm({ ...form, install_date: event.target.value })}
-                      className={inputClass}
-                    />
-                  </Field>
-                  <Field label="비고">
-                    <input
-                      placeholder="비고 입력"
-                      value={form.memo}
-                      onChange={(event) => setForm({ ...form, memo: event.target.value })}
                       className={inputClass}
                     />
                   </Field>
@@ -673,6 +679,16 @@ export default function FranchiseCreateDialog({
                     })}
                   </div>
                 </div>
+
+                <Field label="비고">
+                  <textarea
+                    placeholder="비고 입력"
+                    value={form.memo}
+                    onChange={(event) => setForm({ ...form, memo: event.target.value })}
+                    rows={3}
+                    className={`${inputClass} h-auto resize-y py-2`}
+                  />
+                </Field>
               </div>
             </div>
 
