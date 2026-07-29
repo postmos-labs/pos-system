@@ -45,6 +45,9 @@ import type {
   FranchiseApplication,
   FranchiseApplicationLog,
   FranchiseStatus,
+  FranchiseChannel,
+  FranchiseCaseType,
+  FranchisePreviousSnapshot,
   Profile,
 } from "@/types";
 import { APPLICANT_TYPE_LABEL, FRANCHISE_STATUS_LABEL, FRANCHISE_STATUS_COLOR } from "@/types";
@@ -65,7 +68,6 @@ import {
 import { appendApprovalNote, type ApprovalNote } from "@/lib/approvalNotes";
 import {
   docCaseOf,
-  createLinkedInstallTicket as createLinkedInstallTicketShared,
   applyFranchiseStatusSideEffects,
   notifyAndLogFranchiseStatus,
 } from "@/lib/franchiseStatusEffects";
@@ -182,6 +184,12 @@ const EMPTY_FORM = {
   cs_id: "",
   applicant_type: "individual" as ApplicantType,
   reception_channel: "",
+  channel: "" as FranchiseChannel | "",
+  case_type: "new" as FranchiseCaseType,
+  is_rental: false,
+  is_installment: false,
+  merchant_id: null as string | null,
+  previous_snapshot: null as FranchisePreviousSnapshot | null,
   reception_date: "",
   open_date: "",
   install_date: "",
@@ -1056,6 +1064,7 @@ export default function FranchiseClient({
   const { colWidths, startResize } = useColumnWidths(COL_WIDTHS_STORAGE_KEY, DEFAULT_WIDTHS);
   const [vanFilter, setVanFilter] = useState("");
   const [channelFilter, setChannelFilter] = useState("");
+  const [caseTypeFilter, setCaseTypeFilter] = useState("");
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(true);
   const [bulkStatusModal, setBulkStatusModal] = useState(false);
   const [bulkStatus, setBulkStatus] = useState<FranchiseStatus | "">("");
@@ -1291,12 +1300,8 @@ export default function FranchiseClient({
       }
       if (!skip.skipStatus && statusFilter && row.status !== statusFilter) return false;
       if (applicantTypeFilter && row.applicant_type !== applicantTypeFilter) return false;
-      if (
-        !skip.skipChannel &&
-        channelFilter &&
-        (row.reception_channel || "미지정") !== channelFilter
-      )
-        return false;
+      if (!skip.skipChannel && channelFilter && row.channel !== channelFilter) return false;
+      if (caseTypeFilter && row.case_type !== caseTypeFilter) return false;
       if (
         vanFilter &&
         !row.van_company
@@ -1321,6 +1326,7 @@ export default function FranchiseClient({
       statusFilter,
       applicantTypeFilter,
       channelFilter,
+      caseTypeFilter,
       vanFilter,
       dateFrom,
       dateTo,
@@ -1361,6 +1367,7 @@ export default function FranchiseClient({
     statusFilter,
     applicantTypeFilter,
     channelFilter,
+    caseTypeFilter,
     vanFilter,
     sortBy,
     tableView,
@@ -1381,6 +1388,7 @@ export default function FranchiseClient({
     setStatusFilter("");
     setApplicantTypeFilter("");
     setChannelFilter("");
+    setCaseTypeFilter("");
     setVanFilter("");
     setDateFrom("");
     setDateTo("");
@@ -1416,6 +1424,7 @@ export default function FranchiseClient({
     !statusFilter &&
     !applicantTypeFilter &&
     !channelFilter &&
+    !caseTypeFilter &&
     !vanFilter &&
     !dateFrom &&
     !dateTo &&
@@ -1670,6 +1679,12 @@ export default function FranchiseClient({
         applicant_type: form.applicant_type,
         status: "doc_waiting",
         reception_channel: form.reception_channel || null,
+        channel: form.channel || null,
+        case_type: form.case_type,
+        is_rental: form.is_rental,
+        is_installment: form.is_installment,
+        merchant_id: form.merchant_id,
+        previous_snapshot: form.previous_snapshot,
         reception_date: form.reception_date ? formatDateText(form.reception_date) : null,
         open_date: form.open_date ? formatDateText(form.open_date) : null,
         install_date: form.install_date ? formatDateText(form.install_date) : null,
@@ -1718,10 +1733,6 @@ export default function FranchiseClient({
       ...prev,
     ]);
     return true;
-  }
-
-  async function createLinkedInstallTicket(row: FranchiseApplication) {
-    await createLinkedInstallTicketShared(row, toast);
   }
 
   async function updateStatus(
@@ -1791,6 +1802,23 @@ export default function FranchiseClient({
         r.id === row.id
           ? { ...r, applicant_type: applicantType, updated_at: new Date().toISOString() }
           : r,
+      ),
+    );
+  }
+
+  async function updateOptions(
+    row: FranchiseApplication,
+    patch: { is_rental?: boolean; is_installment?: boolean },
+  ) {
+    const supabase = createClient();
+    const { error } = await supabase.from("franchise_applications").update(patch).eq("id", row.id);
+    if (error) {
+      toast.error("옵션 변경 실패: " + error.message);
+      return;
+    }
+    setLocalRows((prev) =>
+      prev.map((r) =>
+        r.id === row.id ? { ...r, ...patch, updated_at: new Date().toISOString() } : r,
       ),
     );
   }
@@ -2867,6 +2895,7 @@ export default function FranchiseClient({
         statusFilter={statusFilter}
         applicantTypeFilter={applicantTypeFilter}
         channelFilter={channelFilter}
+        caseTypeFilter={caseTypeFilter}
         dateFrom={dateFrom}
         dateTo={dateTo}
         sortBy={sortBy}
@@ -2890,6 +2919,7 @@ export default function FranchiseClient({
         onStatusFilterChange={setStatusFilter}
         onApplicantTypeFilterChange={setApplicantTypeFilter}
         onChannelFilterChange={setChannelFilter}
+        onCaseTypeFilterChange={setCaseTypeFilter}
         onDateFromChange={setDateFrom}
         onDateToChange={setDateTo}
         onSortChange={setSortBy}
@@ -2935,6 +2965,7 @@ export default function FranchiseClient({
               linkingInternet={linkingInternetId === row.id}
               onClose={() => setExpandedId(null)}
               onSave={(field, value) => saveField(row, field, value)}
+              onOptionsChange={(patch) => updateOptions(row, patch)}
               onEquipmentChange={(items) => saveEquipmentItems(row, items)}
               onApplicantTypeChange={(value) => updateApplicantType(row, value)}
               onCsChange={(value) => updateCs(row, value)}
