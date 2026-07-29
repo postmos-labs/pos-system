@@ -913,7 +913,11 @@ export default function WooClient({
               <Fragment key={row.id}>
                 <tr
                   id={`woo-row-${row.id}`}
-                  className="border-b border-slate-100 hover:bg-blue-50 transition-colors cursor-pointer"
+                  className={`border-b border-slate-100 transition-colors cursor-pointer ${
+                    localLinkedInstalls[row.id]?.status === "completed"
+                      ? "bg-green-50 hover:bg-green-100"
+                      : "hover:bg-blue-50"
+                  }`}
                   onClick={() => toggleExpand(row.id)}
                 >
                   <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
