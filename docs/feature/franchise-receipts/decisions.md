@@ -71,9 +71,10 @@
 
 ## 2026-07-28 (레거시 데이터 백필, 090 dev 적용 후)
 
-- `090_franchise_receipts_merchant_link.sql`을 dev DB에 적용 완료.
+- `090_franchise_receipts_merchant_link.sql`(현재는 `091_franchise_receipts_merchant_link.sql`로
+  재번호됨 — 아래 2026-07-29 항목 참고)을 dev DB에 적용 완료.
 - 사용자가 "table 말고 data"도 마이그레이션해야 하지 않냐고 확인 — 스키마 추가만 하고 데이터 백필이
-  없었던 걸 짚음. `091_franchise_receipts_data_backfill.sql` 작성:
+  없었던 걸 짚음. `092_franchise_receipts_data_backfill.sql`(당시 파일명 `091_...`) 작성:
   - **명확하게 매핑 가능한 값만 백필**, 애매한 건 그대로 NULL로 남김 (자동 매핑 안 하기로 한 원래 결정과
     모순 아님 — "전부 다 매핑"이 아니라 "확실한 것만 매핑"으로 범위를 좁힌 것)
   - `merchant_id`: 기존 `merchants.franchise_application_id`(059 마이그레이션에서 만든 관계)를
@@ -84,6 +85,17 @@
     `'전환'`/`'승계'`/`'명변'`/`'랜탈'`/`'할부'`는 채널 정보 자체가 없는 값이라 계속 `NULL`
   - `is_rental`/`is_installment`: `reception_channel`이 정확히 `'랜탈'`/`'할부'`였던 row만 `TRUE`
   - 번호는 090이 이미 dev에 적용된 뒤라 091로 이어붙임 (이미 적용된 마이그레이션 파일은 사후 수정 안 함)
+
+## 2026-07-29 (배포 전 번호 재확인 — 090 충돌 발견)
+
+- 배포 전 재검토 중 `supabase/090_calendar_events_category_as_migration.sql`이 이미 `develop`/`main`에
+  존재한다는 걸 발견 (커밋 `675a6e9`, 이 브랜치를 따기 전부터 있던 파일). 세션 시작 시 "089가 마지막"으로
+  잘못 확인해서 090을 그대로 써버린 것.
+- dev DB에는 이미 옛 파일명(`090_franchise_receipts_merchant_link.sql`,
+  `091_franchise_receipts_data_backfill.sql`) 그대로 적용됐으므로 **SQL 실행 결과는 그대로 유효** —
+  파일만 리네임: `090_franchise_receipts_merchant_link.sql` → `091_franchise_receipts_merchant_link.sql`,
+  `091_franchise_receipts_data_backfill.sql` → `092_franchise_receipts_data_backfill.sql`.
+- 운영(prod) DB에 적용할 때는 새 파일명(091/092) 기준으로 안내.
 
 ## 미결 (다음 세션에서 이어갈 것)
 
