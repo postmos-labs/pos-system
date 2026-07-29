@@ -6,25 +6,20 @@ import type {
   ApplicantType,
   EquipmentItem,
   FranchiseApplication,
+  FranchiseChannel,
   FranchiseStatus,
   Profile,
 } from "@/types";
-import { APPLICANT_TYPE_LABEL, FRANCHISE_STATUS_LABEL } from "@/types";
+import {
+  APPLICANT_TYPE_LABEL,
+  FRANCHISE_CASE_TYPE_LABEL,
+  FRANCHISE_CHANNEL_LABEL,
+  FRANCHISE_STATUS_LABEL,
+} from "@/types";
 import { formatBusinessNumber, formatPhone } from "@/lib/format";
 import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
 import type { ApprovalNote } from "@/lib/approvalNotes";
 
-const RECEPTION_CHANNELS = [
-  "토스 홈페이지",
-  "직접 영업",
-  "전환",
-  "토스리드건",
-  "토스프리미엄",
-  "승계",
-  "명변",
-  "랜탈",
-  "할부",
-];
 const EQUIPMENT_CATALOG = [
   "토스프론트",
   "토스단말기",
@@ -65,6 +60,10 @@ interface Props {
   linkingInternet: boolean;
   onClose: () => void;
   onSave: (field: keyof FranchiseApplication, value: string) => void | Promise<void>;
+  onOptionsChange: (patch: {
+    is_rental?: boolean;
+    is_installment?: boolean;
+  }) => void | Promise<void>;
   onEquipmentChange: (items: EquipmentItem[]) => void | Promise<void>;
   onApplicantTypeChange: (value: ApplicantType) => void | Promise<void>;
   onCsChange: (value: string) => void | Promise<void>;
@@ -254,6 +253,7 @@ export default function FranchiseDetailDrawer({
   linkingInternet,
   onClose,
   onSave,
+  onOptionsChange,
   onEquipmentChange,
   onApplicantTypeChange,
   onCsChange,
@@ -302,7 +302,7 @@ export default function FranchiseDetailDrawer({
         aria-modal="true"
         aria-labelledby="franchise-detail-title"
         onMouseDown={(event) => event.stopPropagation()}
-        className="bg-card text-foreground absolute inset-y-0 right-0 flex h-dvh w-[560px] max-w-[calc(100vw-32px)] flex-col shadow-2xl"
+        className="bg-card text-foreground absolute inset-y-0 right-0 flex h-dvh w-[820px] max-w-[calc(100vw-32px)] flex-col shadow-2xl"
       >
         <div className="border-border flex-shrink-0 border-b px-6 py-5">
           <div className="flex items-start justify-between">
@@ -351,7 +351,7 @@ export default function FranchiseDetailDrawer({
           <div className="flex flex-col gap-5">
             <div>
               <div className="text-foreground mb-2.5 text-[13px] font-bold">기본 정보</div>
-              <div className="grid grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
                 <Field label="상호명">
                   <EditableInput
                     value={row.business_name}
@@ -379,17 +379,48 @@ export default function FranchiseDetailDrawer({
                     onSave={(value) => onSave("business_number", value)}
                   />
                 </Field>
-                <Field label="접수채널">
+                <Field label="채널">
                   <select
-                    value={row.reception_channel ?? ""}
-                    onChange={(event) => onSave("reception_channel", event.target.value)}
+                    value={row.channel ?? ""}
+                    onChange={(event) => onSave("channel", event.target.value)}
                     className={selectClass}
                   >
                     <option value="">미지정</option>
-                    {RECEPTION_CHANNELS.map((channel) => (
-                      <option key={channel}>{channel}</option>
+                    {(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map((c) => (
+                      <option key={c} value={c}>
+                        {FRANCHISE_CHANNEL_LABEL[c]}
+                      </option>
                     ))}
                   </select>
+                </Field>
+                <Field label="구분">
+                  <div className="flex h-9 items-center text-sm">
+                    {row.case_type ? FRANCHISE_CASE_TYPE_LABEL[row.case_type] : "미지정"}
+                  </div>
+                </Field>
+                <Field label="옵션">
+                  <div className="flex h-9 items-center gap-3">
+                    <label className="text-foreground flex cursor-pointer items-center gap-1.5 text-sm select-none">
+                      <input
+                        type="checkbox"
+                        checked={!!row.is_rental}
+                        onChange={(event) => onOptionsChange({ is_rental: event.target.checked })}
+                        className="accent-primary size-[15px] cursor-pointer"
+                      />
+                      렌탈
+                    </label>
+                    <label className="text-foreground flex cursor-pointer items-center gap-1.5 text-sm select-none">
+                      <input
+                        type="checkbox"
+                        checked={!!row.is_installment}
+                        onChange={(event) =>
+                          onOptionsChange({ is_installment: event.target.checked })
+                        }
+                        className="accent-primary size-[15px] cursor-pointer"
+                      />
+                      할부
+                    </label>
+                  </div>
                 </Field>
                 <Field label="사업자 유형">
                   <select
@@ -407,10 +438,47 @@ export default function FranchiseDetailDrawer({
               </div>
             </div>
 
+            {row.case_type && row.case_type !== "new" && row.previous_snapshot && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div className="mb-2 text-[13px] font-bold text-amber-800">
+                  {FRANCHISE_CASE_TYPE_LABEL[row.case_type]} — 이전 정보 대비 변경사항
+                </div>
+                <ul className="flex flex-col gap-1 text-sm text-amber-900">
+                  {(
+                    [
+                      ["상호명", "business_name"],
+                      ["대표자명", "owner_name"],
+                      ["사업자번호", "business_number"],
+                      ["연락처", "phone"],
+                      ["주소", "address"],
+                    ] as const
+                  ).map(([label, key]) => {
+                    const before = row.previous_snapshot?.[key];
+                    const after = row[key];
+                    if (!before && !after) return null;
+                    return (
+                      <li key={key}>
+                        <span className="font-medium">{label}:</span>{" "}
+                        {before && before !== after ? (
+                          <>
+                            <span className="line-through opacity-60">{before}</span>
+                            {" → "}
+                            <span className="font-semibold">{after || "-"}</span>
+                          </>
+                        ) : (
+                          <span>{after || "-"} (변경 없음)</span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+
             <div>
               <div className="text-foreground mb-2.5 text-[13px] font-bold">상품</div>
               <div className="flex gap-2">
-                <div className="flex-1">
+                <div className="max-w-xs flex-1">
                   <select
                     value={productSelect}
                     onChange={(event) => setProductSelect(event.target.value)}
@@ -460,7 +528,7 @@ export default function FranchiseDetailDrawer({
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
               <Field label="주소">
                 <EditableInput
                   value={row.address}
