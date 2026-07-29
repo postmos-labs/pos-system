@@ -55,11 +55,7 @@ export default async function FranchisePage({ searchParams }: Props) {
       .select("id,name,role")
       .in("role", ["sales", "admin", "master"])
       .order("name"),
-    supabase
-      .from("profiles")
-      .select("id,name,role")
-      .in("role", ["cs", "admin", "master"])
-      .order("name"),
+    supabase.from("profiles").select("id,name,role").eq("role", "cs").order("name"),
     supabase.from("profiles").select("name,role,approval_role").eq("id", user.id).single(),
     supabase
       .from("franchise_application_logs")
