@@ -1,22 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { XIcon } from "lucide-react";
-import type { ApplicantType, EquipmentItem, Profile } from "@/types";
-import { APPLICANT_TYPE_LABEL } from "@/types";
+import { XIcon, SearchIcon } from "lucide-react";
+import type {
+  ApplicantType,
+  EquipmentItem,
+  Profile,
+  FranchiseChannel,
+  FranchiseCaseType,
+  FranchisePreviousSnapshot,
+} from "@/types";
+import { APPLICANT_TYPE_LABEL, FRANCHISE_CHANNEL_LABEL, FRANCHISE_CASE_TYPE_LABEL } from "@/types";
 import { formatBusinessNumber, formatPhone } from "@/lib/format";
+import { createClient } from "@/lib/supabase/client";
 
-const RECEPTION_CHANNELS = [
-  "토스 홈페이지",
-  "직접 영업",
-  "전환",
-  "토스리드건",
-  "토스프리미엄",
-  "승계",
-  "명변",
-  "랜탈",
-  "할부",
-];
 const EQUIPMENT_CATALOG = [
   "토스프론트",
   "토스단말기",
@@ -50,6 +47,12 @@ export interface FranchiseCreateInput {
   cs_id: string;
   applicant_type: ApplicantType;
   reception_channel: string;
+  channel: FranchiseChannel | "";
+  case_type: FranchiseCaseType;
+  is_rental: boolean;
+  is_installment: boolean;
+  merchant_id: string | null;
+  previous_snapshot: FranchisePreviousSnapshot | null;
   reception_date: string;
   open_date: string;
   install_date: string;
@@ -64,6 +67,13 @@ interface Props {
   submitting: boolean;
   onClose: () => void;
   csProfiles?: Pick<Profile, "id" | "name" | "role">[];
+}
+
+interface MerchantSearchResult {
+  id: string;
+  business_name: string;
+  owner_name: string;
+  phone: string;
 }
 
 function initialForm(): FranchiseCreateInput {
@@ -83,7 +93,13 @@ function initialForm(): FranchiseCreateInput {
     sales_id: "",
     cs_id: "",
     applicant_type: "individual",
-    reception_channel: RECEPTION_CHANNELS[0],
+    reception_channel: "",
+    channel: "",
+    case_type: "new",
+    is_rental: false,
+    is_installment: false,
+    merchant_id: null,
+    previous_snapshot: null,
     reception_date: receptionDate,
     open_date: "",
     install_date: "",
@@ -121,12 +137,83 @@ export default function FranchiseCreateDialog({
   const [form, setForm] = useState(initialForm);
   const [productSelect, setProductSelect] = useState(EQUIPMENT_CATALOG[0]);
   const [productQty, setProductQty] = useState(1);
+  const [merchantQuery, setMerchantQuery] = useState("");
+  const [merchantResults, setMerchantResults] = useState<MerchantSearchResult[]>([]);
+  const [merchantSearching, setMerchantSearching] = useState(false);
+  const [loadedMerchantLabel, setLoadedMerchantLabel] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const vanSelected = form.van_company
     ? form.van_company
         .split(",")
         .map((value) => value.trim())
         .filter(Boolean)
     : [];
+
+  async function searchMerchants() {
+    const term = merchantQuery.trim();
+    if (!term) return;
+    setMerchantSearching(true);
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("merchants")
+      .select("id, business_name, owner_name, phone")
+      .or(`business_name.ilike.%${term}%,owner_name.ilike.%${term}%,phone.ilike.%${term}%`)
+      .limit(10);
+    setMerchantResults(data ?? []);
+    setMerchantSearching(false);
+  }
+
+  async function loadMerchant(merchant: MerchantSearchResult) {
+    const supabase = createClient();
+    const [{ data: merchantRow }, { data: latestApplication }] = await Promise.all([
+      supabase
+        .from("merchants")
+        .select(
+          "id, business_name, owner_name, business_number, phone, address, address_detail, memo",
+        )
+        .eq("id", merchant.id)
+        .single(),
+      supabase
+        .from("franchise_applications")
+        .select("applicant_type, title, sales_id, cs_id, van_company, internet, equipment_items")
+        .eq("merchant_id", merchant.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    if (!merchantRow) return;
+
+    const previousSnapshot: FranchisePreviousSnapshot = {
+      business_name: merchantRow.business_name,
+      owner_name: merchantRow.owner_name,
+      business_number: merchantRow.business_number ?? undefined,
+      phone: merchantRow.phone,
+      address: merchantRow.address ?? undefined,
+    };
+
+    setForm((current) => ({
+      ...current,
+      merchant_id: merchantRow.id,
+      previous_snapshot: previousSnapshot,
+      business_name: merchantRow.business_name ?? current.business_name,
+      owner_name: merchantRow.owner_name ?? current.owner_name,
+      business_number: merchantRow.business_number ?? current.business_number,
+      phone: merchantRow.phone ?? current.phone,
+      address: merchantRow.address ?? current.address,
+      address_detail: merchantRow.address_detail ?? current.address_detail,
+      applicant_type: latestApplication?.applicant_type ?? current.applicant_type,
+      title: latestApplication?.title ?? current.title,
+      sales_id: latestApplication?.sales_id ?? current.sales_id,
+      cs_id: latestApplication?.cs_id ?? current.cs_id,
+      van_company: latestApplication?.van_company ?? current.van_company,
+      internet: latestApplication?.internet ?? current.internet,
+      equipmentItems: latestApplication?.equipment_items ?? current.equipmentItems,
+    }));
+    setLoadedMerchantLabel(`${merchantRow.business_name} · ${merchantRow.owner_name}`);
+    setMerchantResults([]);
+    setMerchantQuery("");
+    setSubmitError("");
+  }
 
   function addProduct() {
     setForm((current) => ({
@@ -151,6 +238,13 @@ export default function FranchiseCreateDialog({
 
   async function handleSubmit() {
     if (submitting) return;
+    if (form.case_type !== "new" && !form.merchant_id) {
+      setSubmitError(
+        `"${FRANCHISE_CASE_TYPE_LABEL[form.case_type]}"은(는) 기존 매장을 불러와야 등록할 수 있습니다. 위에서 매장을 검색해 선택해주세요.`,
+      );
+      return;
+    }
+    setSubmitError("");
     const success = await onSubmit(form);
     if (success) {
       setForm(initialForm());
@@ -242,19 +336,126 @@ export default function FranchiseCreateDialog({
                     className={inputClass}
                   />
                 </Field>
-                <Field label="접수채널">
+                <Field label="채널">
                   <select
-                    value={form.reception_channel}
+                    value={form.channel}
                     onChange={(event) =>
-                      setForm({ ...form, reception_channel: event.target.value })
+                      setForm({ ...form, channel: event.target.value as FranchiseChannel | "" })
                     }
                     className={selectClass}
                   >
-                    {RECEPTION_CHANNELS.map((channel) => (
-                      <option key={channel}>{channel}</option>
+                    <option value="">선택 안함</option>
+                    {(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map((c) => (
+                      <option key={c} value={c}>
+                        {FRANCHISE_CHANNEL_LABEL[c]}
+                      </option>
                     ))}
                   </select>
                 </Field>
+                <Field label="구분">
+                  <select
+                    value={form.case_type}
+                    onChange={(event) => {
+                      const nextCaseType = event.target.value as FranchiseCaseType;
+                      setForm((current) => ({
+                        ...current,
+                        case_type: nextCaseType,
+                        ...(nextCaseType === "new"
+                          ? { merchant_id: null, previous_snapshot: null }
+                          : {}),
+                      }));
+                      if (nextCaseType === "new") {
+                        setLoadedMerchantLabel("");
+                        setMerchantResults([]);
+                        setMerchantQuery("");
+                        setSubmitError("");
+                      }
+                    }}
+                    className={selectClass}
+                  >
+                    {(Object.keys(FRANCHISE_CASE_TYPE_LABEL) as FranchiseCaseType[]).map((c) => (
+                      <option key={c} value={c}>
+                        {FRANCHISE_CASE_TYPE_LABEL[c]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="옵션">
+                  <div className="flex h-9 items-center gap-3">
+                    <label className="text-foreground flex cursor-pointer items-center gap-1.5 text-sm select-none">
+                      <input
+                        type="checkbox"
+                        checked={form.is_rental}
+                        onChange={(event) => setForm({ ...form, is_rental: event.target.checked })}
+                        className="accent-primary size-[15px] cursor-pointer"
+                      />
+                      렌탈
+                    </label>
+                    <label className="text-foreground flex cursor-pointer items-center gap-1.5 text-sm select-none">
+                      <input
+                        type="checkbox"
+                        checked={form.is_installment}
+                        onChange={(event) =>
+                          setForm({ ...form, is_installment: event.target.checked })
+                        }
+                        className="accent-primary size-[15px] cursor-pointer"
+                      />
+                      할부
+                    </label>
+                  </div>
+                </Field>
+                {form.case_type !== "new" && (
+                  <div className="border-border bg-surface-subtle flex flex-col gap-2 rounded-lg border p-3 md:col-span-4">
+                    <span className="text-muted-foreground text-xs">
+                      {FRANCHISE_CASE_TYPE_LABEL[form.case_type]} — 기존 매장 불러오기
+                    </span>
+                    <div className="flex gap-1.5">
+                      <input
+                        value={merchantQuery}
+                        onChange={(event) => setMerchantQuery(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void searchMerchants();
+                          }
+                        }}
+                        placeholder="상호명, 대표자, 전화번호 검색"
+                        className={inputClass}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void searchMerchants()}
+                        disabled={merchantSearching}
+                        className={secondaryButton}
+                      >
+                        <SearchIcon className="size-4" />
+                      </button>
+                    </div>
+                    {merchantResults.length > 0 && (
+                      <ul className="flex flex-col gap-1">
+                        {merchantResults.map((m) => (
+                          <li key={m.id}>
+                            <button
+                              type="button"
+                              onClick={() => void loadMerchant(m)}
+                              className="hover:bg-muted flex w-full items-center justify-between rounded-lg border border-transparent px-2.5 py-1.5 text-left text-sm"
+                            >
+                              <span>
+                                {m.business_name} · {m.owner_name}
+                              </span>
+                              <span className="text-muted-foreground text-xs">{m.phone}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {loadedMerchantLabel && (
+                      <span className="text-primary text-xs font-medium">
+                        불러온 매장: {loadedMerchantLabel}
+                      </span>
+                    )}
+                  </div>
+                )}
                 <Field label="사업자 유형">
                   <select
                     value={form.applicant_type}
@@ -424,24 +625,27 @@ export default function FranchiseCreateDialog({
           </div>
         </div>
 
-        <div className="border-border flex flex-shrink-0 items-center justify-between border-t px-7 py-4">
-          <label className="text-foreground flex cursor-pointer items-center gap-2 text-sm select-none">
-            <input
-              type="checkbox"
-              checked={form.sendDocNotify}
-              onChange={(event) => setForm({ ...form, sendDocNotify: event.target.checked })}
-              className="accent-primary size-[15px] cursor-pointer"
-            />
-            등록 즉시 서류안내 알림톡 발송
-          </label>
-          <button
-            type="button"
-            disabled={submitting}
-            onClick={handleSubmit}
-            className={primaryButton}
-          >
-            {submitting ? "등록 중..." : "등록"}
-          </button>
+        <div className="border-border flex flex-shrink-0 flex-col gap-2 border-t px-7 py-4">
+          {submitError && <span className="text-error text-xs">{submitError}</span>}
+          <div className="flex items-center justify-between">
+            <label className="text-foreground flex cursor-pointer items-center gap-2 text-sm select-none">
+              <input
+                type="checkbox"
+                checked={form.sendDocNotify}
+                onChange={(event) => setForm({ ...form, sendDocNotify: event.target.checked })}
+                className="accent-primary size-[15px] cursor-pointer"
+              />
+              등록 즉시 서류안내 알림톡 발송
+            </label>
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={handleSubmit}
+              className={primaryButton}
+            >
+              {submitting ? "등록 중..." : "등록"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
