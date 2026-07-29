@@ -59,100 +59,6 @@ export async function notifyAndLogFranchiseStatus(
   }
 }
 
-export async function createLinkedInstallTicket(
-  row: FranchiseApplication,
-  toast: StatusEffectsToast,
-): Promise<void> {
-  if (!row.business_name || !row.owner_name || !row.phone || !row.address) {
-    toast.warning(
-      "상호명·대표자명·연락처·주소가 모두 입력되지 않아 설치 작업을 자동으로 만들지 못했습니다. 직접 등록해주세요.",
-    );
-    return;
-  }
-  const supabase = createClient();
-  const { data: merchant, error: merchantError } = await supabase
-    .from("merchants")
-    .insert({
-      business_name: row.business_name,
-      owner_name: row.owner_name,
-      business_number: row.business_number || null,
-      phone: row.phone,
-      address: row.address,
-      address_detail: row.address_detail || null,
-      pos_model: row.equipment_items?.length
-        ? row.equipment_items.map((i) => `${i.name} x${i.quantity}`).join(", ")
-        : null,
-      sales_id: row.sales_id || null,
-      memo: row.memo || null,
-      franchise_application_id: row.id,
-    })
-    .select("id")
-    .single();
-
-  if (merchantError || !merchant) {
-    toast.error("가맹점 자동 등록 실패: " + merchantError?.message);
-    return;
-  }
-
-  const { error: ticketError } = await supabase.from("tickets").insert({
-    merchant_id: merchant.id,
-    title: row.title || `${row.business_name} 가맹 설치`,
-    type: "install",
-    status: "tech_pending",
-    sales_id: row.sales_id || null,
-    cs_id: row.cs_id || null,
-    memo: row.memo || null,
-    reception_channel: row.reception_channel || null,
-    open_date: row.open_date || null,
-    install_date: row.install_date || null,
-  });
-
-  if (ticketError) {
-    const { error: cleanupError } = await supabase.from("merchants").delete().eq("id", merchant.id);
-    if (cleanupError) console.error("고아 가맹점 정리 실패:", cleanupError.message);
-    toast.error(
-      "설치 작업 생성 실패로 방금 등록한 가맹점도 함께 취소했습니다: " + ticketError.message,
-    );
-    return;
-  }
-}
-
-export async function autoRegisterMerchant(
-  row: FranchiseApplication,
-  toast: StatusEffectsToast,
-): Promise<void> {
-  if (!row.business_name || !row.owner_name || !row.phone) {
-    toast.warning(
-      "상호명·대표자명·연락처가 모두 입력되지 않아 가맹점을 자동으로 등록하지 못했습니다. 직접 등록해주세요.",
-    );
-    return;
-  }
-  const supabase = createClient();
-  const { data: existing } = await supabase
-    .from("merchants")
-    .select("id")
-    .eq("franchise_application_id", row.id)
-    .maybeSingle();
-  if (existing) return;
-
-  const { error } = await supabase.from("merchants").insert({
-    business_name: row.business_name,
-    owner_name: row.owner_name,
-    business_number: row.business_number || null,
-    phone: row.phone,
-    address: row.address || null,
-    address_detail: row.address_detail || null,
-    pos_model: row.equipment_items?.length
-      ? row.equipment_items.map((i) => `${i.name} x${i.quantity}`).join(", ")
-      : null,
-    sales_id: row.sales_id || null,
-    memo: row.memo || null,
-    franchise_application_id: row.id,
-  });
-
-  if (error) toast.error("가맹점 자동 등록 실패: " + error.message);
-}
-
 export async function autoTransferToTech(
   row: FranchiseApplication,
   currentUserId: string,
@@ -279,9 +185,9 @@ export async function applyFranchiseStatusSideEffects(
     }
   }
 
-  if (status === "card_done" || status === "toss_review_done") {
-    await autoRegisterMerchant(row, toast);
-  }
+  // card_done/toss_review_done 전환 시 매장 생성/갱신은 DB 트리거(sync_merchant_on_franchise_completion,
+  // 090_franchise_receipts_merchant_link.sql)가 전담한다. 클라이언트에서 별도로 호출하지 않음 —
+  // 여러 호출부 중 하나가 빠지는 문제(예: 일괄 상태변경)를 구조적으로 막기 위함.
 
   return {};
 }
