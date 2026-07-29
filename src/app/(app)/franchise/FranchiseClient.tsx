@@ -168,6 +168,13 @@ const COMPLETED_STATUS_SET = new Set<FranchiseStatus>([
   "toss_review_done",
   "completed",
 ]);
+const RECEPTION_SUCCESS_STATUS_SET = new Set<FranchiseStatus>([
+  "card_apply_done",
+  "toss_review_apply_done",
+  "card_done",
+  "toss_review_done",
+  "completed",
+]);
 
 const EMPTY_FORM = {
   business_name: "",
@@ -1591,6 +1598,29 @@ export default function FranchiseClient({
     };
   }, [localRows, search, matchesFilters, todayDate, todayCompletedIdSet]);
 
+  const successRateStats = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const base = localRows.filter((row) => {
+      if (!matchesFilters(row, { skipView: true, skipKpi: true, skipStatus: true })) return false;
+      if (!term) return true;
+      const haystack =
+        `${row.business_name ?? ""} ${row.owner_name ?? ""} ${row.phone ?? ""} ${row.business_number ?? ""}`.toLowerCase();
+      return haystack.includes(term);
+    });
+    const dayMs = 24 * 60 * 60 * 1000;
+    const todayStartMs = new Date(`${todayDate}T00:00:00+09:00`).getTime();
+    const rateForWindow = (days: number) => {
+      const fromMs = todayStartMs - (days - 1) * dayMs;
+      const windowRows = base.filter((row) => new Date(row.created_at).getTime() >= fromMs);
+      if (windowRows.length === 0) return { rate: null as number | null, total: 0 };
+      const success = windowRows.filter((row) =>
+        RECEPTION_SUCCESS_STATUS_SET.has(row.status),
+      ).length;
+      return { rate: Math.round((success / windowRows.length) * 100), total: windowRows.length };
+    };
+    return { day1: rateForWindow(1), day30: rateForWindow(30) };
+  }, [localRows, search, matchesFilters, todayDate]);
+
   const allChecked = pagedRows.length > 0 && pagedRows.every((r) => selected.has(r.id));
 
   const toggleAll = useCallback(() => {
@@ -2860,6 +2890,7 @@ export default function FranchiseClient({
         page={page}
         totalPages={totalPages}
         kpiCounts={kpiCounts}
+        successRateStats={successRateStats}
         activeKpi={activeKpi}
         tableView={tableView}
         tableViewCounts={tableViewCounts}
