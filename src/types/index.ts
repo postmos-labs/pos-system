@@ -138,6 +138,14 @@ export interface FranchisePreviousSnapshot {
   business_number?: string;
   phone?: string;
   address?: string;
+  address_detail?: string;
+  applicant_type?: ApplicantType;
+  title?: string;
+  van_company?: string;
+  internet?: string;
+  equipment_items?: EquipmentItem[];
+  sales_id?: string;
+  cs_id?: string;
 }
 
 export interface FranchiseApplication {

@@ -451,6 +451,10 @@ export default function FranchiseDetailDrawer({
                       ["사업자번호", "business_number"],
                       ["연락처", "phone"],
                       ["주소", "address"],
+                      ["상세주소", "address_detail"],
+                      ["작업제목", "title"],
+                      ["VAN사", "van_company"],
+                      ["인터넷", "internet"],
                     ] as const
                   ).map(([label, key]) => {
                     const before = row.previous_snapshot?.[key];
@@ -471,6 +475,48 @@ export default function FranchiseDetailDrawer({
                       </li>
                     );
                   })}
+                  {(row.previous_snapshot?.applicant_type || row.applicant_type) && (
+                    <li>
+                      <span className="font-medium">사업자 유형:</span>{" "}
+                      {row.previous_snapshot?.applicant_type &&
+                      row.previous_snapshot.applicant_type !== row.applicant_type ? (
+                        <>
+                          <span className="line-through opacity-60">
+                            {APPLICANT_TYPE_LABEL[row.previous_snapshot.applicant_type]}
+                          </span>
+                          {" → "}
+                          <span className="font-semibold">
+                            {APPLICANT_TYPE_LABEL[row.applicant_type]}
+                          </span>
+                        </>
+                      ) : (
+                        <span>{APPLICANT_TYPE_LABEL[row.applicant_type]} (변경 없음)</span>
+                      )}
+                    </li>
+                  )}
+                  {(() => {
+                    const formatItems = (items?: EquipmentItem[]) =>
+                      items?.length
+                        ? items.map((i) => `${i.name} x${i.quantity}`).join(", ")
+                        : undefined;
+                    const before = formatItems(row.previous_snapshot?.equipment_items);
+                    const after = formatItems(row.equipment_items);
+                    if (!before && !after) return null;
+                    return (
+                      <li>
+                        <span className="font-medium">설치기기:</span>{" "}
+                        {before && before !== after ? (
+                          <>
+                            <span className="line-through opacity-60">{before}</span>
+                            {" → "}
+                            <span className="font-semibold">{after || "-"}</span>
+                          </>
+                        ) : (
+                          <span>{after || "-"} (변경 없음)</span>
+                        )}
+                      </li>
+                    );
+                  })()}
                 </ul>
               </div>
             )}

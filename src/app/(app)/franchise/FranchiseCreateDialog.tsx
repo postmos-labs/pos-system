@@ -141,6 +141,7 @@ export default function FranchiseCreateDialog({
   const [merchantResults, setMerchantResults] = useState<MerchantSearchResult[]>([]);
   const [merchantSearching, setMerchantSearching] = useState(false);
   const [loadedMerchantLabel, setLoadedMerchantLabel] = useState("");
+  const [merchantNotFound, setMerchantNotFound] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const vanSelected = form.van_company
     ? form.van_company
@@ -189,6 +190,14 @@ export default function FranchiseCreateDialog({
       business_number: merchantRow.business_number ?? undefined,
       phone: merchantRow.phone,
       address: merchantRow.address ?? undefined,
+      address_detail: merchantRow.address_detail ?? undefined,
+      applicant_type: latestApplication?.applicant_type ?? undefined,
+      title: latestApplication?.title ?? undefined,
+      van_company: latestApplication?.van_company ?? undefined,
+      internet: latestApplication?.internet ?? undefined,
+      equipment_items: latestApplication?.equipment_items ?? undefined,
+      sales_id: latestApplication?.sales_id ?? undefined,
+      cs_id: latestApplication?.cs_id ?? undefined,
     };
 
     setForm((current) => ({
@@ -212,6 +221,7 @@ export default function FranchiseCreateDialog({
     setLoadedMerchantLabel(`${merchantRow.business_name} · ${merchantRow.owner_name}`);
     setMerchantResults([]);
     setMerchantQuery("");
+    setMerchantNotFound(false);
     setSubmitError("");
   }
 
@@ -238,9 +248,9 @@ export default function FranchiseCreateDialog({
 
   async function handleSubmit() {
     if (submitting) return;
-    if (form.case_type !== "new" && !form.merchant_id) {
+    if (form.case_type !== "new" && !form.merchant_id && !merchantNotFound) {
       setSubmitError(
-        `"${FRANCHISE_CASE_TYPE_LABEL[form.case_type]}"은(는) 기존 매장을 불러와야 등록할 수 있습니다. 위에서 매장을 검색해 선택해주세요.`,
+        `"${FRANCHISE_CASE_TYPE_LABEL[form.case_type]}"은(는) 기존 매장을 불러오거나, 찾을 수 없으면 "매장을 찾을 수 없음"을 선택해주세요.`,
       );
       return;
     }
@@ -368,6 +378,7 @@ export default function FranchiseCreateDialog({
                         setLoadedMerchantLabel("");
                         setMerchantResults([]);
                         setMerchantQuery("");
+                        setMerchantNotFound(false);
                         setSubmitError("");
                       }
                     }}
@@ -409,50 +420,79 @@ export default function FranchiseCreateDialog({
                     <span className="text-muted-foreground text-xs">
                       {FRANCHISE_CASE_TYPE_LABEL[form.case_type]} — 기존 매장 불러오기
                     </span>
-                    <div className="flex gap-1.5">
-                      <input
-                        value={merchantQuery}
-                        onChange={(event) => setMerchantQuery(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            void searchMerchants();
-                          }
-                        }}
-                        placeholder="상호명, 대표자, 전화번호 검색"
-                        className={inputClass}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void searchMerchants()}
-                        disabled={merchantSearching}
-                        className={secondaryButton}
-                      >
-                        <SearchIcon className="size-4" />
-                      </button>
-                    </div>
-                    {merchantResults.length > 0 && (
-                      <ul className="flex flex-col gap-1">
-                        {merchantResults.map((m) => (
-                          <li key={m.id}>
-                            <button
-                              type="button"
-                              onClick={() => void loadMerchant(m)}
-                              className="hover:bg-muted flex w-full items-center justify-between rounded-lg border border-transparent px-2.5 py-1.5 text-left text-sm"
-                            >
-                              <span>
-                                {m.business_name} · {m.owner_name}
-                              </span>
-                              <span className="text-muted-foreground text-xs">{m.phone}</span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {loadedMerchantLabel && (
-                      <span className="text-primary text-xs font-medium">
-                        불러온 매장: {loadedMerchantLabel}
-                      </span>
+                    {merchantNotFound ? (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">
+                          매장을 찾을 수 없어 아래 정보를 직접 입력합니다.
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setMerchantNotFound(false)}
+                          className="text-primary text-xs font-medium"
+                        >
+                          다시 검색
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex gap-1.5">
+                          <input
+                            value={merchantQuery}
+                            onChange={(event) => setMerchantQuery(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                void searchMerchants();
+                              }
+                            }}
+                            placeholder="상호명, 대표자, 전화번호 검색"
+                            className={inputClass}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void searchMerchants()}
+                            disabled={merchantSearching}
+                            className={secondaryButton}
+                          >
+                            <SearchIcon className="size-4" />
+                          </button>
+                        </div>
+                        {merchantResults.length > 0 && (
+                          <ul className="flex flex-col gap-1">
+                            {merchantResults.map((m) => (
+                              <li key={m.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => void loadMerchant(m)}
+                                  className="hover:bg-muted flex w-full items-center justify-between rounded-lg border border-transparent px-2.5 py-1.5 text-left text-sm"
+                                >
+                                  <span>
+                                    {m.business_name} · {m.owner_name}
+                                  </span>
+                                  <span className="text-muted-foreground text-xs">{m.phone}</span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {loadedMerchantLabel && (
+                          <span className="text-primary text-xs font-medium">
+                            불러온 매장: {loadedMerchantLabel}
+                          </span>
+                        )}
+                        {!loadedMerchantLabel && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMerchantNotFound(true);
+                              setSubmitError("");
+                            }}
+                            className="text-muted-foreground hover:text-foreground self-start text-xs underline"
+                          >
+                            매장을 찾을 수 없음 (직접 입력)
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
