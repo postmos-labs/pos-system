@@ -1025,6 +1025,7 @@ export default function FranchiseClient({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showExistingForm, setShowExistingForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [transferringId, setTransferringId] = useState<string | null>(null);
@@ -2905,6 +2906,7 @@ export default function FranchiseClient({
         busyId={busyId}
         onHelp={() => setShowShortcuts(true)}
         onNew={() => setShowForm(true)}
+        onNewExisting={() => setShowExistingForm(true)}
         onKpiChange={(key) => {
           setActiveKpi((current) => (current === key ? null : key));
           setTableView("all");
@@ -2941,9 +2943,20 @@ export default function FranchiseClient({
 
       {showForm && (
         <FranchiseCreateDialog
+          mode="new"
           onSubmit={handleCreate}
           submitting={submitting}
           onClose={() => setShowForm(false)}
+          csProfiles={csProfiles}
+        />
+      )}
+
+      {showExistingForm && (
+        <FranchiseCreateDialog
+          mode="existing"
+          onSubmit={handleCreate}
+          submitting={submitting}
+          onClose={() => setShowExistingForm(false)}
           csProfiles={csProfiles}
         />
       )}

@@ -67,6 +67,8 @@ interface Props {
   submitting: boolean;
   onClose: () => void;
   csProfiles?: Pick<Profile, "id" | "name" | "role">[];
+  /** "new"면 바로 빈 폼, "existing"이면 매장 검색부터 거친 뒤 폼으로 진입 (전환/승계/명변) */
+  mode?: "new" | "existing";
 }
 
 interface MerchantSearchResult {
@@ -76,7 +78,9 @@ interface MerchantSearchResult {
   phone: string;
 }
 
-function initialForm(): FranchiseCreateInput {
+const EXISTING_CASE_TYPES: FranchiseCaseType[] = ["conversion", "succession", "name_change"];
+
+function initialForm(mode: "new" | "existing"): FranchiseCreateInput {
   const now = new Date();
   const receptionDate = new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
     .toISOString()
@@ -95,7 +99,7 @@ function initialForm(): FranchiseCreateInput {
     applicant_type: "individual",
     reception_channel: "",
     channel: "",
-    case_type: "new",
+    case_type: mode === "existing" ? "conversion" : "new",
     is_rental: false,
     is_installment: false,
     merchant_id: null,
@@ -133,8 +137,10 @@ export default function FranchiseCreateDialog({
   submitting,
   onClose,
   csProfiles = [],
+  mode = "new",
 }: Props) {
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState(() => initialForm(mode));
+  const [step, setStep] = useState<"search" | "form">(mode === "existing" ? "search" : "form");
   const [productSelect, setProductSelect] = useState(EQUIPMENT_CATALOG[0]);
   const [productQty, setProductQty] = useState(1);
   const [merchantQuery, setMerchantQuery] = useState("");
@@ -212,8 +218,6 @@ export default function FranchiseCreateDialog({
       address_detail: merchantRow.address_detail ?? current.address_detail,
       applicant_type: latestApplication?.applicant_type ?? current.applicant_type,
       title: latestApplication?.title ?? current.title,
-      sales_id: latestApplication?.sales_id ?? current.sales_id,
-      cs_id: latestApplication?.cs_id ?? current.cs_id,
       van_company: latestApplication?.van_company ?? current.van_company,
       internet: latestApplication?.internet ?? current.internet,
       equipmentItems: latestApplication?.equipment_items ?? current.equipmentItems,
@@ -223,6 +227,7 @@ export default function FranchiseCreateDialog({
     setMerchantQuery("");
     setMerchantNotFound(false);
     setSubmitError("");
+    setStep("form");
   }
 
   function addProduct() {
@@ -257,7 +262,10 @@ export default function FranchiseCreateDialog({
     setSubmitError("");
     const success = await onSubmit(form);
     if (success) {
-      setForm(initialForm());
+      setForm(initialForm(mode));
+      setStep(mode === "existing" ? "search" : "form");
+      setLoadedMerchantLabel("");
+      setMerchantNotFound(false);
       onClose();
     }
   }
@@ -276,7 +284,7 @@ export default function FranchiseCreateDialog({
       >
         <div className="border-border flex flex-shrink-0 items-center justify-between border-b px-7 py-5">
           <div id="franchise-create-title" className="text-foreground text-[19px] font-bold">
-            프랜차이즈 정보 입력
+            {step === "search" ? "전환·승계·명변 접수 — 매장 검색" : "프랜차이즈 정보 입력"}
           </div>
           <button
             type="button"
@@ -288,405 +296,410 @@ export default function FranchiseCreateDialog({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-7 py-5">
-          <div className="flex flex-col gap-5">
-            <div>
-              <div className="text-foreground mb-2.5 text-[13px] font-bold">기본 정보</div>
-              <div className="grid grid-cols-1 gap-3.5 md:grid-cols-4">
-                <Field label="상호명">
-                  <input
-                    placeholder="상호명 입력"
-                    value={form.business_name}
-                    onChange={(event) => setForm({ ...form, business_name: event.target.value })}
-                    className={inputClass}
-                  />
-                </Field>
-                <Field label="대표자명">
-                  <input
-                    placeholder="대표자명 입력"
-                    value={form.owner_name}
-                    onChange={(event) => setForm({ ...form, owner_name: event.target.value })}
-                    className={inputClass}
-                  />
-                </Field>
-                <Field label="연락처">
-                  <input
-                    placeholder="010-0000-0000"
-                    value={form.phone}
-                    onChange={(event) =>
-                      setForm({ ...form, phone: formatPhone(event.target.value) })
-                    }
-                    className={inputClass}
-                  />
-                </Field>
-                <Field label="사업자번호">
-                  <input
-                    placeholder="000-00-00000"
-                    value={form.business_number}
-                    onChange={(event) =>
-                      setForm({
-                        ...form,
-                        business_number: formatBusinessNumber(event.target.value),
-                      })
-                    }
-                    className={inputClass}
-                  />
-                </Field>
-              </div>
-            </div>
-
-            <div>
-              <div className="text-foreground mb-2.5 text-[13px] font-bold">접수 정보</div>
-              <div className="grid grid-cols-1 gap-3.5 md:grid-cols-4">
-                <Field label="접수날짜">
-                  <input
-                    type="date"
-                    value={form.reception_date}
-                    onChange={(event) => setForm({ ...form, reception_date: event.target.value })}
-                    className={inputClass}
-                  />
-                </Field>
-                <Field label="채널">
-                  <select
-                    value={form.channel}
-                    onChange={(event) =>
-                      setForm({ ...form, channel: event.target.value as FranchiseChannel | "" })
-                    }
-                    className={selectClass}
-                  >
-                    <option value="">선택 안함</option>
-                    {(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map((c) => (
-                      <option key={c} value={c}>
-                        {FRANCHISE_CHANNEL_LABEL[c]}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="구분">
-                  <select
-                    value={form.case_type}
-                    onChange={(event) => {
-                      const nextCaseType = event.target.value as FranchiseCaseType;
-                      setForm((current) => ({
-                        ...current,
-                        case_type: nextCaseType,
-                        ...(nextCaseType === "new"
-                          ? { merchant_id: null, previous_snapshot: null }
-                          : {}),
-                      }));
-                      if (nextCaseType === "new") {
-                        setLoadedMerchantLabel("");
-                        setMerchantResults([]);
-                        setMerchantQuery("");
-                        setMerchantNotFound(false);
-                        setSubmitError("");
-                      }
-                    }}
-                    className={selectClass}
-                  >
-                    {(Object.keys(FRANCHISE_CASE_TYPE_LABEL) as FranchiseCaseType[]).map((c) => (
-                      <option key={c} value={c}>
-                        {FRANCHISE_CASE_TYPE_LABEL[c]}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="옵션">
-                  <div className="flex h-9 items-center gap-3">
-                    <label className="text-foreground flex cursor-pointer items-center gap-1.5 text-sm select-none">
-                      <input
-                        type="checkbox"
-                        checked={form.is_rental}
-                        onChange={(event) => setForm({ ...form, is_rental: event.target.checked })}
-                        className="accent-primary size-[15px] cursor-pointer"
-                      />
-                      렌탈
-                    </label>
-                    <label className="text-foreground flex cursor-pointer items-center gap-1.5 text-sm select-none">
-                      <input
-                        type="checkbox"
-                        checked={form.is_installment}
-                        onChange={(event) =>
-                          setForm({ ...form, is_installment: event.target.checked })
-                        }
-                        className="accent-primary size-[15px] cursor-pointer"
-                      />
-                      할부
-                    </label>
-                  </div>
-                </Field>
-                {form.case_type !== "new" && (
-                  <div className="border-border bg-surface-subtle flex flex-col gap-2 rounded-lg border p-3 md:col-span-4">
-                    <span className="text-muted-foreground text-xs">
-                      {FRANCHISE_CASE_TYPE_LABEL[form.case_type]} — 기존 매장 불러오기
-                    </span>
-                    {merchantNotFound ? (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm">
-                          매장을 찾을 수 없어 아래 정보를 직접 입력합니다.
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setMerchantNotFound(false)}
-                          className="text-primary text-xs font-medium"
-                        >
-                          다시 검색
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex gap-1.5">
-                          <input
-                            value={merchantQuery}
-                            onChange={(event) => setMerchantQuery(event.target.value)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                void searchMerchants();
-                              }
-                            }}
-                            placeholder="상호명, 대표자, 전화번호 검색"
-                            className={inputClass}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => void searchMerchants()}
-                            disabled={merchantSearching}
-                            className={secondaryButton}
-                          >
-                            <SearchIcon className="size-4" />
-                          </button>
-                        </div>
-                        {merchantResults.length > 0 && (
-                          <ul className="flex flex-col gap-1">
-                            {merchantResults.map((m) => (
-                              <li key={m.id}>
-                                <button
-                                  type="button"
-                                  onClick={() => void loadMerchant(m)}
-                                  className="hover:bg-muted flex w-full items-center justify-between rounded-lg border border-transparent px-2.5 py-1.5 text-left text-sm"
-                                >
-                                  <span>
-                                    {m.business_name} · {m.owner_name}
-                                  </span>
-                                  <span className="text-muted-foreground text-xs">{m.phone}</span>
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                        {loadedMerchantLabel && (
-                          <span className="text-primary text-xs font-medium">
-                            불러온 매장: {loadedMerchantLabel}
-                          </span>
-                        )}
-                        {!loadedMerchantLabel && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setMerchantNotFound(true);
-                              setSubmitError("");
-                            }}
-                            className="text-muted-foreground hover:text-foreground self-start text-xs underline"
-                          >
-                            매장을 찾을 수 없음 (직접 입력)
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-                <Field label="사업자 유형">
-                  <select
-                    value={form.applicant_type}
-                    onChange={(event) =>
-                      setForm({ ...form, applicant_type: event.target.value as ApplicantType })
-                    }
-                    className={selectClass}
-                  >
-                    {(Object.keys(APPLICANT_TYPE_LABEL) as ApplicantType[]).map((type) => (
-                      <option key={type} value={type}>
-                        {APPLICANT_TYPE_LABEL[type]}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="인터넷">
-                  <select
-                    value={form.internet}
-                    onChange={(event) => setForm({ ...form, internet: event.target.value })}
-                    className={selectClass}
-                  >
-                    <option value="">미설정</option>
-                    {INTERNET_PROVIDERS.map((provider) => (
-                      <option key={provider}>{provider}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="담당자">
-                  <select
-                    value={form.cs_id}
-                    onChange={(event) => setForm({ ...form, cs_id: event.target.value })}
-                    className={selectClass}
-                  >
-                    <option value="">미배정</option>
-                    {csProfiles.map((profile) => (
-                      <option key={profile.id} value={profile.id}>
-                        {profile.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-            </div>
-
-            <div>
-              <div className="text-foreground mb-2.5 text-[13px] font-bold">상품</div>
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <select
-                    value={productSelect}
-                    onChange={(event) => setProductSelect(event.target.value)}
-                    className={selectClass}
-                  >
-                    {EQUIPMENT_CATALOG.map((product) => (
-                      <option key={product}>{product}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="w-12 shrink-0">
-                  <input
-                    type="number"
-                    min={1}
-                    max={99}
-                    value={productQty}
-                    onChange={(event) =>
-                      setProductQty(Math.min(99, Number(event.target.value) || 1))
-                    }
-                    className={`${inputClass} text-center`}
-                  />
-                </div>
-                <button type="button" onClick={addProduct} className={secondaryButton}>
-                  추가
-                </button>
-              </div>
-              {form.equipmentItems.length > 0 && (
-                <div className="mt-2 flex flex-col gap-1.5">
-                  {form.equipmentItems.map((product, index) => (
-                    <div
-                      key={`${product.name}-${index}`}
-                      className="bg-surface-subtle flex items-center justify-between rounded-lg px-3 py-2 text-sm"
+        {step === "search" ? (
+          <div className="flex-1 overflow-y-auto px-7 py-5">
+            <div className="flex flex-col gap-4">
+              <div>
+                <div className="text-foreground mb-2.5 text-[13px] font-bold">구분</div>
+                <div className="flex gap-2">
+                  {EXISTING_CASE_TYPES.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setForm({ ...form, case_type: c })}
+                      className={`h-9 rounded-lg border px-4 text-sm font-semibold ${
+                        form.case_type === c
+                          ? "border-primary bg-primary-muted text-primary"
+                          : "border-border bg-card text-foreground hover:border-primary/50"
+                      }`}
                     >
-                      <span>
-                        {product.name} × {product.quantity}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeProduct(index)}
-                        className="text-error text-xs"
-                      >
-                        삭제
-                      </button>
-                    </div>
+                      {FRANCHISE_CASE_TYPE_LABEL[c]}
+                    </button>
                   ))}
                 </div>
-              )}
-            </div>
-
-            <div>
-              <div className="text-foreground mb-2.5 text-[13px] font-bold">주소</div>
-              <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
-                <Field label="주소">
+              </div>
+              <div>
+                <div className="text-foreground mb-2.5 text-[13px] font-bold">매장 검색</div>
+                <div className="flex gap-1.5">
                   <input
-                    placeholder="주소 입력"
-                    value={form.address}
-                    onChange={(event) => setForm({ ...form, address: event.target.value })}
+                    value={merchantQuery}
+                    onChange={(event) => setMerchantQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void searchMerchants();
+                      }
+                    }}
+                    placeholder="상호명, 대표자, 전화번호 검색"
                     className={inputClass}
                   />
-                </Field>
-                <Field label="상세주소">
-                  <input
-                    placeholder="상세주소 입력"
-                    value={form.address_detail}
-                    onChange={(event) => setForm({ ...form, address_detail: event.target.value })}
-                    className={inputClass}
-                  />
-                </Field>
-                <Field label="오픈예정일">
-                  <input
-                    type="date"
-                    value={form.open_date}
-                    onChange={(event) => setForm({ ...form, open_date: event.target.value })}
-                    className={inputClass}
-                  />
-                </Field>
+                  <button
+                    type="button"
+                    onClick={() => void searchMerchants()}
+                    disabled={merchantSearching}
+                    className={secondaryButton}
+                  >
+                    <SearchIcon className="size-4" />
+                  </button>
+                </div>
+                {merchantResults.length > 0 && (
+                  <ul className="mt-2 flex flex-col gap-1">
+                    {merchantResults.map((m) => (
+                      <li key={m.id}>
+                        <button
+                          type="button"
+                          onClick={() => void loadMerchant(m)}
+                          className="hover:bg-muted flex w-full items-center justify-between rounded-lg border border-transparent px-2.5 py-1.5 text-left text-sm"
+                        >
+                          <span>
+                            {m.business_name} · {m.owner_name}
+                          </span>
+                          <span className="text-muted-foreground text-xs">{m.phone}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMerchantNotFound(true);
+                    setSubmitError("");
+                    setStep("form");
+                  }}
+                  className="text-muted-foreground hover:text-foreground mt-2 text-xs underline"
+                >
+                  매장을 찾을 수 없음 (직접 입력)
+                </button>
               </div>
             </div>
-
-            <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
-              <Field label="설치 및 발송일">
-                <input
-                  type="date"
-                  value={form.install_date}
-                  onChange={(event) => setForm({ ...form, install_date: event.target.value })}
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="비고">
-                <input
-                  placeholder="비고 입력"
-                  value={form.memo}
-                  onChange={(event) => setForm({ ...form, memo: event.target.value })}
-                  className={inputClass}
-                />
-              </Field>
-            </div>
-
-            <div>
-              <div className="text-foreground mb-2.5 text-[13px] font-bold">
-                VAN사 (중복선택 가능)
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {VAN_COMPANIES.map((company) => {
-                  const active = vanSelected.includes(company);
-                  return (
+          </div>
+        ) : (
+          <>
+            <div className="flex-1 overflow-y-auto px-7 py-5">
+              <div className="flex flex-col gap-5">
+                {mode === "existing" && (
+                  <div className="border-border bg-surface-subtle flex items-center justify-between rounded-lg border px-3 py-2.5">
+                    <span className="text-sm">
+                      {merchantNotFound
+                        ? `매장을 찾을 수 없어 직접 입력 중 (${FRANCHISE_CASE_TYPE_LABEL[form.case_type]})`
+                        : `선택한 매장: ${loadedMerchantLabel} (${FRANCHISE_CASE_TYPE_LABEL[form.case_type]})`}
+                    </span>
                     <button
-                      key={company}
                       type="button"
-                      onClick={() => toggleVan(company)}
-                      className={`h-8 rounded-full border px-3.5 text-xs font-semibold ${active ? "border-primary bg-primary-muted text-primary" : "border-border bg-card text-foreground hover:border-primary/50"}`}
+                      onClick={() => {
+                        setStep("search");
+                        setMerchantResults([]);
+                        setMerchantQuery("");
+                      }}
+                      className="text-primary text-xs font-medium"
                     >
-                      {company}
+                      다시 검색
                     </button>
-                  );
-                })}
+                  </div>
+                )}
+                <div>
+                  <div className="text-foreground mb-2.5 text-[13px] font-bold">기본 정보</div>
+                  <div className="grid grid-cols-1 gap-3.5 md:grid-cols-4">
+                    <Field label="상호명">
+                      <input
+                        placeholder="상호명 입력"
+                        value={form.business_name}
+                        onChange={(event) =>
+                          setForm({ ...form, business_name: event.target.value })
+                        }
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="대표자명">
+                      <input
+                        placeholder="대표자명 입력"
+                        value={form.owner_name}
+                        onChange={(event) => setForm({ ...form, owner_name: event.target.value })}
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="연락처">
+                      <input
+                        placeholder="010-0000-0000"
+                        value={form.phone}
+                        onChange={(event) =>
+                          setForm({ ...form, phone: formatPhone(event.target.value) })
+                        }
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="사업자번호">
+                      <input
+                        placeholder="000-00-00000"
+                        value={form.business_number}
+                        onChange={(event) =>
+                          setForm({
+                            ...form,
+                            business_number: formatBusinessNumber(event.target.value),
+                          })
+                        }
+                        className={inputClass}
+                      />
+                    </Field>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-foreground mb-2.5 text-[13px] font-bold">접수 정보</div>
+                  <div className="grid grid-cols-1 gap-3.5 md:grid-cols-4">
+                    <Field label="접수날짜">
+                      <input
+                        type="date"
+                        value={form.reception_date}
+                        onChange={(event) =>
+                          setForm({ ...form, reception_date: event.target.value })
+                        }
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="채널">
+                      <select
+                        value={form.channel}
+                        onChange={(event) =>
+                          setForm({ ...form, channel: event.target.value as FranchiseChannel | "" })
+                        }
+                        className={selectClass}
+                      >
+                        <option value="">선택 안함</option>
+                        {(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map((c) => (
+                          <option key={c} value={c}>
+                            {FRANCHISE_CHANNEL_LABEL[c]}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="구분">
+                      <div className="flex h-9 items-center text-sm">
+                        {FRANCHISE_CASE_TYPE_LABEL[form.case_type]}
+                      </div>
+                    </Field>
+                    <Field label="옵션">
+                      <div className="flex h-9 items-center gap-3">
+                        <label className="text-foreground flex cursor-pointer items-center gap-1.5 text-sm select-none">
+                          <input
+                            type="checkbox"
+                            checked={form.is_rental}
+                            onChange={(event) =>
+                              setForm({ ...form, is_rental: event.target.checked })
+                            }
+                            className="accent-primary size-[15px] cursor-pointer"
+                          />
+                          렌탈
+                        </label>
+                        <label className="text-foreground flex cursor-pointer items-center gap-1.5 text-sm select-none">
+                          <input
+                            type="checkbox"
+                            checked={form.is_installment}
+                            onChange={(event) =>
+                              setForm({ ...form, is_installment: event.target.checked })
+                            }
+                            className="accent-primary size-[15px] cursor-pointer"
+                          />
+                          할부
+                        </label>
+                      </div>
+                    </Field>
+                    <Field label="사업자 유형">
+                      <select
+                        value={form.applicant_type}
+                        onChange={(event) =>
+                          setForm({ ...form, applicant_type: event.target.value as ApplicantType })
+                        }
+                        className={selectClass}
+                      >
+                        {(Object.keys(APPLICANT_TYPE_LABEL) as ApplicantType[]).map((type) => (
+                          <option key={type} value={type}>
+                            {APPLICANT_TYPE_LABEL[type]}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="인터넷">
+                      <select
+                        value={form.internet}
+                        onChange={(event) => setForm({ ...form, internet: event.target.value })}
+                        className={selectClass}
+                      >
+                        <option value="">미설정</option>
+                        {INTERNET_PROVIDERS.map((provider) => (
+                          <option key={provider}>{provider}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="담당자">
+                      <select
+                        value={form.cs_id}
+                        onChange={(event) => setForm({ ...form, cs_id: event.target.value })}
+                        className={selectClass}
+                      >
+                        <option value="">미배정</option>
+                        {csProfiles.map((profile) => (
+                          <option key={profile.id} value={profile.id}>
+                            {profile.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-foreground mb-2.5 text-[13px] font-bold">상품</div>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <select
+                        value={productSelect}
+                        onChange={(event) => setProductSelect(event.target.value)}
+                        className={selectClass}
+                      >
+                        {EQUIPMENT_CATALOG.map((product) => (
+                          <option key={product}>{product}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="w-12 shrink-0">
+                      <input
+                        type="number"
+                        min={1}
+                        max={99}
+                        value={productQty}
+                        onChange={(event) =>
+                          setProductQty(Math.min(99, Number(event.target.value) || 1))
+                        }
+                        className={`${inputClass} text-center`}
+                      />
+                    </div>
+                    <button type="button" onClick={addProduct} className={secondaryButton}>
+                      추가
+                    </button>
+                  </div>
+                  {form.equipmentItems.length > 0 && (
+                    <div className="mt-2 flex flex-col gap-1.5">
+                      {form.equipmentItems.map((product, index) => (
+                        <div
+                          key={`${product.name}-${index}`}
+                          className="bg-surface-subtle flex items-center justify-between rounded-lg px-3 py-2 text-sm"
+                        >
+                          <span>
+                            {product.name} × {product.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeProduct(index)}
+                            className="text-error text-xs"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <div className="text-foreground mb-2.5 text-[13px] font-bold">주소</div>
+                  <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
+                    <Field label="주소">
+                      <input
+                        placeholder="주소 입력"
+                        value={form.address}
+                        onChange={(event) => setForm({ ...form, address: event.target.value })}
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="상세주소">
+                      <input
+                        placeholder="상세주소 입력"
+                        value={form.address_detail}
+                        onChange={(event) =>
+                          setForm({ ...form, address_detail: event.target.value })
+                        }
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="오픈예정일">
+                      <input
+                        type="date"
+                        value={form.open_date}
+                        onChange={(event) => setForm({ ...form, open_date: event.target.value })}
+                        className={inputClass}
+                      />
+                    </Field>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
+                  <Field label="설치 및 발송일">
+                    <input
+                      type="date"
+                      value={form.install_date}
+                      onChange={(event) => setForm({ ...form, install_date: event.target.value })}
+                      className={inputClass}
+                    />
+                  </Field>
+                  <Field label="비고">
+                    <input
+                      placeholder="비고 입력"
+                      value={form.memo}
+                      onChange={(event) => setForm({ ...form, memo: event.target.value })}
+                      className={inputClass}
+                    />
+                  </Field>
+                </div>
+
+                <div>
+                  <div className="text-foreground mb-2.5 text-[13px] font-bold">
+                    VAN사 (중복선택 가능)
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {VAN_COMPANIES.map((company) => {
+                      const active = vanSelected.includes(company);
+                      return (
+                        <button
+                          key={company}
+                          type="button"
+                          onClick={() => toggleVan(company)}
+                          className={`h-8 rounded-full border px-3.5 text-xs font-semibold ${active ? "border-primary bg-primary-muted text-primary" : "border-border bg-card text-foreground hover:border-primary/50"}`}
+                        >
+                          {company}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        <div className="border-border flex flex-shrink-0 flex-col gap-2 border-t px-7 py-4">
-          {submitError && <span className="text-error text-xs">{submitError}</span>}
-          <div className="flex items-center justify-between">
-            <label className="text-foreground flex cursor-pointer items-center gap-2 text-sm select-none">
-              <input
-                type="checkbox"
-                checked={form.sendDocNotify}
-                onChange={(event) => setForm({ ...form, sendDocNotify: event.target.checked })}
-                className="accent-primary size-[15px] cursor-pointer"
-              />
-              등록 즉시 서류안내 알림톡 발송
-            </label>
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={handleSubmit}
-              className={primaryButton}
-            >
-              {submitting ? "등록 중..." : "등록"}
-            </button>
-          </div>
-        </div>
+            <div className="border-border flex flex-shrink-0 flex-col gap-2 border-t px-7 py-4">
+              {submitError && <span className="text-error text-xs">{submitError}</span>}
+              <div className="flex items-center justify-between">
+                <label className="text-foreground flex cursor-pointer items-center gap-2 text-sm select-none">
+                  <input
+                    type="checkbox"
+                    checked={form.sendDocNotify}
+                    onChange={(event) => setForm({ ...form, sendDocNotify: event.target.checked })}
+                    className="accent-primary size-[15px] cursor-pointer"
+                  />
+                  등록 즉시 서류안내 알림톡 발송
+                </label>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={handleSubmit}
+                  className={primaryButton}
+                >
+                  {submitting ? "등록 중..." : "등록"}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

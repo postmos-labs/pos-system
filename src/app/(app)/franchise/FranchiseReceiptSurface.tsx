@@ -60,6 +60,7 @@ interface Props {
   busyId: string | null;
   onHelp: () => void;
   onNew: () => void;
+  onNewExisting: () => void;
   onKpiChange: (key: KpiKey) => void;
   onTableViewChange: (view: TableView, kpi?: KpiKey | null) => void;
   onSearchChange: (value: string) => void;
@@ -291,6 +292,10 @@ export default function FranchiseReceiptSurface(props: Props) {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button type="button" onClick={props.onNewExisting} className={secondaryButton}>
+            <PlusIcon className="size-3.5" />
+            전환·승계·명변 접수
+          </button>
           <button type="button" onClick={props.onNew} className={primaryButton}>
             <PlusIcon className="size-3.5" />
             신규 접수
