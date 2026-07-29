@@ -15,8 +15,20 @@ import {
   SearchIcon,
   StickyNoteIcon,
 } from "lucide-react";
-import type { ApplicantType, FranchiseApplication, FranchiseStatus, Profile } from "@/types";
-import { APPLICANT_TYPE_LABEL, FRANCHISE_STATUS_LABEL } from "@/types";
+import type {
+  ApplicantType,
+  FranchiseApplication,
+  FranchiseCaseType,
+  FranchiseChannel,
+  FranchiseStatus,
+  Profile,
+} from "@/types";
+import {
+  APPLICANT_TYPE_LABEL,
+  FRANCHISE_CASE_TYPE_LABEL,
+  FRANCHISE_CHANNEL_LABEL,
+  FRANCHISE_STATUS_LABEL,
+} from "@/types";
 
 type TableView = "all" | "mine" | "doc_incomplete" | "doc_waiting" | "approved";
 type KpiKey = "today_received" | "doc_waiting" | "doc_incomplete" | "reviewing" | "today_completed";
@@ -38,6 +50,7 @@ interface Props {
   statusFilter: string;
   applicantTypeFilter: string;
   channelFilter: string;
+  caseTypeFilter: string;
   dateFrom: string;
   dateTo: string;
   sortBy: SortBy;
@@ -53,6 +66,7 @@ interface Props {
   onStatusFilterChange: (value: string) => void;
   onApplicantTypeFilterChange: (value: string) => void;
   onChannelFilterChange: (value: string) => void;
+  onCaseTypeFilterChange: (value: string) => void;
   onDateFromChange: (value: string) => void;
   onDateToChange: (value: string) => void;
   onSortChange: (value: SortBy) => void;
@@ -76,17 +90,6 @@ interface Props {
   onBulkTransfer: () => void;
 }
 
-const RECEPTION_CHANNELS = [
-  "토스 홈페이지",
-  "직접 영업",
-  "전환",
-  "토스리드건",
-  "토스프리미엄",
-  "승계",
-  "명변",
-  "랜탈",
-  "할부",
-];
 const HIDDEN_STATUSES: FranchiseStatus[] = [
   "internet_apply_done",
   "internet_done",
@@ -379,17 +382,32 @@ export default function FranchiseReceiptSurface(props: Props) {
                 ))}
               </select>
             </div>
-            <div className="w-40">
+            <div className="w-32">
               <select
-                aria-label="접수 채널"
+                aria-label="채널"
                 value={props.channelFilter}
                 onChange={(event) => props.onChannelFilterChange(event.target.value)}
                 className={selectBase}
               >
-                <option value="">접수 채널 전체</option>
-                {RECEPTION_CHANNELS.map((channel) => (
-                  <option key={channel} value={channel}>
-                    {channel}
+                <option value="">채널 전체</option>
+                {(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map((c) => (
+                  <option key={c} value={c}>
+                    {FRANCHISE_CHANNEL_LABEL[c]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="w-32">
+              <select
+                aria-label="구분"
+                value={props.caseTypeFilter}
+                onChange={(event) => props.onCaseTypeFilterChange(event.target.value)}
+                className={selectBase}
+              >
+                <option value="">구분 전체</option>
+                {(Object.keys(FRANCHISE_CASE_TYPE_LABEL) as FranchiseCaseType[]).map((c) => (
+                  <option key={c} value={c}>
+                    {FRANCHISE_CASE_TYPE_LABEL[c]}
                   </option>
                 ))}
               </select>
@@ -488,7 +506,8 @@ export default function FranchiseReceiptSurface(props: Props) {
                 {[
                   "접수일",
                   "오픈 예정일",
-                  "접수 채널",
+                  "채널",
+                  "구분",
                   "상호명",
                   "대표자",
                   "연락처",
@@ -511,7 +530,7 @@ export default function FranchiseReceiptSurface(props: Props) {
               {props.rows.length === 0 && (
                 <tr className="border-border border-b">
                   <td
-                    colSpan={12}
+                    colSpan={13}
                     style={{ height: 50 * 49 }}
                     className="text-muted-foreground text-center text-sm"
                   >
@@ -560,18 +579,30 @@ export default function FranchiseReceiptSurface(props: Props) {
                     </td>
                     <td className="px-2.5 py-2.5 whitespace-nowrap">
                       <select
-                        aria-label="접수 채널"
-                        value={row.reception_channel ?? ""}
-                        onChange={(event) =>
-                          props.onSaveField(row, "reception_channel", event.target.value)
-                        }
+                        aria-label="채널"
+                        value={row.channel ?? ""}
+                        onChange={(event) => props.onSaveField(row, "channel", event.target.value)}
                         className="text-foreground h-auto border-none bg-transparent py-0 pr-6 pl-0 text-[12.5px] outline-none"
                       >
                         <option value="">미지정</option>
-                        {RECEPTION_CHANNELS.map((channel) => (
-                          <option key={channel}>{channel}</option>
+                        {(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map((c) => (
+                          <option key={c} value={c}>
+                            {FRANCHISE_CHANNEL_LABEL[c]}
+                          </option>
                         ))}
                       </select>
+                    </td>
+                    <td className="px-2.5 py-2.5 whitespace-nowrap">
+                      <span className="text-foreground text-[12.5px]">
+                        {row.case_type ? FRANCHISE_CASE_TYPE_LABEL[row.case_type] : "미지정"}
+                      </span>
+                      {(row.is_rental || row.is_installment) && (
+                        <span className="text-muted-foreground ml-1 text-[11px]">
+                          {[row.is_rental && "렌탈", row.is_installment && "할부"]
+                            .filter(Boolean)
+                            .join("·")}
+                        </span>
+                      )}
                     </td>
                     <td className="max-w-[200px] px-2.5 py-2.5 font-semibold">
                       <button
