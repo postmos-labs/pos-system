@@ -48,6 +48,8 @@ export interface Profile {
   created_at: string;
 }
 
+export type MerchantOpenStatus = "preparing" | "operating";
+
 export interface Merchant {
   id: string;
   business_name: string;
@@ -57,6 +59,7 @@ export interface Merchant {
   address?: string;
   address_detail?: string;
   pos_model?: string;
+  open_date?: string;
   service_type?: string;
   memo?: string;
   sales_id?: string;
@@ -126,6 +129,17 @@ export interface EquipmentItem {
   quantity: number;
 }
 
+export type FranchiseChannel = "direct_sales" | "toss_lead";
+export type FranchiseCaseType = "new" | "conversion" | "succession" | "name_change";
+
+export interface FranchisePreviousSnapshot {
+  business_name?: string;
+  owner_name?: string;
+  business_number?: string;
+  phone?: string;
+  address?: string;
+}
+
 export interface FranchiseApplication {
   id: string;
   business_name?: string;
@@ -138,6 +152,12 @@ export interface FranchiseApplication {
   address_detail?: string;
   title?: string;
   reception_channel?: string;
+  channel?: FranchiseChannel;
+  case_type?: FranchiseCaseType;
+  is_rental?: boolean;
+  is_installment?: boolean;
+  merchant_id?: string | null;
+  previous_snapshot?: FranchisePreviousSnapshot | null;
   reception_date?: string;
   card_apply_date?: string;
   open_date?: string;
@@ -314,6 +334,18 @@ export const FRANCHISE_STATUS_COLOR: Record<FranchiseStatus, string> = {
   toss_review_done: "bg-green-100 text-green-700 border-green-200",
   completed: "bg-emerald-100 text-emerald-700 border-emerald-200",
   hold: "bg-gray-100 text-gray-700 border-gray-200",
+};
+
+export const FRANCHISE_CHANNEL_LABEL: Record<FranchiseChannel, string> = {
+  direct_sales: "직접 영업",
+  toss_lead: "토스 리드",
+};
+
+export const FRANCHISE_CASE_TYPE_LABEL: Record<FranchiseCaseType, string> = {
+  new: "신규",
+  conversion: "전환",
+  succession: "승계",
+  name_change: "명변",
 };
 
 export const APPLICANT_TYPE_LABEL: Record<ApplicantType, string> = {
