@@ -61,13 +61,31 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const roomIds = myRooms?.map((r) => r.id) ?? [];
   let unreadDmCount = 0;
   if (roomIds.length > 0) {
-    const { count } = await supabase
-      .from("dm_messages")
-      .select("*", { count: "exact", head: true })
-      .in("room_id", roomIds)
-      .neq("user_id", user.id)
-      .eq("is_read", false);
-    unreadDmCount = count ?? 0;
+    const [{ data: dmLastMessages }, { data: dmReads }] = await Promise.all([
+      supabase
+        .from("dm_messages")
+        .select("room_id, created_at")
+        .in("room_id", roomIds)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("chat_room_reads")
+        .select("room_id, last_read_at")
+        .eq("user_id", user.id)
+        .eq("room_type", "dm"),
+    ]);
+
+    const lastMessageAt = new Map<string, string>();
+    for (const m of dmLastMessages ?? []) {
+      if (!lastMessageAt.has(m.room_id)) lastMessageAt.set(m.room_id, m.created_at);
+    }
+    const lastReadAt = new Map<string, string>();
+    for (const r of dmReads ?? []) lastReadAt.set(r.room_id, r.last_read_at);
+
+    unreadDmCount = roomIds.filter((id) => {
+      const msgAt = lastMessageAt.get(id);
+      const readAt = lastReadAt.get(id);
+      return Boolean(msgAt && (!readAt || new Date(msgAt) > new Date(readAt)));
+    }).length;
   }
 
   const scheduleAlerts = (upcomingTickets ?? []).flatMap((t: any) =>
