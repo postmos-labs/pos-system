@@ -22,6 +22,7 @@ export default async function InstallsPage({ searchParams }: Props) {
     { data: techUsers },
     { data: completionApprovals },
     { data: transferApprovals },
+    { data: deliveryStatusRows },
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).single(),
     supabase
@@ -41,7 +42,13 @@ export default async function InstallsPage({ searchParams }: Props) {
       )
       .order("requested_at", { ascending: true }),
     supabase.from("franchise_transfer_approvals").select("franchise_application_id,approval_notes"),
+    supabase.from("installations").select("status").eq("delivery_type", "delivery"),
   ]);
+
+  const initialDeliveryStats = {
+    total: deliveryStatusRows?.length ?? 0,
+    completed: (deliveryStatusRows ?? []).filter((row) => row.status === "completed").length,
+  };
 
   if (!profile) redirect("/dashboard");
 
@@ -91,6 +98,7 @@ export default async function InstallsPage({ searchParams }: Props) {
         pendingApprovals.map((approval) => [approval.installation_id, approval]),
       )}
       initialApprovalNoteHistory={approvalNoteHistory}
+      initialDeliveryStats={initialDeliveryStats}
     />
   );
 }

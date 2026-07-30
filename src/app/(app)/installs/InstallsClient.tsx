@@ -16,6 +16,7 @@ import {
   Trash2,
   ChevronDown,
   Save,
+  Percent,
 } from "lucide-react";
 import type { Profile, FranchiseApplication } from "@/types";
 import { FRANCHISE_STATUS_LABEL } from "@/types";
@@ -164,6 +165,7 @@ interface Props {
   initialHighlightId?: string;
   initialCompletionApprovals: Record<string, CompletionApproval>;
   initialApprovalNoteHistory?: Record<string, ApprovalNote[]>;
+  initialDeliveryStats?: { total: number; completed: number };
 }
 
 type CompletionApproval = {
@@ -637,12 +639,14 @@ export default function InstallsClient({
   initialHighlightId,
   initialCompletionApprovals,
   initialApprovalNoteHistory = {},
+  initialDeliveryStats = { total: 0, completed: 0 },
 }: Props) {
   const canEdit = ["tech", "cs", "admin", "master"].includes(profile.role);
   const canDelete = profile.role === "admin" || profile.role === "master" || !!profile.can_delete;
   const toast = useToast();
   const router = useRouter();
   const [installs, setInstalls] = useState<Installation[]>(initialInstalls);
+  const [deliveryStats, setDeliveryStats] = useState(initialDeliveryStats);
   const [loading, setLoading] = useState(false);
   const [hitFetchLimit, setHitFetchLimit] = useState(initialInstalls.length >= FETCH_LIMIT);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -776,6 +780,16 @@ export default function InstallsClient({
     setInstalls((data as any) ?? []);
     setHitFetchLimit((data?.length ?? 0) >= FETCH_LIMIT);
     setLoading(false);
+    if (!deliveryOnly && !mineOnly) {
+      const { data: deliveryRows } = await supabase
+        .from("installations")
+        .select("status")
+        .eq("delivery_type", "delivery");
+      setDeliveryStats({
+        total: deliveryRows?.length ?? 0,
+        completed: (deliveryRows ?? []).filter((row) => row.status === "completed").length,
+      });
+    }
   }
 
   async function openFranchiseDetail(franchiseId: string) {
@@ -1799,6 +1813,16 @@ export default function InstallsClient({
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   }).length;
 
+  const installCompletionStats = useMemo(() => {
+    const installOnly = installs.filter((i) => deliveryTypeOf(i.delivery_type) === "install");
+    const total = installOnly.length;
+    const completed = installOnly.filter((i) => i.status === "completed").length;
+    return { total, completed, rate: total > 0 ? Math.round((completed / total) * 100) : null };
+  }, [installs]);
+
+  const deliveryCompletionRate =
+    deliveryStats.total > 0 ? Math.round((deliveryStats.completed / deliveryStats.total) * 100) : null;
+
   return (
     <div className="p-6 max-w-[1600px] mx-auto space-y-5">
       {}
@@ -2145,6 +2169,53 @@ export default function InstallsClient({
           )}
         </div>
       </div>
+
+      {!mineOnly && !deliveryOnly && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <div
+            title="전체 설치건 중 설치완료 상태인 비율"
+            className="bg-white border border-slate-200 rounded-xl flex items-center gap-4 px-6 py-5"
+          >
+            <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-blue-500/12 text-blue-600">
+              <Percent size={28} />
+            </span>
+            <span className="min-w-0">
+              <span className="text-slate-500 block truncate text-sm">
+                설치완료율 (전체 설치건)
+              </span>
+              <span className="text-slate-900 mt-1 flex items-baseline gap-2">
+                <span className="text-3xl font-bold">
+                  {installCompletionStats.rate === null ? "-" : `${installCompletionStats.rate}%`}
+                </span>
+                <small className="text-slate-400 text-xs font-medium">
+                  {installCompletionStats.completed}/{installCompletionStats.total}건
+                </small>
+              </span>
+            </span>
+          </div>
+          <div
+            title="택배발송건 중 완료 상태인 비율"
+            className="bg-white border border-slate-200 rounded-xl flex items-center gap-4 px-6 py-5"
+          >
+            <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-orange-500/12 text-orange-600">
+              <Percent size={28} />
+            </span>
+            <span className="min-w-0">
+              <span className="text-slate-500 block truncate text-sm">
+                택배발송완료율 (택배발송건)
+              </span>
+              <span className="text-slate-900 mt-1 flex items-baseline gap-2">
+                <span className="text-3xl font-bold">
+                  {deliveryCompletionRate === null ? "-" : `${deliveryCompletionRate}%`}
+                </span>
+                <small className="text-slate-400 text-xs font-medium">
+                  {deliveryStats.completed}/{deliveryStats.total}건
+                </small>
+              </span>
+            </span>
+          </div>
+        </div>
+      )}
 
       {canDelete && selected.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-white border border-slate-200 shadow-lg rounded-xl px-5 py-3">
