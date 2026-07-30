@@ -23,9 +23,18 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const TIMED_OUT = Symbol("auth-check-timed-out");
+  const authCheck = await Promise.race([
+    supabase.auth.getUser().then((res) => res.data.user),
+    new Promise<typeof TIMED_OUT>((resolve) => setTimeout(() => resolve(TIMED_OUT), 5000)),
+  ]);
+
+  // Supabase Auth 응답 지연으로 proxy가 수십 초씩 멈추는 장애 대응:
+  // 타임아웃 시 로그인으로 막지 않고 통과시킨다. 실제 데이터 접근은 RLS가 막아준다.
+  if (authCheck === TIMED_OUT) {
+    return supabaseResponse;
+  }
+  const user = authCheck;
 
   const isLoginPage = request.nextUrl.pathname === "/login";
   const isPublicPage =
