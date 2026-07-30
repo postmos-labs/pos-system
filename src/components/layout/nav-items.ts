@@ -14,7 +14,6 @@ import {
   FileText,
   Network,
   FileEdit,
-  Hash,
   Images,
   Code2,
   NotebookText,
@@ -36,7 +35,6 @@ export const COMMON_NAV: NavItem[] = [
   { href: "/chat", label: "채팅", icon: MessageCircle },
   { href: "/contracts", label: "계약서 / 서명", icon: PenLine },
   { href: "/dev-requests", label: "개발요청", icon: Code2 },
-  { href: "/slack", label: "Slack", icon: Hash },
 ];
 
 export const ROLE_FOLDERS: {

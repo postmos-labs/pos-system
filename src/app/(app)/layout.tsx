@@ -5,7 +5,6 @@ import AppHeader from "@/components/layout/AppHeader";
 import MobileNav from "@/components/layout/MobileNav";
 import RealtimeNotification from "@/components/layout/RealtimeNotification";
 import ScheduleAlertBanner from "@/components/layout/ScheduleAlertBanner";
-import SlackPopupNotifier from "@/components/layout/SlackPopupNotifier";
 import { ToastProvider } from "@/components/ui/Toast";
 import type { Profile } from "@/types";
 
@@ -236,7 +235,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
         <RealtimeNotification userId={user.id} initialCount={unreadCount ?? 0} />
         <ScheduleAlertBanner alerts={scheduleAlerts} />
-        <SlackPopupNotifier />
       </div>
     </ToastProvider>
   );
