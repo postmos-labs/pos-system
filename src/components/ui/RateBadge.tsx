@@ -7,12 +7,12 @@ const TONE_CLASSES: Record<
   { border: string; bg: string; ring: string; track: string; icon: string; text: string; sub: string }
 > = {
   fuchsia: {
-    border: "border-fuchsia-200 dark:border-fuchsia-900/50",
-    bg: "from-fuchsia-50 to-fuchsia-100/60 dark:from-fuchsia-950/40 dark:to-fuchsia-900/20",
+    border: "border-fuchsia-200",
+    bg: "from-fuchsia-50 to-fuchsia-100/60",
     ring: "#c026d3",
     track: "#f5d0fe",
-    icon: "bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-400",
-    text: "text-fuchsia-700 dark:text-fuchsia-300",
+    icon: "bg-fuchsia-500/15 text-fuchsia-600",
+    text: "text-fuchsia-700",
     sub: "text-fuchsia-500/80",
   },
   blue: {
