@@ -2171,10 +2171,10 @@ export default function InstallsClient({
       </div>
 
       {!mineOnly && !deliveryOnly && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <div className="mx-auto grid w-full max-w-2xl grid-cols-1 gap-3.5 sm:grid-cols-2">
           <div
             title="전체 설치건 중 설치완료 상태인 비율"
-            className="bg-white border border-slate-200 rounded-xl flex items-center gap-4 px-6 py-5"
+            className="bg-white border border-slate-200 rounded-xl flex items-center justify-center gap-4 px-6 py-5"
           >
             <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-blue-500/12 text-blue-600">
               <Percent size={28} />
@@ -2195,7 +2195,7 @@ export default function InstallsClient({
           </div>
           <div
             title="택배발송건 중 완료 상태인 비율"
-            className="bg-white border border-slate-200 rounded-xl flex items-center gap-4 px-6 py-5"
+            className="bg-white border border-slate-200 rounded-xl flex items-center justify-center gap-4 px-6 py-5"
           >
             <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-orange-500/12 text-orange-600">
               <Percent size={28} />

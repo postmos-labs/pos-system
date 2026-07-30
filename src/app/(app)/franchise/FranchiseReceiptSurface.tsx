@@ -310,7 +310,7 @@ export default function FranchiseReceiptSurface(props: Props) {
 
       <div
         title="접수 등록 건 중 카드가맹접수/토스심사접수완료 단계 이상에 도달한 비율"
-        className="border-border bg-card shadow-card flex items-center gap-4 rounded-xl border px-6 py-5"
+        className="border-border bg-card shadow-card mx-auto flex w-full max-w-md items-center justify-center gap-4 rounded-xl border px-6 py-5"
       >
         <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-fuchsia-500/12 text-fuchsia-600">
           <PercentIcon className="size-7" />
