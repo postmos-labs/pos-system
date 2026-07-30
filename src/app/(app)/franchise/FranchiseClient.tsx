@@ -439,6 +439,11 @@ function stripPin(text: string): { pinned: boolean; pinnedAt: string | null; tex
   return { pinned: false, pinnedAt: null, text };
 }
 
+function stampMemo(user: string, text: string): string {
+  const stamp = `[${user} ${new Date().toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })}]`;
+  return `${stamp} ${text}`;
+}
+
 // 스탬프(`[이름 MM. DD. HH:mm]`)가 붙은 항목뿐 아니라, 스탬프 도입 전에 저장된 맨 텍스트도 하나의 항목으로 살려서 반환한다
 function parseMemoEntries(
   memo: string | undefined,
@@ -1721,7 +1726,7 @@ export default function FranchiseClient({
         install_date: form.install_date ? formatDateText(form.install_date) : null,
         van_company: form.van_company || null,
         internet: form.internet || null,
-        memo: form.memo || null,
+        memo: form.memo ? stampMemo(currentUserName, form.memo) : null,
         created_by: currentUserId,
       })
       .select()
@@ -1916,9 +1921,9 @@ export default function FranchiseClient({
       const supabase = createClient();
       let saveValue: string | null = value || null;
       if (field === "memo" && value && !raw) {
-        const stamp = `[${currentUserName} ${new Date().toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })}]`;
         const prev = (row.memo ?? "").trim();
-        saveValue = prev ? `${prev}\n${stamp} ${value}` : `${stamp} ${value}`;
+        const stamped = stampMemo(currentUserName, value);
+        saveValue = prev ? `${prev}\n${stamped}` : stamped;
       }
       const { error } = await supabase
         .from("franchise_applications")
