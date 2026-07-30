@@ -30,6 +30,7 @@ import {
   FRANCHISE_CHANNEL_LABEL,
   FRANCHISE_STATUS_LABEL,
 } from "@/types";
+import RateBadge from "@/components/ui/RateBadge";
 
 type TableView = "all" | "mine" | "doc_incomplete" | "doc_waiting" | "approved";
 type KpiKey = "today_received" | "doc_waiting" | "doc_incomplete" | "reviewing" | "today_completed";
@@ -308,32 +309,17 @@ export default function FranchiseReceiptSurface(props: Props) {
         </div>
       </div>
 
-      <div
-        title="접수 등록 건 중 카드가맹접수/토스심사접수완료 단계 이상에 도달한 비율"
-        className="shadow-card mx-auto flex w-full max-w-md items-center justify-center gap-4 rounded-xl border border-fuchsia-200 bg-gradient-to-br from-fuchsia-50 to-fuchsia-100/60 px-6 py-5 dark:border-fuchsia-900/50 dark:from-fuchsia-950/40 dark:to-fuchsia-900/20"
-      >
-        <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-400">
-          <PercentIcon className="size-7" />
-        </span>
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-medium text-fuchsia-700 dark:text-fuchsia-300">
-            접수 성공률
-          </span>
-          <span className="mt-1 flex items-baseline gap-4">
-            <span className="text-3xl font-bold text-fuchsia-700 dark:text-fuchsia-300">
-              {props.successRateStats.day1.rate === null
-                ? "-"
-                : `${props.successRateStats.day1.rate}%`}
-              <small className="ml-1.5 text-xs font-medium text-fuchsia-500/80">1일</small>
-            </span>
-            <span className="text-3xl font-bold text-fuchsia-700 dark:text-fuchsia-300">
-              {props.successRateStats.day30.rate === null
-                ? "-"
-                : `${props.successRateStats.day30.rate}%`}
-              <small className="ml-1.5 text-xs font-medium text-fuchsia-500/80">30일</small>
-            </span>
-          </span>
-        </span>
+      <div className="mx-auto w-full max-w-md">
+        <RateBadge
+          title="접수 성공률"
+          description="접수 등록 건 중 카드가맹접수/토스심사접수완료 단계 이상에 도달한 비율"
+          icon={PercentIcon}
+          tone="fuchsia"
+          stats={[
+            { rate: props.successRateStats.day1.rate, label: "1일" },
+            { rate: props.successRateStats.day30.rate, label: "30일" },
+          ]}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-5">

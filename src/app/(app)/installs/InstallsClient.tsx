@@ -26,6 +26,7 @@ import { NotificationHistory } from "@/components/ui/NotificationHistory";
 import FormModal from "@/components/ui/FormModal";
 import HistoryButton from "@/components/ui/HistoryButton";
 import MemoHistoryPanel from "@/components/ui/MemoHistoryPanel";
+import RateBadge from "@/components/ui/RateBadge";
 import InstallationActivityHistory from "@/components/ui/InstallationActivityHistory";
 import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
 import { appendApprovalNote, type ApprovalNote } from "@/lib/approvalNotes";
@@ -2172,48 +2173,32 @@ export default function InstallsClient({
 
       {!mineOnly && !deliveryOnly && (
         <div className="mx-auto grid w-full max-w-2xl grid-cols-1 gap-3.5 sm:grid-cols-2">
-          <div
-            title="전체 설치건 중 설치완료 상태인 비율"
-            className="flex items-center justify-center gap-4 rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/60 px-6 py-5"
-          >
-            <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-blue-500/15 text-blue-600">
-              <Percent size={28} />
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-medium text-blue-700">
-                설치완료율 (전체 설치건)
-              </span>
-              <span className="mt-1 flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-blue-700">
-                  {installCompletionStats.rate === null ? "-" : `${installCompletionStats.rate}%`}
-                </span>
-                <small className="text-xs font-medium text-blue-500/80">
-                  {installCompletionStats.completed}/{installCompletionStats.total}건
-                </small>
-              </span>
-            </span>
-          </div>
-          <div
-            title="택배발송건 중 완료 상태인 비율"
-            className="flex items-center justify-center gap-4 rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50 to-orange-100/60 px-6 py-5"
-          >
-            <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-orange-500/15 text-orange-600">
-              <Percent size={28} />
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-medium text-orange-700">
-                택배발송완료율 (택배발송건)
-              </span>
-              <span className="mt-1 flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-orange-700">
-                  {deliveryCompletionRate === null ? "-" : `${deliveryCompletionRate}%`}
-                </span>
-                <small className="text-xs font-medium text-orange-500/80">
-                  {deliveryStats.completed}/{deliveryStats.total}건
-                </small>
-              </span>
-            </span>
-          </div>
+          <RateBadge
+            title="설치완료율"
+            description="전체 설치건 중 설치완료 상태인 비율"
+            icon={Percent}
+            tone="blue"
+            stats={[
+              {
+                rate: installCompletionStats.rate,
+                label: "전체 설치건",
+                detail: `${installCompletionStats.completed}/${installCompletionStats.total}건`,
+              },
+            ]}
+          />
+          <RateBadge
+            title="택배발송완료율"
+            description="택배발송건 중 완료 상태인 비율"
+            icon={Percent}
+            tone="orange"
+            stats={[
+              {
+                rate: deliveryCompletionRate,
+                label: "택배발송건",
+                detail: `${deliveryStats.completed}/${deliveryStats.total}건`,
+              },
+            ]}
+          />
         </div>
       )}
 
