@@ -2941,35 +2941,8 @@ export default function InstallsClient({
                               일정변경
                             </button>
                           )}
-                          {completionApprovals[inst.id] &&
-                            (((profile.approval_role === "tech_responsible" &&
-                              completionApprovals[inst.id]!.status === "requested") ||
-                              (profile.approval_role === "team_lead" &&
-                                completionApprovals[inst.id]!.status === "responsible_approved")) &&
-                            completionApprovals[inst.id]!.requested_by !== profile.id ? (
-                              <>
-                                <button
-                                  onClick={() => rejectCompletion(inst.id)}
-                                  disabled={completing}
-                                  className="text-xs text-red-600 border border-red-200 px-2 py-1 rounded-lg hover:bg-red-50 disabled:opacity-50"
-                                >
-                                  반려
-                                </button>
-                                <button
-                                  onClick={() => approveCompletion(inst.id)}
-                                  disabled={completing}
-                                  className="text-xs text-white bg-green-600 border border-green-600 px-2 py-1 rounded-lg hover:bg-green-700 disabled:opacity-50"
-                                >
-                                  {statusLabel(
-                                    completionApprovals[inst.id]!.target_status,
-                                    inst.delivery_type,
-                                  )}{" "}
-                                  {completionApprovals[inst.id]!.status === "requested"
-                                    ? "1차 승인"
-                                    : "최종 승인"}
-                                </button>
-                              </>
-                            ) : (
+                          {completionApprovals[inst.id] && (
+                            <>
                               <span className="text-xs text-amber-700 border border-amber-200 bg-amber-50 px-2 py-1 rounded-lg">
                                 {statusLabel(
                                   completionApprovals[inst.id]!.target_status,
@@ -2979,7 +2952,37 @@ export default function InstallsClient({
                                   ? "1차 승인대기"
                                   : "최종 승인대기"}
                               </span>
-                            ))}
+                              {((profile.approval_role === "tech_responsible" &&
+                                completionApprovals[inst.id]!.status === "requested") ||
+                                (profile.approval_role === "team_lead" &&
+                                  completionApprovals[inst.id]!.status ===
+                                    "responsible_approved")) &&
+                                completionApprovals[inst.id]!.requested_by !== profile.id && (
+                                  <>
+                                    <button
+                                      onClick={() => rejectCompletion(inst.id)}
+                                      disabled={completing}
+                                      className="text-xs text-red-600 border border-red-200 px-2 py-1 rounded-lg hover:bg-red-50 disabled:opacity-50"
+                                    >
+                                      반려
+                                    </button>
+                                    <button
+                                      onClick={() => approveCompletion(inst.id)}
+                                      disabled={completing}
+                                      className="text-xs text-white bg-green-600 border border-green-600 px-2 py-1 rounded-lg hover:bg-green-700 disabled:opacity-50"
+                                    >
+                                      {statusLabel(
+                                        completionApprovals[inst.id]!.target_status,
+                                        inst.delivery_type,
+                                      )}{" "}
+                                      {completionApprovals[inst.id]!.status === "requested"
+                                        ? "1차 승인"
+                                        : "최종 승인"}
+                                    </button>
+                                  </>
+                                )}
+                            </>
+                          )}
                           {!!approvalNoteHistory[inst.id]?.length && (
                             <details className="relative">
                               <summary className="cursor-pointer list-none rounded-lg border border-blue-200 px-2 py-1 text-xs text-blue-600">
