@@ -74,18 +74,19 @@ export default function RealtimeNotification({ userId }: Props) {
         },
         (payload) => {
           const isScheduleNotice = (payload.new.type as string)?.startsWith("schedule_");
-          if (!isScheduleNotice) {
-            const href = payload.new.installation_id
-              ? `/installs?id=${payload.new.installation_id}`
-              : payload.new.franchise_application_id
-                ? `/franchise?id=${payload.new.franchise_application_id}`
-                : payload.new.ticket_id
-                  ? `/tickets/${payload.new.ticket_id}`
-                  : "/notifications";
-            setModal({ title: payload.new.title, body: payload.new.body, href });
-            playSound();
+          if (isScheduleNotice) {
+            router.refresh();
+            return;
           }
-          router.refresh();
+          const href = payload.new.installation_id
+            ? `/installs?id=${payload.new.installation_id}`
+            : payload.new.franchise_application_id
+              ? `/franchise?id=${payload.new.franchise_application_id}`
+              : payload.new.ticket_id
+                ? `/tickets/${payload.new.ticket_id}`
+                : "/notifications";
+          setModal({ title: payload.new.title, body: payload.new.body, href });
+          playSound();
         },
       )
       .subscribe();
