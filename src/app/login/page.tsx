@@ -16,31 +16,36 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, password }),
-    });
-    const data = await res.json();
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, password }),
+      });
+      const data = await res.json().catch(() => null);
 
-    if (!res.ok || data.error) {
-      setError("이름 또는 비밀번호가 올바르지 않습니다.");
-      setLoading(false);
-      return;
-    }
+      if (!res.ok || !data || data.error) {
+        setError("이름 또는 비밀번호가 올바르지 않습니다.");
+        return;
+      }
 
-    const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: data.email,
-      password,
-    });
+      const supabase = createClient();
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password,
+      });
 
-    if (signInError) {
-      setError("이름 또는 비밀번호가 올바르지 않습니다.");
-      setLoading(false);
-    } else {
+      if (signInError) {
+        setError("이름 또는 비밀번호가 올바르지 않습니다.");
+        return;
+      }
+
       router.push("/");
       router.refresh();
+    } catch {
+      setError("서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setLoading(false);
     }
   }
 
