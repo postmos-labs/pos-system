@@ -14,6 +14,8 @@ export interface ChatbotDataRow {
   solution: string;
   registered_by: string;
   registrant_name: string;
+  company_name: string | null;
+  phone: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -21,11 +23,15 @@ export interface ChatbotDataRow {
 interface ChatbotDataFormValue {
   problemSituation: string;
   solution: string;
+  companyName: string;
+  phone: string;
 }
 
 const EMPTY_FORM: ChatbotDataFormValue = {
   problemSituation: "",
   solution: "",
+  companyName: "",
+  phone: "",
 };
 
 function formatDateTime(value: string) {
@@ -59,6 +65,26 @@ function CreateForm({ registrantName, submitting, onClose, onSubmit }: CreateFor
         <div className="rounded-lg bg-slate-50 px-3 py-2.5">
           <div className="text-xs text-slate-500">등록자</div>
           <div className="mt-0.5 text-sm font-semibold text-slate-800">{registrantName}</div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1.5 text-xs font-medium text-slate-500">
+            상호명
+            <input
+              value={form.companyName}
+              onChange={(event) => setForm({ ...form, companyName: event.target.value })}
+              placeholder="선택 입력"
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-xs font-medium text-slate-500">
+            연락처
+            <input
+              value={form.phone}
+              onChange={(event) => setForm({ ...form, phone: event.target.value })}
+              placeholder="선택 입력"
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </label>
         </div>
         <label className="flex flex-col gap-1.5 text-xs font-medium text-slate-500">
           문제상황
@@ -121,7 +147,7 @@ export default function ChatbotDataClient({ rows, profile }: Props) {
     const term = search.trim().toLowerCase();
     if (!term) return localRows;
     return localRows.filter((row) =>
-      `${row.problem_situation} ${row.solution} ${row.registrant_name}`
+      `${row.problem_situation} ${row.solution} ${row.registrant_name} ${row.company_name ?? ""} ${row.phone ?? ""}`
         .toLowerCase()
         .includes(term),
     );
@@ -137,6 +163,8 @@ export default function ChatbotDataClient({ rows, profile }: Props) {
       .insert({
         problem_situation: value.problemSituation.trim(),
         solution: value.solution.trim(),
+        company_name: value.companyName.trim() || null,
+        phone: value.phone.trim() || null,
       })
       .select()
       .single();
@@ -154,7 +182,7 @@ export default function ChatbotDataClient({ rows, profile }: Props) {
 
   async function handleUpdate(
     row: ChatbotDataRow,
-    value: Pick<ChatbotDataRow, "problem_situation" | "solution">,
+    value: Pick<ChatbotDataRow, "problem_situation" | "solution" | "company_name" | "phone">,
   ) {
     const supabase = createClient();
     const { data, error } = await supabase
@@ -213,20 +241,26 @@ export default function ChatbotDataClient({ rows, profile }: Props) {
       )}
 
       <div className="flex-1 overflow-auto rounded-xl border border-slate-200">
-        <table className="w-full min-w-[840px] border-collapse text-sm">
+        <table className="w-full min-w-[960px] border-collapse text-sm">
           <thead className="sticky top-0 z-10 bg-slate-50">
             <tr>
-              <th className="w-[34%] border-b border-slate-200 px-4 py-3 text-left font-semibold text-slate-700">
+              <th className="w-[26%] border-b border-slate-200 px-4 py-3 text-left font-semibold text-slate-700">
                 문제상황
               </th>
-              <th className="w-[38%] border-b border-slate-200 px-4 py-3 text-left font-semibold text-slate-700">
+              <th className="w-[30%] border-b border-slate-200 px-4 py-3 text-left font-semibold text-slate-700">
                 해결방법
+              </th>
+              <th className="border-b border-slate-200 px-4 py-3 text-left font-semibold text-slate-700 whitespace-nowrap">
+                상호명
+              </th>
+              <th className="border-b border-slate-200 px-4 py-3 text-left font-semibold text-slate-700 whitespace-nowrap">
+                연락처
               </th>
               <th className="border-b border-slate-200 px-4 py-3 text-left font-semibold text-slate-700 whitespace-nowrap">
                 등록자
               </th>
               <th className="border-b border-slate-200 px-4 py-3 text-left font-semibold text-slate-700 whitespace-nowrap">
-                최종 수정일
+                등록일
               </th>
             </tr>
           </thead>
@@ -255,16 +289,20 @@ export default function ChatbotDataClient({ rows, profile }: Props) {
                   </button>
                 </td>
                 <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
+                  {row.company_name ?? "-"}
+                </td>
+                <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{row.phone ?? "-"}</td>
+                <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
                   {row.registrant_name}
                 </td>
                 <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
-                  {formatDateTime(row.updated_at)}
+                  {formatDateTime(row.created_at)}
                 </td>
               </tr>
             ))}
             {filteredRows.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-12 text-center text-slate-400">
+                <td colSpan={6} className="py-12 text-center text-slate-400">
                   등록된 챗봇 데이터가 없습니다.
                 </td>
               </tr>

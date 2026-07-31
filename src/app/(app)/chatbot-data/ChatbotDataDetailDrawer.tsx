@@ -15,7 +15,9 @@ function formatDateTime(value: string) {
 interface Props {
   row: ChatbotDataRow;
   onClose: () => void;
-  onSave: (value: Pick<ChatbotDataRow, "problem_situation" | "solution">) => Promise<boolean>;
+  onSave: (
+    value: Pick<ChatbotDataRow, "problem_situation" | "solution" | "company_name" | "phone">,
+  ) => Promise<boolean>;
 }
 
 export default function ChatbotDataDetailDrawer({ row, onClose, onSave }: Props) {
@@ -23,6 +25,8 @@ export default function ChatbotDataDetailDrawer({ row, onClose, onSave }: Props)
   const [saving, setSaving] = useState(false);
   const [problemSituation, setProblemSituation] = useState(row.problem_situation);
   const [solution, setSolution] = useState(row.solution);
+  const [companyName, setCompanyName] = useState(row.company_name ?? "");
+  const [phone, setPhone] = useState(row.phone ?? "");
   const canSave = problemSituation.trim() && solution.trim();
 
   async function handleSave() {
@@ -31,6 +35,8 @@ export default function ChatbotDataDetailDrawer({ row, onClose, onSave }: Props)
     const saved = await onSave({
       problem_situation: problemSituation.trim(),
       solution: solution.trim(),
+      company_name: companyName.trim() || null,
+      phone: phone.trim() || null,
     });
     setSaving(false);
     if (saved) setEditing(false);
@@ -68,6 +74,36 @@ export default function ChatbotDataDetailDrawer({ row, onClose, onSave }: Props)
         </div>
 
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1.5 text-xs font-medium text-slate-500">
+              상호명
+              {editing ? (
+                <input
+                  value={companyName}
+                  onChange={(event) => setCompanyName(event.target.value)}
+                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              ) : (
+                <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  {row.company_name ?? "-"}
+                </div>
+              )}
+            </label>
+            <label className="flex flex-col gap-1.5 text-xs font-medium text-slate-500">
+              연락처
+              {editing ? (
+                <input
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              ) : (
+                <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  {row.phone ?? "-"}
+                </div>
+              )}
+            </label>
+          </div>
           <label className="flex flex-col gap-1.5 text-xs font-medium text-slate-500">
             문제상황
             {editing ? (
@@ -108,6 +144,8 @@ export default function ChatbotDataDetailDrawer({ row, onClose, onSave }: Props)
                 onClick={() => {
                   setProblemSituation(row.problem_situation);
                   setSolution(row.solution);
+                  setCompanyName(row.company_name ?? "");
+                  setPhone(row.phone ?? "");
                   setEditing(false);
                 }}
                 className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
