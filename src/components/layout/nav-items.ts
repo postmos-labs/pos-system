@@ -1,7 +1,6 @@
 import {
   LayoutDashboard,
   Store,
-  MessageCircle,
   Package,
   PenLine,
   CalendarDays,
@@ -32,7 +31,6 @@ export const COMMON_NAV: NavItem[] = [
   { href: "/dashboard", label: "대시보드", icon: LayoutDashboard },
   { href: "/calendar", label: "캘린더", icon: CalendarDays },
   { href: "/merchants", label: "가맹점", icon: Store },
-  { href: "/chat", label: "채팅", icon: MessageCircle },
   { href: "/contracts", label: "계약서 / 서명", icon: PenLine },
   { href: "/dev-requests", label: "개발요청", icon: Code2 },
 ];

@@ -149,19 +149,6 @@ export async function deleteUserAccount(userId: string) {
       await supabase.from(table).delete().eq(column, userId);
     }
 
-    const { data: rooms } = await supabase
-      .from("dm_rooms")
-      .select("id")
-      .or(`user1_id.eq.${userId},user2_id.eq.${userId}`);
-    const roomIds = (rooms ?? []).map((room) => room.id);
-    if (roomIds.length) {
-      await supabase.from("dm_messages").delete().in("room_id", roomIds);
-      await supabase.from("dm_rooms").delete().in("id", roomIds);
-    }
-
-    await supabase.from("dm_messages").delete().eq("user_id", userId);
-    await supabase.from("messages").delete().eq("user_id", userId);
-
     const { error: authDeleteError } = await supabase.auth.admin.deleteUser(userId);
     if (authDeleteError) return { error: "계정 삭제 실패(인증): " + authDeleteError.message };
 

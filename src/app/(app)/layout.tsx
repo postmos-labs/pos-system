@@ -36,57 +36,25 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const limitStr = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
   const oneHourAgoStr = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 
-  const [{ data: myRooms }, { data: upcomingTickets }, { data: myRecentScheduleNotif }] =
-    await Promise.all([
-      supabase.from("dm_rooms").select("id").or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`),
-      supabase
-        .from("tickets")
-        .select(
-          "id, title, scheduled_at, install_date, open_date, card_apply_date, sales_id, cs_id, tech_id, merchant:merchants(business_name)",
-        )
-        .not("status", "eq", "canceled")
-        .or(
-          "scheduled_at.not.is.null,install_date.not.is.null,open_date.not.is.null,card_apply_date.not.is.null",
-        ),
+  const [{ data: upcomingTickets }, { data: myRecentScheduleNotif }] = await Promise.all([
+    supabase
+      .from("tickets")
+      .select(
+        "id, title, scheduled_at, install_date, open_date, card_apply_date, sales_id, cs_id, tech_id, merchant:merchants(business_name)",
+      )
+      .not("status", "eq", "canceled")
+      .or(
+        "scheduled_at.not.is.null,install_date.not.is.null,open_date.not.is.null,card_apply_date.not.is.null",
+      ),
 
-      supabase
-        .from("notifications")
-        .select("id")
-        .eq("user_id", user.id)
-        .like("type", "schedule_%")
-        .gte("created_at", oneHourAgoStr)
-        .limit(1),
-    ]);
-
-  const roomIds = myRooms?.map((r) => r.id) ?? [];
-  let unreadDmCount = 0;
-  if (roomIds.length > 0) {
-    const [{ data: dmLastMessages }, { data: dmReads }] = await Promise.all([
-      supabase
-        .from("dm_messages")
-        .select("room_id, created_at")
-        .in("room_id", roomIds)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("chat_room_reads")
-        .select("room_id, last_read_at")
-        .eq("user_id", user.id)
-        .eq("room_type", "dm"),
-    ]);
-
-    const lastMessageAt = new Map<string, string>();
-    for (const m of dmLastMessages ?? []) {
-      if (!lastMessageAt.has(m.room_id)) lastMessageAt.set(m.room_id, m.created_at);
-    }
-    const lastReadAt = new Map<string, string>();
-    for (const r of dmReads ?? []) lastReadAt.set(r.room_id, r.last_read_at);
-
-    unreadDmCount = roomIds.filter((id) => {
-      const msgAt = lastMessageAt.get(id);
-      const readAt = lastReadAt.get(id);
-      return Boolean(msgAt && (!readAt || new Date(msgAt) > new Date(readAt)));
-    }).length;
-  }
+    supabase
+      .from("notifications")
+      .select("id")
+      .eq("user_id", user.id)
+      .like("type", "schedule_%")
+      .gte("created_at", oneHourAgoStr)
+      .limit(1),
+  ]);
 
   const scheduleAlerts = (upcomingTickets ?? []).flatMap((t: any) =>
     SCHEDULE_FIELDS.flatMap((f) => {
@@ -238,7 +206,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <ToastProvider>
       <div className="flex h-dvh overflow-hidden bg-slate-50">
         <div className="hidden md:flex">
-          <Sidebar profile={profile as Profile} unreadDmCount={unreadDmCount} />
+          <Sidebar profile={profile as Profile} />
         </div>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="hidden md:block">

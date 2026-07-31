@@ -18,10 +18,9 @@ import type { Profile, Role } from "@/types";
 
 interface Props {
   profile: Profile;
-  unreadDmCount?: number;
 }
 
-export default function Sidebar({ profile, unreadDmCount = 0 }: Props) {
+export default function Sidebar({ profile }: Props) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const storageKey = `sidebar_open_folders_${profile.id}`;
@@ -77,7 +76,6 @@ export default function Sidebar({ profile, unreadDmCount = 0 }: Props) {
 
   function NavLink({ item, folderKey }: { item: NavItem; folderKey?: Role }) {
     const active = isHighlighted(item.href, folderKey);
-    const showDmBadge = item.href === "/chat" && unreadDmCount > 0;
 
     return (
       <Link
@@ -96,16 +94,6 @@ export default function Sidebar({ profile, unreadDmCount = 0 }: Props) {
       >
         <item.icon className="size-[18px] shrink-0" />
         {!collapsed && <span className="truncate">{item.label}</span>}
-        {showDmBadge && (
-          <span
-            className={[
-              "flex size-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white",
-              collapsed ? "absolute right-0 top-0" : "ml-auto",
-            ].join(" ")}
-          >
-            {unreadDmCount > 9 ? "9+" : unreadDmCount}
-          </span>
-        )}
       </Link>
     );
   }

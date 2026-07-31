@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, FileText, Wrench, MessageCircle, Bell, LogOut } from "lucide-react";
+import { LayoutDashboard, FileText, Wrench, Bell, LogOut } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 import { createClient } from "@/lib/supabase/client";
 import type { Role } from "@/types";
@@ -10,14 +10,12 @@ import type { Role } from "@/types";
 const NAV = [
   { href: "/dashboard", label: "대시보드", icon: LayoutDashboard },
   { href: "/tickets", label: "작업", icon: FileText },
-  { href: "/chat", label: "채팅", icon: MessageCircle },
   { href: "/notifications", label: "알림", icon: Bell },
 ];
 
 const TECH_NAV = [
   { href: "/dashboard", label: "대시보드", icon: LayoutDashboard },
   { href: "/installs/mine", label: "기사페이지", icon: Wrench },
-  { href: "/chat", label: "채팅", icon: MessageCircle },
   { href: "/notifications", label: "알림", icon: Bell },
 ];
 

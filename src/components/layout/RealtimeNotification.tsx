@@ -1,142 +1,65 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter, usePathname } from "next/navigation";
-import { Bell, X, MessageCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Bell, X } from "lucide-react";
 
 interface Props {
   userId: string;
   initialCount: number;
 }
 
-interface Toast {
-  id: number;
-  title: string;
-  body?: string;
-  type: "dm" | "notification";
-  href?: string;
-}
-
-let toastId = 0;
+const POLL_INTERVAL_MS = 60_000;
 
 export default function RealtimeNotification({ userId }: Props) {
   const [modal, setModal] = useState<{ title: string; body?: string; href?: string } | null>(null);
-  const [toasts, setToasts] = useState<Toast[]>([]);
   const router = useRouter();
-  const pathname = usePathname();
   const supabase = useMemo(() => createClient(), []);
 
-  function playSound() {
-    try {
-      const audioWindow = window as Window &
-        typeof globalThis & { webkitAudioContext?: typeof AudioContext };
-      const AudioContextConstructor = window.AudioContext || audioWindow.webkitAudioContext;
-      if (!AudioContextConstructor) return;
-      const ctx = new AudioContextConstructor();
-      const times = [0, 0.15, 0.3];
-      times.forEach((t) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(880, ctx.currentTime + t);
-        osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + t + 0.1);
-        gain.gain.setValueAtTime(0.3, ctx.currentTime + t);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.15);
-        osc.start(ctx.currentTime + t);
-        osc.stop(ctx.currentTime + t + 0.15);
-      });
-    } catch {}
-  }
-
-  function addToast(toast: Omit<Toast, "id">) {
-    const id = ++toastId;
-    setToasts((prev) => [...prev, { ...toast, id }]);
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 5000);
-  }
-
-  function removeToast(id: number) {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }
+  const sinceRef = useRef<string>(new Date().toISOString());
 
   useEffect(() => {
-    const channel = supabase
-      .channel("notifications-" + userId)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          const isScheduleNotice = (payload.new.type as string)?.startsWith("schedule_");
-          if (isScheduleNotice) {
-            router.refresh();
-            return;
-          }
-          const href = payload.new.installation_id
-            ? `/installs?id=${payload.new.installation_id}`
-            : payload.new.franchise_application_id
-              ? `/franchise?id=${payload.new.franchise_application_id}`
-              : payload.new.ticket_id
-                ? `/tickets/${payload.new.ticket_id}`
-                : "/notifications";
-          setModal({ title: payload.new.title, body: payload.new.body, href });
-          playSound();
-        },
-      )
-      .subscribe();
+    let cancelled = false;
+
+    async function poll() {
+      const { data } = await supabase
+        .from("notifications")
+        .select(
+          "type, title, body, created_at, installation_id, franchise_application_id, ticket_id",
+        )
+        .eq("user_id", userId)
+        .gt("created_at", sinceRef.current)
+        .order("created_at", { ascending: true });
+
+      if (cancelled || !data || data.length === 0) return;
+
+      sinceRef.current = data[data.length - 1].created_at;
+
+      let hasScheduleNotice = false;
+      for (const row of data) {
+        if ((row.type as string)?.startsWith("schedule_")) {
+          hasScheduleNotice = true;
+          continue;
+        }
+        const href = row.installation_id
+          ? `/installs?id=${row.installation_id}`
+          : row.franchise_application_id
+            ? `/franchise?id=${row.franchise_application_id}`
+            : row.ticket_id
+              ? `/tickets/${row.ticket_id}`
+              : "/notifications";
+        setModal({ title: row.title, body: row.body ?? undefined, href });
+      }
+      if (hasScheduleNotice) router.refresh();
+    }
+
+    const timer = setInterval(poll, POLL_INTERVAL_MS);
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      clearInterval(timer);
     };
   }, [router, supabase, userId]);
-
-  useEffect(() => {
-    const channel = supabase
-      .channel("dm-notify-" + userId)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "dm_messages" },
-        async (payload) => {
-          const msg = payload.new;
-          if (msg.user_id === userId) return;
-
-          const { data: room } = await supabase
-            .from("dm_rooms")
-            .select("user1_id, user2_id")
-            .eq("id", msg.room_id)
-            .single();
-
-          if (!room) return;
-          const isMyRoom = room.user1_id === userId || room.user2_id === userId;
-          if (!isMyRoom) return;
-
-          if (pathname === `/chat/dm/${msg.room_id}`) return;
-
-          const { data: sender } = await supabase
-            .from("profiles")
-            .select("name")
-            .eq("id", msg.user_id)
-            .single();
-
-          playSound();
-          addToast({
-            type: "dm",
-            title: sender?.name ?? "메시지",
-            body: msg.content,
-            href: `/chat/dm/${msg.room_id}`,
-          });
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [pathname, supabase, userId]);
 
   return (
     <>
@@ -176,39 +99,6 @@ export default function RealtimeNotification({ userId }: Props) {
           </div>
         </div>
       )}
-
-      {}
-      <div className="fixed bottom-20 right-4 z-50 flex flex-col gap-2 md:bottom-6">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-96 overflow-hidden flex items-stretch animate-in slide-in-from-right duration-200"
-          >
-            <div className="bg-[#3e6d9c] w-1.5 flex-shrink-0" />
-            <div className="flex items-start gap-4 px-4 py-4 flex-1">
-              <div className="w-11 h-11 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <MessageCircle size={20} className="text-blue-600" />
-              </div>
-              <button
-                className="flex-1 text-left"
-                onClick={() => {
-                  router.push(toast.href!);
-                  removeToast(toast.id);
-                }}
-              >
-                <p className="text-base font-bold text-slate-900">{toast.title}</p>
-                <p className="text-sm text-slate-500 mt-1 line-clamp-2">{toast.body}</p>
-              </button>
-              <button
-                onClick={() => removeToast(toast.id)}
-                className="text-slate-300 hover:text-slate-500 flex-shrink-0 mt-0.5"
-              >
-                <X size={17} />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
     </>
   );
 }
