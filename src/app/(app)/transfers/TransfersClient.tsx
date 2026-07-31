@@ -421,9 +421,12 @@ export default function TransfersClient({
     );
   }, [localRows, search, statusFilter, manualSort]);
 
-  useEffect(() => {
+  const filterKey = `${search}|${statusFilter}`;
+  const [pageResetKey, setPageResetKey] = useState(filterKey);
+  if (filterKey !== pageResetKey) {
+    setPageResetKey(filterKey);
     setPage(1);
-  }, [search, statusFilter]);
+  }
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const pagedRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 

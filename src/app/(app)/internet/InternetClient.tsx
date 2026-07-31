@@ -405,9 +405,12 @@ export default function InternetClient({ rows }: Props) {
     });
   }, [localRows, search, statusFilter, categoryFilter]);
 
-  useEffect(() => {
+  const filterKey = `${search}|${statusFilter}|${categoryFilter}`;
+  const [pageResetKey, setPageResetKey] = useState(filterKey);
+  if (filterKey !== pageResetKey) {
+    setPageResetKey(filterKey);
     setPage(1);
-  }, [search, statusFilter, categoryFilter]);
+  }
 
   const kpis = useMemo(() => {
     const todayStr = new Date().toISOString().slice(0, 10);

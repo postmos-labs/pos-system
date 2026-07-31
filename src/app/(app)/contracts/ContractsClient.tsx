@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { format } from "date-fns";
@@ -73,9 +73,12 @@ export default function ContractsClient({ profile, initialContracts }: Props) {
     });
   }, [contracts, search, statusFilter]);
 
-  useEffect(() => {
+  const filterKey = `${search}|${statusFilter}`;
+  const [pageResetKey, setPageResetKey] = useState(filterKey);
+  if (filterKey !== pageResetKey) {
+    setPageResetKey(filterKey);
     setPage(1);
-  }, [search, statusFilter]);
+  }
   const totalPages = Math.max(1, Math.ceil(filteredContracts.length / PAGE_SIZE));
   const pagedContracts = filteredContracts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 

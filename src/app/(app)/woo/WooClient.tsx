@@ -472,9 +472,12 @@ export default function WooClient({
     );
   }, [localRows, search, categoryFilter, sortKey]);
 
-  useEffect(() => {
+  const filterKey = `${search}|${categoryFilter}|${sortKey}`;
+  const [pageResetKey, setPageResetKey] = useState(filterKey);
+  if (filterKey !== pageResetKey) {
+    setPageResetKey(filterKey);
     setPage(1);
-  }, [search, categoryFilter, sortKey]);
+  }
 
   const kpis = useMemo(() => {
     const now = new Date();
@@ -493,9 +496,9 @@ export default function WooClient({
   }, [localRows]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+  if (page > totalPages) {
+    setPage(totalPages);
+  }
   const pagedRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const highlightAppliedRef = useRef(false);

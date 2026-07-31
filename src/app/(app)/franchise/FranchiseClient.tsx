@@ -1373,9 +1373,7 @@ export default function FranchiseClient({
     });
   }, [localRows, search, sortBy, matchesFilters]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [
+  const filterKey = [
     search,
     statusFilter,
     applicantTypeFilter,
@@ -1387,7 +1385,12 @@ export default function FranchiseClient({
     activeKpi,
     dateFrom,
     dateTo,
-  ]);
+  ].join("|");
+  const [pageResetKey, setPageResetKey] = useState(filterKey);
+  if (filterKey !== pageResetKey) {
+    setPageResetKey(filterKey);
+    setPage(1);
+  }
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const pagedRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
