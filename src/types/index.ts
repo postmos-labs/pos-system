@@ -182,6 +182,7 @@ export interface FranchiseApplication {
   change_type?: string;
   doc_template?: string;
   memo?: string;
+  next_check_date?: string | null;
   sort_order?: number | null;
   equipment_select_token?: string;
   selected_equipment?: string[];

@@ -50,7 +50,13 @@ import type {
   FranchisePreviousSnapshot,
   Profile,
 } from "@/types";
-import { APPLICANT_TYPE_LABEL, FRANCHISE_STATUS_LABEL, FRANCHISE_STATUS_COLOR } from "@/types";
+import {
+  APPLICANT_TYPE_LABEL,
+  FRANCHISE_STATUS_LABEL,
+  FRANCHISE_STATUS_COLOR,
+  FRANCHISE_CHANNEL_LABEL,
+  FRANCHISE_CASE_TYPE_LABEL,
+} from "@/types";
 import type { DocCase } from "@/lib/solapi";
 import { useToast } from "@/components/ui/Toast";
 import BulkConfirmDialog from "@/components/ui/BulkConfirmDialog";
@@ -60,7 +66,11 @@ import HistoryIcon from "@/components/ui/HistoryIcon";
 import FranchiseCreateDialog from "./FranchiseCreateDialog";
 import FranchiseDetailDrawer from "./FranchiseDetailDrawer";
 import FranchiseMemoDrawer from "./FranchiseMemoDrawer";
-import FranchiseReceiptSurface from "./FranchiseReceiptSurface";
+import FranchiseReceiptSurface, {
+  nextCheckSeverity,
+  type ColumnSortKey,
+  type ColumnSortState,
+} from "./FranchiseReceiptSurface";
 import {
   INSTALLATION_DELIVERY_TYPE_OPTIONS,
   type InstallationDeliveryType,
@@ -1014,6 +1024,37 @@ const CreateForm = memo(function CreateForm({ onSubmit, submitting, onClose }: C
   );
 });
 
+function getColumnSortValue(
+  row: FranchiseApplication,
+  key: Exclude<ColumnSortKey, "next_check_color">,
+  linkedInternets: Record<string, { id: string; status: string | null; category: string | null }>,
+): string | null | undefined {
+  switch (key) {
+    case "reception_date":
+      return row.reception_date;
+    case "open_date":
+      return row.open_date;
+    case "channel":
+      return row.channel ? FRANCHISE_CHANNEL_LABEL[row.channel] : null;
+    case "case_type":
+      return row.case_type ? FRANCHISE_CASE_TYPE_LABEL[row.case_type] : null;
+    case "business_name":
+      return row.business_name;
+    case "owner_name":
+      return row.owner_name;
+    case "phone":
+      return row.phone;
+    case "cs":
+      return row.cs?.name;
+    case "internet":
+      return linkedInternets[row.id]?.category || row.internet;
+    case "status":
+      return FRANCHISE_STATUS_LABEL[row.status];
+    case "next_check_date":
+      return row.next_check_date;
+  }
+}
+
 export default function FranchiseClient({
   rows,
   salesProfiles,
@@ -1072,6 +1113,16 @@ export default function FranchiseClient({
   const [sortBy, setSortBy] = useState<
     "updated_at" | "created_at" | "open_date" | "install_date" | "status" | "manual"
   >("created_at");
+  const [columnSort, setColumnSort] = useState<ColumnSortState>(null);
+  const handleColumnSortChange = useCallback((key: ColumnSortKey) => {
+    setColumnSort((prev) => {
+      if (!prev || prev.key !== key) return { key, dir: "desc" };
+      // 색상(긴급도) 정렬은 빨강>노랑>빈칸(내림차순) 한 방향만 의미가 있어 2단계로 순환
+      if (key === "next_check_color") return null;
+      if (prev.dir === "desc") return { key, dir: "asc" };
+      return null;
+    });
+  }, []);
   const [rowDragId, setRowDragId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const { colWidths, startResize } = useColumnWidths(COL_WIDTHS_STORAGE_KEY, DEFAULT_WIDTHS);
@@ -1358,6 +1409,23 @@ export default function FranchiseClient({
       return true;
     });
     return [...filtered].sort((a, b) => {
+      if (columnSort) {
+        if (columnSort.key === "next_check_color") {
+          const cmp =
+            nextCheckSeverity(a.next_check_date, todayDate) -
+            nextCheckSeverity(b.next_check_date, todayDate);
+          return columnSort.dir === "desc" ? -cmp : cmp;
+        }
+        const av = getColumnSortValue(a, columnSort.key, localLinkedInternets);
+        const bv = getColumnSortValue(b, columnSort.key, localLinkedInternets);
+        const aEmpty = !av;
+        const bEmpty = !bv;
+        if (aEmpty && bEmpty) return 0;
+        if (aEmpty) return 1;
+        if (bEmpty) return -1;
+        const cmp = av!.localeCompare(bv!, "ko");
+        return columnSort.dir === "desc" ? -cmp : cmp;
+      }
       if (sortBy === "status") return a.status.localeCompare(b.status);
       if (sortBy === "open_date") return (a.open_date ?? "").localeCompare(b.open_date ?? "");
       if (sortBy === "install_date")
@@ -1371,7 +1439,7 @@ export default function FranchiseClient({
         );
       return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
     });
-  }, [localRows, search, sortBy, matchesFilters]);
+  }, [localRows, search, sortBy, columnSort, todayDate, localLinkedInternets, matchesFilters]);
 
   const filterKey = [
     search,
@@ -1970,6 +2038,38 @@ export default function FranchiseClient({
       );
     },
     [currentUserName],
+  );
+
+  const saveNextCheckDate = useCallback(
+    async (row: FranchiseApplication, value: string) => {
+      const supabase = createClient();
+      const nextCheckDate = value || null;
+      if (nextCheckDate) {
+        const { error } = await supabase
+          .from("franchise_next_check_dates")
+          .upsert(
+            { franchise_application_id: row.id, next_check_date: nextCheckDate },
+            { onConflict: "franchise_application_id" },
+          );
+        if (error) {
+          toast.error("확인일 저장 실패: " + error.message);
+          return;
+        }
+      } else {
+        const { error } = await supabase
+          .from("franchise_next_check_dates")
+          .delete()
+          .eq("franchise_application_id", row.id);
+        if (error) {
+          toast.error("확인일 삭제 실패: " + error.message);
+          return;
+        }
+      }
+      setLocalRows((prev) =>
+        prev.map((r) => (r.id === row.id ? { ...r, next_check_date: nextCheckDate } : r)),
+      );
+    },
+    [toast],
   );
 
   // 히스토리 패널의 메모 삭제/핀 토글. realtime 구독이 테이블 변경마다 전체 행을 다시 받아와
@@ -2922,6 +3022,7 @@ export default function FranchiseClient({
         rows={pagedRows}
         allRows={localRows}
         filteredCount={filteredRows.length}
+        todayDate={todayDate}
         selected={selected}
         allChecked={allChecked}
         page={page}
@@ -2964,9 +3065,12 @@ export default function FranchiseClient({
         onDateFromChange={setDateFrom}
         onDateToChange={setDateTo}
         onSortChange={setSortBy}
+        columnSort={columnSort}
+        onColumnSortChange={handleColumnSortChange}
         onToggleAll={toggleAll}
         onToggleRow={toggleOne}
         onSaveField={saveField}
+        onSaveNextCheckDate={saveNextCheckDate}
         onApplicantTypeChange={updateApplicantType}
         onCsChange={updateCs}
         onStatusChange={handleStatusChange}

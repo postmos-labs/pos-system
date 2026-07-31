@@ -47,7 +47,7 @@ export default async function FranchisePage({ searchParams }: Props) {
     supabase
       .from("franchise_applications")
       .select(
-        "*, sales:profiles!franchise_applications_sales_id_fkey(id,name,role), cs:profiles!franchise_applications_cs_id_fkey(id,name,role), creator:profiles!franchise_applications_created_by_fkey(id,name,role)",
+        "*, sales:profiles!franchise_applications_sales_id_fkey(id,name,role), cs:profiles!franchise_applications_cs_id_fkey(id,name,role), creator:profiles!franchise_applications_created_by_fkey(id,name,role), next_check:franchise_next_check_dates(next_check_date)",
       )
       .order("updated_at", { ascending: false }),
     supabase
@@ -73,6 +73,17 @@ export default async function FranchisePage({ searchParams }: Props) {
   const todayCompletedIds = [
     ...new Set((todayCompletionLogs ?? []).map((log) => log.franchise_application_id)),
   ];
+
+  // franchise_next_check_dates 1:1 임베드 결과(객체 또는 배열)를 next_check_date로 평탄화
+  const flatRows = (rows ?? []).map((row) => {
+    const nextCheck = (
+      row as { next_check?: { next_check_date: string } | { next_check_date: string }[] | null }
+    ).next_check;
+    const next_check_date = Array.isArray(nextCheck)
+      ? (nextCheck[0]?.next_check_date ?? null)
+      : (nextCheck?.next_check_date ?? null);
+    return { ...row, next_check_date };
+  });
 
   const linkedInstalls: Record<string, { id: string; status: string }> = {};
   const linkedInternets: Record<
@@ -149,7 +160,7 @@ export default async function FranchisePage({ searchParams }: Props) {
         <div className="text-red-500 text-sm">데이터를 불러오지 못했습니다: {error.message}</div>
       ) : (
         <FranchiseClient
-          rows={rows ?? []}
+          rows={flatRows}
           salesProfiles={salesProfiles ?? []}
           csProfiles={csProfiles ?? []}
           currentUserId={user.id}

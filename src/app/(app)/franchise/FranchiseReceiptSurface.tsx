@@ -6,6 +6,7 @@ import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChevronUpIcon,
   CircleHelpIcon,
   ClockIcon,
   FileTextIcon,
@@ -35,6 +36,36 @@ import RateBadge from "@/components/ui/RateBadge";
 type TableView = "all" | "mine" | "doc_incomplete" | "doc_waiting" | "approved";
 type KpiKey = "today_received" | "doc_waiting" | "doc_incomplete" | "reviewing" | "today_completed";
 type SortBy = "updated_at" | "created_at" | "open_date" | "install_date" | "status" | "manual";
+
+export type ColumnSortKey =
+  | "reception_date"
+  | "open_date"
+  | "channel"
+  | "case_type"
+  | "business_name"
+  | "owner_name"
+  | "phone"
+  | "cs"
+  | "internet"
+  | "status"
+  | "next_check_date"
+  | "next_check_color";
+
+export type ColumnSortState = { key: ColumnSortKey; dir: "desc" | "asc" } | null;
+
+const SORTABLE_HEADERS: { label: string; key: ColumnSortKey }[] = [
+  { label: "접수일", key: "reception_date" },
+  { label: "오픈 예정일", key: "open_date" },
+  { label: "채널", key: "channel" },
+  { label: "구분", key: "case_type" },
+  { label: "상호명", key: "business_name" },
+  { label: "대표자", key: "owner_name" },
+  { label: "연락처", key: "phone" },
+  { label: "담당자", key: "cs" },
+  { label: "인터넷", key: "internet" },
+  { label: "상태", key: "status" },
+  { label: "확인일", key: "next_check_date" },
+];
 
 interface Props {
   rows: FranchiseApplication[];
@@ -79,11 +110,15 @@ interface Props {
   onSortChange: (value: SortBy) => void;
   onToggleAll: () => void;
   onToggleRow: (id: string) => void;
+  todayDate: string;
+  columnSort: ColumnSortState;
+  onColumnSortChange: (key: ColumnSortKey) => void;
   onSaveField: (
     row: FranchiseApplication,
     field: keyof FranchiseApplication,
     value: string,
   ) => void | Promise<void>;
+  onSaveNextCheckDate: (row: FranchiseApplication, value: string) => void | Promise<void>;
   onApplicantTypeChange: (row: FranchiseApplication, value: ApplicantType) => void | Promise<void>;
   onCsChange: (row: FranchiseApplication, value: string) => void | Promise<void>;
   onStatusChange: (row: FranchiseApplication, value: FranchiseStatus) => void;
@@ -169,6 +204,44 @@ function statusTone(status: FranchiseStatus) {
     border: "border-zinc-500",
     stage: 0,
   };
+}
+
+// 확인일 경과 정도: -1 = 미지정, 0 = 정상, 1 = 3일 이상 경과(노랑), 2 = 7일 이상 경과(빨강)
+export function nextCheckSeverity(
+  nextCheckDate: string | null | undefined,
+  todayDate: string,
+): -1 | 0 | 1 | 2 {
+  if (!nextCheckDate) return -1;
+  const nextMs = new Date(`${nextCheckDate}T00:00:00+09:00`).getTime();
+  const todayMs = new Date(`${todayDate}T00:00:00+09:00`).getTime();
+  const daysPast = Math.floor((todayMs - nextMs) / (24 * 60 * 60 * 1000));
+  if (daysPast >= 7) return 2;
+  if (daysPast >= 3) return 1;
+  return 0;
+}
+
+function nextCheckDotColor(nextCheckDate: string | null | undefined, todayDate: string): string {
+  const severity = nextCheckSeverity(nextCheckDate, todayDate);
+  if (severity === 2) return "!bg-gradient-to-br !from-red-400 !to-red-600";
+  if (severity === 1) return "!bg-gradient-to-br !from-yellow-300 !to-yellow-500";
+  return "";
+}
+
+function nextCheckPingColor(nextCheckDate: string | null | undefined, todayDate: string): string {
+  const severity = nextCheckSeverity(nextCheckDate, todayDate);
+  if (severity === 2) return "!bg-red-500";
+  if (severity === 1) return "!bg-yellow-400";
+  return "";
+}
+
+function columnSortIndicator(columnSort: ColumnSortState, key: ColumnSortKey) {
+  const active = columnSort?.key === key;
+  if (!active) return <ChevronDownIcon className="text-muted-foreground/35 size-3.5" />;
+  return columnSort!.dir === "desc" ? (
+    <ChevronDownIcon className="text-primary size-3.5" />
+  ) : (
+    <ChevronUpIcon className="text-primary size-3.5" />
+  );
 }
 
 const MEMO_STAMP_RE = /\[(.+?) (\d{2})\. (\d{2})\. (\d{2}):(\d{2})\]/g;
@@ -515,7 +588,7 @@ export default function FranchiseReceiptSurface(props: Props) {
 
       <div className="border-border bg-card shrink-0 overflow-hidden rounded-xl border">
         <div className="overflow-x-auto rounded-t-xl">
-          <table className="w-full min-w-[1580px] border-collapse text-[12.5px]">
+          <table className="w-full min-w-[1610px] border-collapse text-[12.5px]">
             <thead>
               <tr className="bg-surface-subtle border-border border-b">
                 <th className="w-10 px-3 py-2.5 text-left">
@@ -527,20 +600,32 @@ export default function FranchiseReceiptSurface(props: Props) {
                     className="accent-primary size-[15px] cursor-pointer"
                   />
                 </th>
-                {[
-                  "접수일",
-                  "오픈 예정일",
-                  "채널",
-                  "구분",
-                  "상호명",
-                  "대표자",
-                  "연락처",
-                  "담당자",
-                  "인터넷",
-                  "상태",
-                  "비고",
-                  "메모",
-                ].map((label) => (
+                <th className="w-11 px-1 py-2.5 text-left">
+                  <button
+                    type="button"
+                    aria-label="확인일 색상 정렬"
+                    onClick={() => props.onColumnSortChange("next_check_color")}
+                    className="text-muted-foreground hover:text-foreground inline-flex items-center"
+                  >
+                    {columnSortIndicator(props.columnSort, "next_check_color")}
+                  </button>
+                </th>
+                {SORTABLE_HEADERS.map(({ label, key }) => (
+                  <th
+                    key={key}
+                    className="text-muted-foreground px-2.5 py-2.5 text-left font-semibold whitespace-nowrap"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => props.onColumnSortChange(key)}
+                      className="hover:text-foreground inline-flex items-center gap-0.5"
+                    >
+                      {label}
+                      {columnSortIndicator(props.columnSort, key)}
+                    </button>
+                  </th>
+                ))}
+                {["비고", "메모"].map((label) => (
                   <th
                     key={label}
                     className="text-muted-foreground px-2.5 py-2.5 text-left font-semibold whitespace-nowrap"
@@ -554,7 +639,7 @@ export default function FranchiseReceiptSurface(props: Props) {
               {props.rows.length === 0 && (
                 <tr className="border-border border-b">
                   <td
-                    colSpan={13}
+                    colSpan={15}
                     style={{ height: 50 * 49 }}
                     className="text-muted-foreground text-center text-sm"
                   >
@@ -578,6 +663,23 @@ export default function FranchiseReceiptSurface(props: Props) {
                         onChange={() => props.onToggleRow(row.id)}
                         className="accent-primary size-[15px] cursor-pointer"
                       />
+                    </td>
+                    <td className="px-1 py-1.5 text-center">
+                      {(() => {
+                        const dot = nextCheckDotColor(row.next_check_date, props.todayDate);
+                        const ping = nextCheckPingColor(row.next_check_date, props.todayDate);
+                        return dot ? (
+                          <span
+                            className="relative mx-auto flex size-8 items-center justify-center"
+                            title="확인일 경과"
+                          >
+                            <span
+                              className={`absolute inline-flex size-full animate-ping rounded-full opacity-75 ${ping}`}
+                            />
+                            <span className={`relative inline-block size-5 rounded-full ${dot}`} />
+                          </span>
+                        ) : null;
+                      })()}
                     </td>
                     <td className="px-2.5 py-2.5 whitespace-nowrap">
                       <input
@@ -684,7 +786,16 @@ export default function FranchiseReceiptSurface(props: Props) {
                         ))}
                       </select>
                     </td>
-                    <td className="text-foreground min-w-[200px] px-2.5 py-2.5">
+                    <td className="px-2.5 py-2.5 whitespace-nowrap">
+                      <input
+                        aria-label="확인일"
+                        type="date"
+                        value={row.next_check_date ?? ""}
+                        onChange={(event) => props.onSaveNextCheckDate(row, event.target.value)}
+                        className="h-auto border-none bg-transparent px-0 text-[12.5px] outline-none"
+                      />
+                    </td>
+                    <td className="text-foreground min-w-[140px] px-2.5 py-2.5">
                       {memos.length > 0 ? (
                         <ul className="list-disc space-y-0.5 pl-4">
                           {memos.map((entry, index) => (
@@ -715,7 +826,7 @@ export default function FranchiseReceiptSurface(props: Props) {
               {props.rows.length > 0 &&
                 Array.from({ length: Math.max(0, 50 - props.rows.length) }).map((_, index) => (
                   <tr key={`filler-${index}`} aria-hidden="true" className="border-border border-b">
-                    <td colSpan={12} style={{ height: 49 }} />
+                    <td colSpan={14} style={{ height: 49 }} />
                   </tr>
                 ))}
             </tbody>
