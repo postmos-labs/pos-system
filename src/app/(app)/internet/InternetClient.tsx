@@ -77,6 +77,7 @@ const EMPTY_FORM = {
 
 const MAIN_COLUMNS: { key: keyof InternetManagement; label: string }[] = [
   { key: "business_name", label: "상호명" },
+  { key: "category", label: "구분" },
   { key: "apply_date", label: "접수신청일" },
   { key: "open_date", label: "개통완료일" },
   { key: "status", label: "상태" },
@@ -85,7 +86,6 @@ const MAIN_COLUMNS: { key: keyof InternetManagement; label: string }[] = [
 ];
 
 const DETAIL_COLUMNS: { key: keyof InternetManagement; label: string }[] = [
-  { key: "category", label: "구분" },
   { key: "carrier", label: "통신사" },
   { key: "speed", label: "속도" },
   { key: "addon", label: "추가 가입상품" },
@@ -100,6 +100,7 @@ const COLUMNS = [...MAIN_COLUMNS, ...DETAIL_COLUMNS];
 
 const DEFAULT_WIDTHS: Partial<Record<keyof InternetManagement, number>> = {
   business_name: 180,
+  category: 90,
   apply_date: 110,
   open_date: 110,
   status: 100,
@@ -109,6 +110,24 @@ const DEFAULT_WIDTHS: Partial<Record<keyof InternetManagement, number>> = {
 
 const COL_WIDTHS_STORAGE_KEY = "internet_management_col_widths";
 const PAGE_SIZE = 50;
+
+function formatLocalDate(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function getTodayStr() {
+  return formatLocalDate(new Date());
+}
+
+function getMonthRange() {
+  const now = new Date();
+  const from = formatLocalDate(new Date(now.getFullYear(), now.getMonth(), 1));
+  const to = formatLocalDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+  return { from, to };
+}
 
 const AUTO_FORMAT: Partial<Record<keyof InternetManagement, (raw: string) => string>> = {
   phone: formatPhone,
@@ -355,6 +374,9 @@ export default function InternetClient({ rows }: Props) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [dateField, setDateField] = useState<"apply_date" | "open_date">("apply_date");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
@@ -396,6 +418,12 @@ export default function InternetClient({ rows }: Props) {
     return localRows.filter((row) => {
       if (statusFilter && row.status !== statusFilter) return false;
       if (categoryFilter && row.category !== categoryFilter) return false;
+      if (dateFrom || dateTo) {
+        const value = row[dateField] as string | undefined;
+        if (!value) return false;
+        if (dateFrom && value < dateFrom) return false;
+        if (dateTo && value > dateTo) return false;
+      }
       if (term) {
         const haystack =
           `${row.business_name ?? ""} ${row.owner_name ?? ""} ${row.phone ?? ""} ${row.region ?? ""}`.toLowerCase();
@@ -403,25 +431,61 @@ export default function InternetClient({ rows }: Props) {
       }
       return true;
     });
-  }, [localRows, search, statusFilter, categoryFilter]);
+  }, [localRows, search, statusFilter, categoryFilter, dateField, dateFrom, dateTo]);
 
-  const filterKey = `${search}|${statusFilter}|${categoryFilter}`;
+  const filterKey = `${search}|${statusFilter}|${categoryFilter}|${dateField}|${dateFrom}|${dateTo}`;
   const [pageResetKey, setPageResetKey] = useState(filterKey);
   if (filterKey !== pageResetKey) {
     setPageResetKey(filterKey);
     setPage(1);
   }
 
+  const applyKpiFilter = useCallback(
+    (filter: {
+      status?: string;
+      category?: string;
+      dateField?: "apply_date" | "open_date";
+      dateFrom?: string;
+      dateTo?: string;
+    }) => {
+      setSearch("");
+      setStatusFilter(filter.status ?? "");
+      setCategoryFilter(filter.category ?? "");
+      setDateField(filter.dateField ?? "apply_date");
+      setDateFrom(filter.dateFrom ?? "");
+      setDateTo(filter.dateTo ?? "");
+    },
+    [],
+  );
+
   const kpis = useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getTodayStr();
     const monthStr = todayStr.slice(0, 7);
     return {
       today: localRows.filter((r) => r.apply_date === todayStr).length,
       waiting: localRows.filter((r) => r.status === "접수완료").length,
       openedToday: localRows.filter((r) => r.status === "개통완료" && r.open_date === todayStr)
         .length,
+      openedToday3S: localRows.filter(
+        (r) => r.status === "개통완료" && r.open_date === todayStr && r.category === "3S",
+      ).length,
+      openedTodayBaekMega: localRows.filter(
+        (r) => r.status === "개통완료" && r.open_date === todayStr && r.category === "백메가",
+      ).length,
       openedMonth: localRows.filter(
         (r) => r.status === "개통완료" && (r.open_date ?? "").startsWith(monthStr),
+      ).length,
+      openedMonth3S: localRows.filter(
+        (r) =>
+          r.status === "개통완료" &&
+          (r.open_date ?? "").startsWith(monthStr) &&
+          r.category === "3S",
+      ).length,
+      openedMonthBaekMega: localRows.filter(
+        (r) =>
+          r.status === "개통완료" &&
+          (r.open_date ?? "").startsWith(monthStr) &&
+          r.category === "백메가",
       ).length,
     };
   }, [localRows]);
@@ -591,11 +655,89 @@ export default function InternetClient({ rows }: Props) {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirmOpen(false)}
       />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 mb-3">
-        <KpiCard label="오늘 접수" value={kpis.today} icon={ClipboardList} tone="blue" />
-        <KpiCard label="개통 대기" value={kpis.waiting} icon={CalendarClock} tone="amber" />
-        <KpiCard label="오늘 개통" value={kpis.openedToday} icon={Wifi} tone="green" />
-        <KpiCard label="이번 달 개통" value={kpis.openedMonth} icon={CheckCircle2} tone="green" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6 mb-3">
+        <KpiCard
+          label="오늘 접수"
+          value={kpis.today}
+          icon={ClipboardList}
+          tone="blue"
+          onClick={() =>
+            applyKpiFilter({
+              dateField: "apply_date",
+              dateFrom: getTodayStr(),
+              dateTo: getTodayStr(),
+            })
+          }
+        />
+        <KpiCard
+          label="개통 대기"
+          value={kpis.waiting}
+          icon={CalendarClock}
+          tone="amber"
+          onClick={() => applyKpiFilter({ status: "접수완료" })}
+        />
+        <KpiCard
+          label="오늘 3S 개통"
+          value={kpis.openedToday3S}
+          icon={Wifi}
+          tone="green"
+          onClick={() =>
+            applyKpiFilter({
+              status: "개통완료",
+              category: "3S",
+              dateField: "open_date",
+              dateFrom: getTodayStr(),
+              dateTo: getTodayStr(),
+            })
+          }
+        />
+        <KpiCard
+          label="오늘 백메가 개통"
+          value={kpis.openedTodayBaekMega}
+          icon={Wifi}
+          tone="green"
+          onClick={() =>
+            applyKpiFilter({
+              status: "개통완료",
+              category: "백메가",
+              dateField: "open_date",
+              dateFrom: getTodayStr(),
+              dateTo: getTodayStr(),
+            })
+          }
+        />
+        <KpiCard
+          label="이번 달 3S 개통"
+          value={kpis.openedMonth3S}
+          icon={CheckCircle2}
+          tone="green"
+          onClick={() => {
+            const { from, to } = getMonthRange();
+            applyKpiFilter({
+              status: "개통완료",
+              category: "3S",
+              dateField: "open_date",
+              dateFrom: from,
+              dateTo: to,
+            });
+          }}
+        />
+        <KpiCard
+          label="이번 달 백메가 개통"
+          value={kpis.openedMonthBaekMega}
+          icon={CheckCircle2}
+          tone="green"
+          onClick={() => {
+            const { from, to } = getMonthRange();
+            applyKpiFilter({
+              status: "개통완료",
+              category: "백메가",
+              dateField: "open_date",
+              dateFrom: from,
+              dateTo: to,
+            });
+          }}
+        />
       </div>
       <div className="flex flex-wrap items-center gap-2 mb-3 rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
         <div className="relative">
@@ -631,12 +773,36 @@ export default function InternetClient({ rows }: Props) {
             </option>
           ))}
         </select>
-        {(search || statusFilter || categoryFilter) && (
+        <select
+          value={dateField}
+          onChange={(e) => setDateField(e.target.value as "apply_date" | "open_date")}
+          className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="apply_date">접수일 기준</option>
+          <option value="open_date">개통일 기준</option>
+        </select>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <span className="text-slate-400 text-sm">~</span>
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        {(search || statusFilter || categoryFilter || dateFrom || dateTo) && (
           <button
             onClick={() => {
               setSearch("");
               setStatusFilter("");
               setCategoryFilter("");
+              setDateField("apply_date");
+              setDateFrom("");
+              setDateTo("");
             }}
             className="text-sm text-slate-400 hover:text-red-500 px-2 py-2 transition-colors"
           >
