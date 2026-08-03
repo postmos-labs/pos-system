@@ -165,7 +165,13 @@ type TransferApproval = {
   approval_notes: ApprovalNote[];
 };
 
-type ReceiptTableView = "all" | "mine" | "doc_incomplete" | "doc_waiting" | "approved";
+type ReceiptTableView =
+  | "all"
+  | "mine"
+  | "doc_incomplete"
+  | "doc_waiting"
+  | "approved"
+  | "persistent_absence";
 type ReceiptKpi =
   "today_received" | "doc_waiting" | "doc_incomplete" | "reviewing" | "today_completed";
 
@@ -1361,6 +1367,8 @@ export default function FranchiseClient({
         if (tableView === "doc_incomplete" && row.status !== "doc_incomplete") return false;
         if (tableView === "doc_waiting" && row.status !== "doc_waiting") return false;
         if (tableView === "approved" && !APPROVED_STATUS_SET.has(row.status)) return false;
+        if (tableView === "persistent_absence" && row.status !== "persistent_absence")
+          return false;
       }
       if (!skip.skipStatus && statusFilter && row.status !== statusFilter) return false;
       if (applicantTypeFilter && row.applicant_type !== applicantTypeFilter) return false;
@@ -1659,6 +1667,7 @@ export default function FranchiseClient({
       doc_incomplete: base.filter((row) => row.status === "doc_incomplete").length,
       doc_waiting: base.filter((row) => row.status === "doc_waiting").length,
       approved: base.filter((row) => APPROVED_STATUS_SET.has(row.status)).length,
+      persistent_absence: base.filter((row) => row.status === "persistent_absence").length,
     };
   }, [localRows, search, matchesFilters, currentUserId]);
 

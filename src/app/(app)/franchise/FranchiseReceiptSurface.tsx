@@ -33,7 +33,13 @@ import {
 } from "@/types";
 import RateBadge from "@/components/ui/RateBadge";
 
-type TableView = "all" | "mine" | "doc_incomplete" | "doc_waiting" | "approved";
+type TableView =
+  | "all"
+  | "mine"
+  | "doc_incomplete"
+  | "doc_waiting"
+  | "approved"
+  | "persistent_absence";
 type KpiKey = "today_received" | "doc_waiting" | "doc_incomplete" | "reviewing" | "today_completed";
 type SortBy = "updated_at" | "created_at" | "open_date" | "install_date" | "status" | "manual";
 
@@ -198,6 +204,13 @@ function statusTone(status: FranchiseStatus) {
       border: "border-green-500",
       stage: 3,
     };
+  if (status === "persistent_absence")
+    return {
+      pill: "!bg-orange-500/15 !text-orange-500",
+      solid: "bg-orange-500",
+      border: "border-orange-500",
+      stage: 0,
+    };
   return {
     pill: "!bg-zinc-500/15 !text-zinc-500",
     solid: "bg-zinc-500",
@@ -206,7 +219,7 @@ function statusTone(status: FranchiseStatus) {
   };
 }
 
-// 확인일 경과 정도: -1 = 미지정, 0 = 정상, 1 = 당일~다음날(초록), 2 = 3일 이상 경과(노랑), 3 = 7일 이상 경과(빨강)
+// 확인일 경과 정도: -1 = 미지정, 0 = 정상, 1 = 확인일이 오늘~내일(초록), 2 = 3일 이상 경과(노랑), 3 = 7일 이상 경과(빨강)
 export function nextCheckSeverity(
   nextCheckDate: string | null | undefined,
   todayDate: string,
@@ -217,7 +230,7 @@ export function nextCheckSeverity(
   const daysPast = Math.floor((todayMs - nextMs) / (24 * 60 * 60 * 1000));
   if (daysPast >= 7) return 3;
   if (daysPast >= 3) return 2;
-  if (daysPast >= 0 && daysPast <= 1) return 1;
+  if (daysPast >= -1 && daysPast <= 0) return 1;
   return 0;
 }
 
@@ -314,6 +327,12 @@ export default function FranchiseReceiptSurface(props: Props) {
       count: props.tableViewCounts.approved,
       view: "approved" as TableView,
     },
+    {
+      key: "persistentAbsence",
+      label: "지속적 부재",
+      count: props.tableViewCounts.persistent_absence,
+      view: "persistent_absence" as TableView,
+    },
   ];
   const activeTab =
     props.activeKpi === "reviewing"
@@ -322,7 +341,9 @@ export default function FranchiseReceiptSurface(props: Props) {
         ? "docMissing"
         : props.tableView === "approved"
           ? "techDone"
-          : props.tableView;
+          : props.tableView === "persistent_absence"
+            ? "persistentAbsence"
+            : props.tableView;
   const kpis = [
     {
       key: "today_received" as KpiKey,

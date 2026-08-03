@@ -34,7 +34,8 @@ export type FranchiseStatus =
   | "toss_review_apply_done"
   | "toss_review_done"
   | "completed"
-  | "hold";
+  | "hold"
+  | "persistent_absence";
 export type ApplicantType = "corporate" | "individual" | "giga_corporate" | "giga_individual";
 
 export interface Profile {
@@ -328,6 +329,7 @@ export const FRANCHISE_STATUS_LABEL: Record<FranchiseStatus, string> = {
   toss_review_done: "토스심사완료",
   completed: "완료",
   hold: "보류",
+  persistent_absence: "지속적 부재",
 };
 
 export const FRANCHISE_STATUS_COLOR: Record<FranchiseStatus, string> = {
@@ -343,6 +345,7 @@ export const FRANCHISE_STATUS_COLOR: Record<FranchiseStatus, string> = {
   toss_review_done: "bg-green-100 text-green-700 border-green-200",
   completed: "bg-emerald-100 text-emerald-700 border-emerald-200",
   hold: "bg-gray-100 text-gray-700 border-gray-200",
+  persistent_absence: "bg-orange-100 text-orange-700 border-orange-200",
 };
 
 export const FRANCHISE_CHANNEL_LABEL: Record<FranchiseChannel, string> = {
