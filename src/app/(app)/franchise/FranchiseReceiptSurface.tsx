@@ -229,14 +229,6 @@ function nextCheckDotColor(nextCheckDate: string | null | undefined, todayDate: 
   return "";
 }
 
-function nextCheckPingColor(nextCheckDate: string | null | undefined, todayDate: string): string {
-  const severity = nextCheckSeverity(nextCheckDate, todayDate);
-  if (severity === 3) return "!bg-red-500";
-  if (severity === 2) return "!bg-yellow-400";
-  if (severity === 1) return "!bg-green-500";
-  return "";
-}
-
 function columnSortIndicator(columnSort: ColumnSortState, key: ColumnSortKey) {
   const active = columnSort?.key === key;
   if (!active) return <ChevronDownIcon className="text-muted-foreground/35 size-3.5" />;
@@ -670,15 +662,11 @@ export default function FranchiseReceiptSurface(props: Props) {
                     <td className="px-1 py-1.5 text-center">
                       {(() => {
                         const dot = nextCheckDotColor(row.next_check_date, props.todayDate);
-                        const ping = nextCheckPingColor(row.next_check_date, props.todayDate);
                         return dot ? (
                           <span
                             className="relative mx-auto flex size-8 items-center justify-center"
                             title="확인일 경과"
                           >
-                            <span
-                              className={`absolute inline-flex size-full animate-ping rounded-full opacity-75 ${ping}`}
-                            />
                             <span className={`relative inline-block size-5 rounded-full ${dot}`} />
                           </span>
                         ) : null;
