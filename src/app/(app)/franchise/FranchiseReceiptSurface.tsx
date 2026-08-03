@@ -206,31 +206,34 @@ function statusTone(status: FranchiseStatus) {
   };
 }
 
-// 확인일 경과 정도: -1 = 미지정, 0 = 정상, 1 = 3일 이상 경과(노랑), 2 = 7일 이상 경과(빨강)
+// 확인일 경과 정도: -1 = 미지정, 0 = 정상, 1 = 당일~다음날(초록), 2 = 3일 이상 경과(노랑), 3 = 7일 이상 경과(빨강)
 export function nextCheckSeverity(
   nextCheckDate: string | null | undefined,
   todayDate: string,
-): -1 | 0 | 1 | 2 {
+): -1 | 0 | 1 | 2 | 3 {
   if (!nextCheckDate) return -1;
   const nextMs = new Date(`${nextCheckDate}T00:00:00+09:00`).getTime();
   const todayMs = new Date(`${todayDate}T00:00:00+09:00`).getTime();
   const daysPast = Math.floor((todayMs - nextMs) / (24 * 60 * 60 * 1000));
-  if (daysPast >= 7) return 2;
-  if (daysPast >= 3) return 1;
+  if (daysPast >= 7) return 3;
+  if (daysPast >= 3) return 2;
+  if (daysPast >= 0 && daysPast <= 1) return 1;
   return 0;
 }
 
 function nextCheckDotColor(nextCheckDate: string | null | undefined, todayDate: string): string {
   const severity = nextCheckSeverity(nextCheckDate, todayDate);
-  if (severity === 2) return "!bg-gradient-to-br !from-red-400 !to-red-600";
-  if (severity === 1) return "!bg-gradient-to-br !from-yellow-300 !to-yellow-500";
+  if (severity === 3) return "!bg-gradient-to-br !from-red-400 !to-red-600";
+  if (severity === 2) return "!bg-gradient-to-br !from-yellow-300 !to-yellow-500";
+  if (severity === 1) return "!bg-gradient-to-br !from-green-300 !to-green-500";
   return "";
 }
 
 function nextCheckPingColor(nextCheckDate: string | null | undefined, todayDate: string): string {
   const severity = nextCheckSeverity(nextCheckDate, todayDate);
-  if (severity === 2) return "!bg-red-500";
-  if (severity === 1) return "!bg-yellow-400";
+  if (severity === 3) return "!bg-red-500";
+  if (severity === 2) return "!bg-yellow-400";
+  if (severity === 1) return "!bg-green-500";
   return "";
 }
 
