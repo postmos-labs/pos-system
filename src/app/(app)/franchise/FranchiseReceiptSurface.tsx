@@ -206,7 +206,7 @@ function statusTone(status: FranchiseStatus) {
   };
 }
 
-// 확인일 경과 정도: -1 = 미지정, 0 = 정상, 1 = 당일~다음날(초록), 2 = 3일 이상 경과(노랑), 3 = 7일 이상 경과(빨강)
+// 확인일 경과 정도: -1 = 미지정, 0 = 정상, 1 = 전날~다음날(초록), 2 = 3일 이상 경과(노랑), 3 = 7일 이상 경과(빨강)
 export function nextCheckSeverity(
   nextCheckDate: string | null | undefined,
   todayDate: string,
@@ -217,7 +217,7 @@ export function nextCheckSeverity(
   const daysPast = Math.floor((todayMs - nextMs) / (24 * 60 * 60 * 1000));
   if (daysPast >= 7) return 3;
   if (daysPast >= 3) return 2;
-  if (daysPast >= 0 && daysPast <= 1) return 1;
+  if (daysPast >= -1 && daysPast <= 1) return 1;
   return 0;
 }
 
