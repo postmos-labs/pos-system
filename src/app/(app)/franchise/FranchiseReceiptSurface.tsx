@@ -16,6 +16,7 @@ import {
   PlusIcon,
   SearchIcon,
   StickyNoteIcon,
+  UserXIcon,
 } from "lucide-react";
 import type {
   ApplicantType,
@@ -40,7 +41,13 @@ type TableView =
   | "doc_waiting"
   | "approved"
   | "persistent_absence";
-type KpiKey = "today_received" | "doc_waiting" | "doc_incomplete" | "reviewing" | "today_completed";
+type KpiKey =
+  | "today_received"
+  | "doc_waiting"
+  | "doc_incomplete"
+  | "reviewing"
+  | "today_completed"
+  | "persistent_absence";
 type SortBy = "updated_at" | "created_at" | "open_date" | "install_date" | "status" | "manual";
 
 export type ColumnSortKey =
@@ -375,6 +382,12 @@ export default function FranchiseReceiptSurface(props: Props) {
       icon: CheckIcon,
       tone: "bg-emerald-500/12 text-emerald-600",
     },
+    {
+      key: "persistent_absence" as KpiKey,
+      label: "지속적 부재",
+      icon: UserXIcon,
+      tone: "bg-orange-500/12 text-orange-600",
+    },
   ];
 
   return (
@@ -411,7 +424,7 @@ export default function FranchiseReceiptSurface(props: Props) {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-6">
         {kpis.map((kpi) => {
           const Icon = kpi.icon;
           return (

@@ -173,7 +173,12 @@ type ReceiptTableView =
   | "approved"
   | "persistent_absence";
 type ReceiptKpi =
-  "today_received" | "doc_waiting" | "doc_incomplete" | "reviewing" | "today_completed";
+  | "today_received"
+  | "doc_waiting"
+  | "doc_incomplete"
+  | "reviewing"
+  | "today_completed"
+  | "persistent_absence";
 
 const REVIEWING_STATUS_SET = new Set<FranchiseStatus>([
   "card_apply_done",
@@ -1356,6 +1361,8 @@ export default function FranchiseClient({
           (!APPROVED_STATUS_SET.has(row.status) || !todayCompletedIdSet.has(row.id))
         )
           return false;
+        if (activeKpi === "persistent_absence" && row.status !== "persistent_absence")
+          return false;
       }
       if (!skip.skipView) {
         if (
@@ -1690,6 +1697,7 @@ export default function FranchiseClient({
       today_completed: base.filter(
         (row) => APPROVED_STATUS_SET.has(row.status) && todayCompletedIdSet.has(row.id),
       ).length,
+      persistent_absence: base.filter((row) => row.status === "persistent_absence").length,
     };
   }, [localRows, search, matchesFilters, todayDate, todayCompletedIdSet]);
 
