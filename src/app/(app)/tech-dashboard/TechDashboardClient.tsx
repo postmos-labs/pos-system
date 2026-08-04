@@ -30,6 +30,7 @@ type InstallRow = {
   assigned_to: string | null;
   notes: string | null;
   franchise_application_id: string | null;
+  created_at?: string;
   assignee: { name: string } | null;
 };
 
@@ -132,6 +133,7 @@ export default function TechDashboardClient({
 }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<InstallRow | null>(null);
+  const [techFilter, setTechFilter] = useState("");
 
   const [dateFrom, setDateFrom] = useState(initialDateFrom);
   const [dateTo, setDateTo] = useState(initialDateTo);
@@ -183,6 +185,23 @@ export default function TechDashboardClient({
 
   const maxWeekly = Math.max(...stats.weeklyBars.map((w) => w.install + w.as), 1);
   const periodLabel = `${appliedFrom} ~ ${appliedTo}`;
+
+  const filteredCalendarRows = useMemo(
+    () =>
+      techFilter
+        ? calendarInstallRows.filter((r) => r.assigned_to === techFilter)
+        : calendarInstallRows,
+    [calendarInstallRows, techFilter],
+  );
+
+  const recentInstalls = useMemo(
+    () => searchRows.filter((r) => r.delivery_type !== "as").slice(0, 5),
+    [searchRows],
+  );
+  const recentAs = useMemo(
+    () => searchRows.filter((r) => r.delivery_type === "as").slice(0, 5),
+    [searchRows],
+  );
 
   const summaryCards = [
     {
@@ -285,8 +304,8 @@ export default function TechDashboardClient({
       </div>
 
       {}
-      <div className="relative bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-        <div className="relative max-w-md">
+      <div className="relative bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-64 max-w-md">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={search}
@@ -295,6 +314,18 @@ export default function TechDashboardClient({
             className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
+        <select
+          value={techFilter}
+          onChange={(e) => setTechFilter(e.target.value)}
+          className="text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-slate-700"
+        >
+          <option value="">담당 기사 전체</option>
+          {techProfiles.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
         {results.length > 0 && (
           <div className="absolute left-4 top-[calc(100%-4px)] w-full max-w-md bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden z-20">
             {results.map((r) => (
@@ -350,7 +381,7 @@ export default function TechDashboardClient({
           <div className="flex-1 overflow-hidden">
             <CalendarClient
               tickets={[]}
-              installRows={calendarInstallRows}
+              installRows={filteredCalendarRows}
               techProfiles={techProfiles}
               currentUserId={currentUserId}
               showLegend={false}
@@ -423,6 +454,98 @@ export default function TechDashboardClient({
               ))}
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-slate-100">
+            <p className="text-sm font-bold text-slate-900">설치 접수 목록</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">최신 5건</p>
+          </div>
+          {recentInstalls.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-slate-400 text-center">접수된 설치건이 없습니다</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[11px] text-slate-400 border-b border-slate-100">
+                  <th className="px-5 py-2 font-medium">상호명</th>
+                  <th className="px-3 py-2 font-medium">담당 기사</th>
+                  <th className="px-3 py-2 font-medium">예정일</th>
+                  <th className="px-5 py-2 font-medium text-right">상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentInstalls.map((r) => (
+                  <tr
+                    key={r.id}
+                    onClick={() => setSelected(r)}
+                    className="border-b border-slate-50 last:border-0 hover:bg-slate-50 cursor-pointer"
+                  >
+                    <td className="px-5 py-2.5 font-medium text-slate-900 truncate max-w-40">
+                      {r.customer_name || "상호명 미입력"}
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-500">{r.assignee?.name ?? "미배정"}</td>
+                    <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">
+                      {r.scheduled_date ?? "-"}
+                    </td>
+                    <td className="px-5 py-2.5 text-right">
+                      <span
+                        className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${statusChipColor(r.status)}`}
+                      >
+                        {statusLabel(r.status, r.delivery_type)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-slate-100">
+            <p className="text-sm font-bold text-slate-900">AS 접수 목록</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">최신 5건</p>
+          </div>
+          {recentAs.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-slate-400 text-center">접수된 AS건이 없습니다</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[11px] text-slate-400 border-b border-slate-100">
+                  <th className="px-5 py-2 font-medium">상호명</th>
+                  <th className="px-3 py-2 font-medium">담당 기사</th>
+                  <th className="px-3 py-2 font-medium">예정일</th>
+                  <th className="px-5 py-2 font-medium text-right">상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentAs.map((r) => (
+                  <tr
+                    key={r.id}
+                    onClick={() => setSelected(r)}
+                    className="border-b border-slate-50 last:border-0 hover:bg-slate-50 cursor-pointer"
+                  >
+                    <td className="px-5 py-2.5 font-medium text-slate-900 truncate max-w-40">
+                      {r.customer_name || "상호명 미입력"}
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-500">{r.assignee?.name ?? "미배정"}</td>
+                    <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">
+                      {r.scheduled_date ?? "-"}
+                    </td>
+                    <td className="px-5 py-2.5 text-right">
+                      <span
+                        className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${statusChipColor(r.status)}`}
+                      >
+                        {statusLabel(r.status, r.delivery_type)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 

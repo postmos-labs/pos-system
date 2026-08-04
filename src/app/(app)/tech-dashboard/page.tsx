@@ -31,7 +31,7 @@ export default async function TechDashboardPage() {
       supabase
         .from("installations")
         .select(
-          "id, customer_name, contact_name, customer_phone, address, status, delivery_type, scheduled_date, scheduled_time, assigned_to, notes, franchise_application_id, assignee:profiles!installations_assigned_to_fkey(name)",
+          "id, customer_name, contact_name, customer_phone, address, status, delivery_type, scheduled_date, scheduled_time, assigned_to, notes, franchise_application_id, created_at, assignee:profiles!installations_assigned_to_fkey(name)",
         )
         .in("delivery_type", ["install", "as"])
         .order("created_at", { ascending: false })
