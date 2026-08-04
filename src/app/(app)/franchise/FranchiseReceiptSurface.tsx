@@ -997,100 +997,100 @@ export default function FranchiseReceiptSurface(props: Props) {
             </tbody>
           </table>
         </div>
+      </div>
 
-        <div className="border-border bg-card sticky bottom-0 z-10 flex min-h-14 items-center justify-between gap-3.5 border-t px-4 py-2.5 shadow-[0_-2px_8px_rgba(0,0,0,0.04)]">
-          {props.selected.size > 0 ? (
-            <div className="border-border bg-card shadow-card flex flex-wrap items-center gap-3 rounded-lg border px-3.5 py-2">
-              <span className="text-foreground text-sm font-semibold">
-                {props.selected.size}건 선택됨
-              </span>
-              {props.selected.size < props.filteredCount && (
-                <button
-                  type="button"
-                  onClick={props.onSelectAllFiltered}
-                  className="text-primary text-xs font-semibold hover:underline"
-                >
-                  필터링된 전체 {props.filteredCount}건 선택
-                </button>
-              )}
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={props.onBulkStatus}
-                  className={`${secondaryButton} h-8 px-3 text-xs`}
-                >
-                  일괄 상태 변경
-                </button>
-                <button
-                  type="button"
-                  onClick={props.onBulkAssign}
-                  className={`${secondaryButton} h-8 px-3 text-xs`}
-                >
-                  일괄 배정
-                </button>
-                <button
-                  type="button"
-                  onClick={props.onBulkDelete}
-                  className="border-error/30 bg-error/10 text-error hover:bg-error/20 h-8 rounded-lg border px-3 text-xs font-semibold"
-                >
-                  선택 삭제
-                </button>
-                <button
-                  type="button"
-                  onClick={props.onBulkTransfer}
-                  className={`${primaryButton} h-8 px-3 text-xs`}
-                >
-                  기술지원 이관
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div />
-          )}
-          <div className="flex items-center gap-3.5">
+      <div className="border-border bg-card sticky bottom-0 z-10 flex min-h-14 items-center justify-between gap-3.5 rounded-xl border px-4 py-2.5 shadow-[0_-2px_8px_rgba(0,0,0,0.08)]">
+        {props.selected.size > 0 ? (
+          <div className="border-border bg-card shadow-card flex flex-wrap items-center gap-3 rounded-lg border px-3.5 py-2">
+            <span className="text-foreground text-sm font-semibold">
+              {props.selected.size}건 선택됨
+            </span>
+            {props.selected.size < props.filteredCount && (
+              <button
+                type="button"
+                onClick={props.onSelectAllFiltered}
+                className="text-primary text-xs font-semibold hover:underline"
+              >
+                필터링된 전체 {props.filteredCount}건 선택
+              </button>
+            )}
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
-                aria-label="이전 페이지"
-                disabled={props.page <= 1}
-                onClick={() => props.onPageChange(Math.max(1, props.page - 1))}
-                className={`${buttonBase} border-transparent bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground size-9 p-0`}
+                onClick={props.onBulkStatus}
+                className={`${secondaryButton} h-8 px-3 text-xs`}
               >
-                <ChevronLeftIcon className="size-3.5" />
+                일괄 상태 변경
               </button>
-              {pageRange(props.page, props.totalPages).map((page) => (
-                <button
-                  key={page}
-                  type="button"
-                  aria-current={page === props.page ? "page" : undefined}
-                  onClick={() => props.onPageChange(page)}
-                  className={`flex size-7 items-center justify-center rounded-md border text-xs font-semibold ${page === props.page ? "border-primary bg-primary text-primary-foreground" : "border-border text-foreground hover:bg-muted"}`}
-                >
-                  {page}
-                </button>
-              ))}
               <button
                 type="button"
-                aria-label="다음 페이지"
-                disabled={props.page >= props.totalPages}
-                onClick={() => props.onPageChange(Math.min(props.totalPages, props.page + 1))}
-                className={`${buttonBase} border-transparent bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground size-9 p-0`}
+                onClick={props.onBulkAssign}
+                className={`${secondaryButton} h-8 px-3 text-xs`}
               >
-                <ChevronRightIcon className="size-3.5" />
+                일괄 배정
+              </button>
+              <button
+                type="button"
+                onClick={props.onBulkDelete}
+                className="border-error/30 bg-error/10 text-error hover:bg-error/20 h-8 rounded-lg border px-3 text-xs font-semibold"
+              >
+                선택 삭제
+              </button>
+              <button
+                type="button"
+                onClick={props.onBulkTransfer}
+                className={`${primaryButton} h-8 px-3 text-xs`}
+              >
+                기술지원 이관
               </button>
             </div>
-            <select
-              aria-label="페이지당 표시 개수"
-              value="50"
-              disabled
-              title="페이지 크기 변경 기능 추가 필요"
-              className={`${selectBase} h-8 w-auto py-0 text-xs`}
-            >
-              <option value="10">10개씩 보기</option>
-              <option value="20">20개씩 보기</option>
-              <option value="50">50개씩 보기</option>
-            </select>
           </div>
+        ) : (
+          <div />
+        )}
+        <div className="flex items-center gap-3.5">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              aria-label="이전 페이지"
+              disabled={props.page <= 1}
+              onClick={() => props.onPageChange(Math.max(1, props.page - 1))}
+              className={`${buttonBase} border-transparent bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground size-9 p-0`}
+            >
+              <ChevronLeftIcon className="size-3.5" />
+            </button>
+            {pageRange(props.page, props.totalPages).map((page) => (
+              <button
+                key={page}
+                type="button"
+                aria-current={page === props.page ? "page" : undefined}
+                onClick={() => props.onPageChange(page)}
+                className={`flex size-7 items-center justify-center rounded-md border text-xs font-semibold ${page === props.page ? "border-primary bg-primary text-primary-foreground" : "border-border text-foreground hover:bg-muted"}`}
+              >
+                {page}
+              </button>
+            ))}
+            <button
+              type="button"
+              aria-label="다음 페이지"
+              disabled={props.page >= props.totalPages}
+              onClick={() => props.onPageChange(Math.min(props.totalPages, props.page + 1))}
+              className={`${buttonBase} border-transparent bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground size-9 p-0`}
+            >
+              <ChevronRightIcon className="size-3.5" />
+            </button>
+          </div>
+          <select
+            aria-label="페이지당 표시 개수"
+            value="50"
+            disabled
+            title="페이지 크기 변경 기능 추가 필요"
+            className={`${selectBase} h-8 w-auto py-0 text-xs`}
+          >
+            <option value="10">10개씩 보기</option>
+            <option value="20">20개씩 보기</option>
+            <option value="50">50개씩 보기</option>
+          </select>
         </div>
       </div>
     </div>

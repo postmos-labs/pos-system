@@ -1735,12 +1735,16 @@ export default function FranchiseClient({
     ).length;
     const approvedTotal = base.filter((row) => APPROVED_STATUS_SET.has(row.status)).length;
     const total = base.length;
+    const reviewing = base.filter((row) => REVIEWING_STATUS_SET.has(row.status)).length;
+    // 오늘 완료 / 오늘 접수는 서로 다른 코호트라 100%를 넘을 수 있어 지표로 부적합.
+    // 대신 "지금 진행중(심사중) + 오늘 완료" 중 오늘 완료된 비율로 0~100% 범위를 보장한다.
+    const todayCompletionPool = reviewing + todayCompleted;
     return {
       todayReceived,
       todayReceivedTrend: todayReceived - yesterdayReceived,
       docWaiting: base.filter((row) => row.status === "doc_waiting").length,
       docIncomplete: base.filter((row) => row.status === "doc_incomplete").length,
-      reviewing: base.filter((row) => REVIEWING_STATUS_SET.has(row.status)).length,
+      reviewing,
       todayCompleted,
       todayCompletedTrend: todayCompleted - yesterdayCompleted,
       canceled: base.filter((row) => row.status === "canceled").length,
@@ -1749,7 +1753,7 @@ export default function FranchiseClient({
       approvedTotal,
       overallCompletionRate: total > 0 ? Math.round((approvedTotal / total) * 100) : 0,
       todayCompletionRate:
-        todayReceived > 0 ? Math.round((todayCompleted / todayReceived) * 100) : null,
+        todayCompletionPool > 0 ? Math.round((todayCompleted / todayCompletionPool) * 100) : null,
     };
   }, [
     localRows,
