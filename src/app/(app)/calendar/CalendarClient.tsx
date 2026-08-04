@@ -178,6 +178,7 @@ export default function CalendarClient({
   currentUserId,
   canViewAssigned = false,
   showLegend = true,
+  compact = false,
 }: {
   tickets: CalendarTicket[];
   franchiseRows?: CalendarFranchiseRow[];
@@ -188,6 +189,7 @@ export default function CalendarClient({
   currentUserId: string;
   canViewAssigned?: boolean;
   showLegend?: boolean;
+  compact?: boolean;
 }) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -490,38 +492,49 @@ export default function CalendarClient({
     .filter(([d]) => d.startsWith(`${year}-${String(month + 1).padStart(2, "0")}`))
     .reduce((s, [, evs]) => s + evs.length, 0);
 
+  const numRows = cells.length / 7;
+  const maxEventsPerCell = compact ? 2 : 3;
+
   return (
-    <div className="flex gap-4 h-full">
+    <div className={`flex h-full ${compact ? "gap-2" : "gap-4"}`}>
       {}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
         {}
-        <div className="flex items-center gap-3 mb-4">
+        <div
+          className={`flex items-center gap-2 ${compact ? "mb-1.5 flex-shrink-0" : "gap-3 mb-4"}`}
+        >
           <button
             onClick={prevMonth}
-            className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+            className={`rounded-lg hover:bg-slate-100 transition-colors ${compact ? "p-1" : "p-1.5"}`}
           >
-            <ChevronLeft size={18} className="text-slate-500" />
+            <ChevronLeft size={compact ? 15 : 18} className="text-slate-500" />
           </button>
-          <h2 className="text-lg font-bold text-slate-900 min-w-[120px] text-center">
+          <h2
+            className={`font-bold text-slate-900 text-center ${compact ? "text-sm min-w-[90px]" : "text-lg min-w-[120px]"}`}
+          >
             {year}년 {month + 1}월
           </h2>
           <button
             onClick={nextMonth}
-            className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+            className={`rounded-lg hover:bg-slate-100 transition-colors ${compact ? "p-1" : "p-1.5"}`}
           >
-            <ChevronRight size={18} className="text-slate-500" />
+            <ChevronRight size={compact ? 15 : 18} className="text-slate-500" />
           </button>
           <button
             onClick={goToday}
-            className="ml-2 text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors font-medium"
+            className={`ml-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors font-medium ${compact ? "text-[10px] px-2 py-1" : "ml-2 text-xs px-3 py-1.5"}`}
           >
             오늘
           </button>
-          <span className="ml-auto text-sm text-slate-400">이번달 일정 {monthTotal}건</span>
+          <span className={`ml-auto text-slate-400 ${compact ? "text-[11px]" : "text-sm"}`}>
+            이번달 일정 {monthTotal}건
+          </span>
         </div>
 
         {}
-        <div className="flex gap-1 mb-3 border-b border-slate-200">
+        <div
+          className={`flex gap-1 border-b border-slate-200 flex-shrink-0 ${compact ? "mb-1.5" : "mb-3"}`}
+        >
           {(
             [
               ["all", "전체"],
@@ -537,7 +550,7 @@ export default function CalendarClient({
                 setSelectedCategory(null);
                 setSelectedDate(null);
               }}
-              className={`px-3 py-1.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              className={`font-medium border-b-2 -mb-px transition-colors ${compact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm"} ${
                 activeTab === tab
                   ? "border-blue-600 text-blue-600"
                   : "border-transparent text-slate-500 hover:text-slate-700"
@@ -550,7 +563,7 @@ export default function CalendarClient({
 
         {}
         {showLegend && (
-          <div className="flex flex-wrap gap-3 mb-3">
+          <div className="flex flex-wrap gap-3 mb-3 flex-shrink-0">
             {visibleLegendItems.map((li) => (
               <button
                 key={li.category}
@@ -572,11 +585,11 @@ export default function CalendarClient({
         )}
 
         {}
-        <div className="grid grid-cols-7 mb-1">
+        <div className={`grid grid-cols-7 flex-shrink-0 ${compact ? "mb-0.5" : "mb-1"}`}>
           {DAYS.map((d, i) => (
             <div
               key={d}
-              className={`text-center text-xs font-semibold py-2 ${i === 0 ? "text-red-400" : i === 6 ? "text-blue-400" : "text-slate-500"}`}
+              className={`text-center font-semibold ${compact ? "text-[10px] py-1" : "text-xs py-2"} ${i === 0 ? "text-red-400" : i === 6 ? "text-blue-400" : "text-slate-500"}`}
             >
               {d}
             </div>
@@ -584,13 +597,16 @@ export default function CalendarClient({
         </div>
 
         {}
-        <div className="grid grid-cols-7 flex-1 border-t border-l border-slate-200 rounded-xl overflow-hidden">
+        <div
+          className="grid grid-cols-7 flex-1 min-h-0 border-t border-l border-slate-200 rounded-xl overflow-hidden"
+          style={compact ? { gridTemplateRows: `repeat(${numRows}, minmax(0, 1fr))` } : undefined}
+        >
           {cells.map((day, idx) => {
             if (!day)
               return (
                 <div
                   key={`empty-${idx}`}
-                  className="border-b border-r border-slate-200 bg-slate-50/50 min-h-[90px]"
+                  className={`border-b border-r border-slate-200 bg-slate-50/50 ${compact ? "" : "min-h-[90px]"}`}
                 />
               );
             const ds = dateStr(day);
@@ -602,12 +618,12 @@ export default function CalendarClient({
               <div
                 key={ds}
                 onClick={() => setSelectedDate(isSelected ? null : ds)}
-                className={`border-b border-r border-slate-200 min-h-[90px] p-1.5 cursor-pointer transition-colors ${
+                className={`border-b border-r border-slate-200 cursor-pointer transition-colors overflow-hidden ${compact ? "p-1" : "min-h-[90px] p-1.5"} ${
                   isSelected ? "bg-blue-50" : "hover:bg-slate-50"
                 }`}
               >
                 <div
-                  className={`w-7 h-7 flex items-center justify-center rounded-full text-sm font-semibold mb-1 ${
+                  className={`flex items-center justify-center rounded-full font-semibold ${compact ? "w-5 h-5 text-[10px] mb-0.5" : "w-7 h-7 text-sm mb-1"} ${
                     isToday
                       ? "bg-blue-600 text-white"
                       : dow === 0
@@ -620,11 +636,11 @@ export default function CalendarClient({
                   {day}
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  {events.slice(0, 3).map((ev, i) => (
+                  {events.slice(0, maxEventsPerCell).map((ev, i) => (
                     <div
                       key={i}
                       title={`${ev.label} ${ev.businessName}`}
-                      className={`text-white text-[10px] font-bold px-1.5 py-0.5 rounded truncate ${ev.color} ${
+                      className={`text-white font-bold rounded truncate ${compact ? "text-[9px] px-1 py-px" : "text-[10px] px-1.5 py-0.5"} ${ev.color} ${
                         ev.glow
                           ? "ring-2 ring-amber-300 shadow-[0_0_8px_2px_rgba(245,158,11,0.75)] animate-pulse"
                           : ""
@@ -633,8 +649,12 @@ export default function CalendarClient({
                       {ev.label} {ev.businessName}
                     </div>
                   ))}
-                  {events.length > 3 && (
-                    <div className="text-[10px] text-slate-400 px-1">+{events.length - 3}건</div>
+                  {events.length > maxEventsPerCell && (
+                    <div
+                      className={`text-slate-400 px-1 ${compact ? "text-[9px]" : "text-[10px]"}`}
+                    >
+                      +{events.length - maxEventsPerCell}건
+                    </div>
                   )}
                 </div>
               </div>
@@ -644,171 +664,173 @@ export default function CalendarClient({
       </div>
 
       {}
-      <div
-        className={`w-72 flex-shrink-0 transition-all ${selectedDate ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-      >
-        {selectedDate && (
-          <div className="bg-white border border-slate-200 rounded-xl shadow-sm h-fit">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-              <p className="font-semibold text-slate-900 text-sm">
-                {selectedDate.slice(5).replace("-", "/")} 일정
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowAddForm((v) => !v)}
-                  className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors font-medium"
-                >
-                  <Plus size={12} /> 일정 추가
-                </button>
-                <button
-                  onClick={() => setSelectedDate(null)}
-                  className="text-slate-400 hover:text-slate-600"
-                >
-                  <X size={15} />
-                </button>
-              </div>
-            </div>
-
-            {showAddForm && (
-              <div className="px-4 py-3 border-b border-slate-100 flex flex-col gap-2">
-                <div className="flex flex-wrap gap-1.5">
-                  {MANUAL_CATEGORY_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setNewCategory(opt.value)}
-                      className={`flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-md border transition-colors ${
-                        newCategory === opt.value
-                          ? "border-slate-300 bg-slate-100 text-slate-800"
-                          : "border-transparent text-slate-500 hover:bg-slate-50"
-                      }`}
-                    >
-                      <span className={`w-2 h-2 rounded-sm ${opt.color}`} />
-                      {opt.value}
-                    </button>
-                  ))}
-                </div>
-                <input
-                  autoFocus
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleAddEvent();
-                  }}
-                  placeholder="일정 제목"
-                  className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
-                />
-                <input
-                  value={newMemo}
-                  onChange={(e) => setNewMemo(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleAddEvent();
-                  }}
-                  placeholder="메모 (선택)"
-                  className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
-                />
-                {(newCategory === "설치" || newCategory === "택배발송") && (
-                  <select
-                    value={newAssignedTo}
-                    onChange={(e) => setNewAssignedTo(e.target.value)}
-                    className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
-                  >
-                    <option value="">담당자 미배정</option>
-                    {techProfiles.map((tech) => (
-                      <option key={tech.id} value={tech.id}>
-                        {tech.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <div className="flex justify-end gap-2">
+      {!compact && (
+        <div
+          className={`w-72 flex-shrink-0 transition-all ${selectedDate ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        >
+          {selectedDate && (
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm h-fit">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                <p className="font-semibold text-slate-900 text-sm">
+                  {selectedDate.slice(5).replace("-", "/")} 일정
+                </p>
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={resetAddForm}
-                    className="text-xs px-2.5 py-1.5 rounded-lg text-slate-500 hover:bg-slate-50"
+                    onClick={() => setShowAddForm((v) => !v)}
+                    className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors font-medium"
                   >
-                    취소
+                    <Plus size={12} /> 일정 추가
                   </button>
                   <button
-                    onClick={handleAddEvent}
-                    disabled={submitting || !newTitle.trim()}
-                    className="text-xs px-2.5 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    onClick={() => setSelectedDate(null)}
+                    className="text-slate-400 hover:text-slate-600"
                   >
-                    등록
+                    <X size={15} />
                   </button>
                 </div>
               </div>
-            )}
 
-            {selectedEvents.length === 0 ? (
-              <p className="text-slate-400 text-sm text-center py-8">일정 없음</p>
-            ) : (
-              <div className="divide-y divide-slate-50 max-h-[600px] overflow-y-auto">
-                {selectedEvents.map((ev, i) => {
-                  const content = (
-                    <>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span
-                          className={`text-white text-[10px] font-bold px-1.5 py-0.5 rounded ${ev.color} ${
-                            ev.glow
-                              ? "ring-2 ring-amber-300 shadow-[0_0_8px_2px_rgba(245,158,11,0.75)] animate-pulse"
-                              : ""
-                          }`}
-                        >
-                          {ev.label}
-                        </span>
-                        {ev.statusLabel && ev.statusColor && (
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded-full font-medium ${ev.statusColor}`}
-                          >
-                            {ev.statusLabel}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm font-semibold text-slate-900 break-words">
-                        {ev.businessName}
-                      </p>
-                      {ev.subtitle && (
-                        <p className="text-xs text-slate-500 break-words mt-0.5">{ev.subtitle}</p>
-                      )}
-                      <div className="flex gap-2 mt-1 text-xs text-slate-400">
-                        {ev.type && <span>{TYPE_LABEL[ev.type]}</span>}
-                        {ev.techName && <span>· {ev.techName}</span>}
-                        {ev.salesName && <span>· {ev.salesName}</span>}
-                      </div>
-                    </>
-                  );
-                  if (ev.manualId) {
-                    return (
-                      <div
-                        key={i}
-                        className="flex items-start px-4 py-3 hover:bg-slate-50 transition-colors group"
+              {showAddForm && (
+                <div className="px-4 py-3 border-b border-slate-100 flex flex-col gap-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {MANUAL_CATEGORY_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setNewCategory(opt.value)}
+                        className={`flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-md border transition-colors ${
+                          newCategory === opt.value
+                            ? "border-slate-300 bg-slate-100 text-slate-800"
+                            : "border-transparent text-slate-500 hover:bg-slate-50"
+                        }`}
                       >
-                        <div className="flex-1 min-w-0">{content}</div>
-                        <button
-                          onClick={() => handleDeleteEvent(ev.manualId!)}
-                          className="text-slate-300 hover:text-red-500 transition-colors ml-2 opacity-0 group-hover:opacity-100"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    );
-                  }
-                  return (
-                    <Link
-                      key={i}
-                      href={ev.href}
-                      {...(ev.newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                      className="block px-4 py-3 hover:bg-slate-50 transition-colors"
+                        <span className={`w-2 h-2 rounded-sm ${opt.color}`} />
+                        {opt.value}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    autoFocus
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleAddEvent();
+                    }}
+                    placeholder="일정 제목"
+                    className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
+                  />
+                  <input
+                    value={newMemo}
+                    onChange={(e) => setNewMemo(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleAddEvent();
+                    }}
+                    placeholder="메모 (선택)"
+                    className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
+                  />
+                  {(newCategory === "설치" || newCategory === "택배발송") && (
+                    <select
+                      value={newAssignedTo}
+                      onChange={(e) => setNewAssignedTo(e.target.value)}
+                      className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
                     >
-                      {content}
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+                      <option value="">담당자 미배정</option>
+                      {techProfiles.map((tech) => (
+                        <option key={tech.id} value={tech.id}>
+                          {tech.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={resetAddForm}
+                      className="text-xs px-2.5 py-1.5 rounded-lg text-slate-500 hover:bg-slate-50"
+                    >
+                      취소
+                    </button>
+                    <button
+                      onClick={handleAddEvent}
+                      disabled={submitting || !newTitle.trim()}
+                      className="text-xs px-2.5 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    >
+                      등록
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {selectedEvents.length === 0 ? (
+                <p className="text-slate-400 text-sm text-center py-8">일정 없음</p>
+              ) : (
+                <div className="divide-y divide-slate-50 max-h-[600px] overflow-y-auto">
+                  {selectedEvents.map((ev, i) => {
+                    const content = (
+                      <>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span
+                            className={`text-white text-[10px] font-bold px-1.5 py-0.5 rounded ${ev.color} ${
+                              ev.glow
+                                ? "ring-2 ring-amber-300 shadow-[0_0_8px_2px_rgba(245,158,11,0.75)] animate-pulse"
+                                : ""
+                            }`}
+                          >
+                            {ev.label}
+                          </span>
+                          {ev.statusLabel && ev.statusColor && (
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded-full font-medium ${ev.statusColor}`}
+                            >
+                              {ev.statusLabel}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm font-semibold text-slate-900 break-words">
+                          {ev.businessName}
+                        </p>
+                        {ev.subtitle && (
+                          <p className="text-xs text-slate-500 break-words mt-0.5">{ev.subtitle}</p>
+                        )}
+                        <div className="flex gap-2 mt-1 text-xs text-slate-400">
+                          {ev.type && <span>{TYPE_LABEL[ev.type]}</span>}
+                          {ev.techName && <span>· {ev.techName}</span>}
+                          {ev.salesName && <span>· {ev.salesName}</span>}
+                        </div>
+                      </>
+                    );
+                    if (ev.manualId) {
+                      return (
+                        <div
+                          key={i}
+                          className="flex items-start px-4 py-3 hover:bg-slate-50 transition-colors group"
+                        >
+                          <div className="flex-1 min-w-0">{content}</div>
+                          <button
+                            onClick={() => handleDeleteEvent(ev.manualId!)}
+                            className="text-slate-300 hover:text-red-500 transition-colors ml-2 opacity-0 group-hover:opacity-100"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      );
+                    }
+                    return (
+                      <Link
+                        key={i}
+                        href={ev.href}
+                        {...(ev.newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                        className="block px-4 py-3 hover:bg-slate-50 transition-colors"
+                      >
+                        {content}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
