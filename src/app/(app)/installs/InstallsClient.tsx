@@ -41,6 +41,7 @@ import {
   requestInstallationCompletion,
   requestInstallationStatusApproval,
   rescheduleInstallationByTeamLead,
+  sendInstallTransitNotice,
 } from "./actions";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -678,6 +679,10 @@ export default function InstallsClient({
   const [rejectModal, setRejectModal] = useState<{ id: string; reason: string } | null>(null);
   const [rejecting, setRejecting] = useState(false);
   const [transitModal, setTransitModal] = useState<{ id: string; eta: string } | null>(null);
+  const [transitNoticeModal, setTransitNoticeModal] = useState<{ id: string; eta: string } | null>(
+    null,
+  );
+  const [sendingTransitNotice, setSendingTransitNotice] = useState(false);
   const [mobileExpandedId, setMobileExpandedId] = useState<string | null>(null);
   const highlightId =
     initialHighlightId ??
@@ -990,6 +995,28 @@ export default function InstallsClient({
       );
     } finally {
       setSendingTransit(false);
+    }
+  }
+
+  async function submitTransitNotice() {
+    if (!transitNoticeModal) return;
+    setSendingTransitNotice(true);
+    try {
+      const { id, eta } = transitNoticeModal;
+      const result = await sendInstallTransitNotice(id, eta.trim() || undefined);
+      if (result.error) {
+        toast.error("이동중 알림톡 발송 실패: " + result.error);
+        return;
+      }
+      setTransitNoticeModal(null);
+      toast.success("이동중 알림톡을 발송했습니다.");
+    } catch (e) {
+      toast.error(
+        "이동중 알림톡 발송 중 오류가 발생했습니다: " +
+          (e instanceof Error ? e.message : String(e)),
+      );
+    } finally {
+      setSendingTransitNotice(false);
     }
   }
 
@@ -2032,7 +2059,9 @@ export default function InstallsClient({
       {transitModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 w-80 flex flex-col gap-4">
-            <p className="text-sm font-bold text-slate-800">몇 시 방문 예정인가요?</p>
+            <p className="text-sm font-bold text-slate-800">
+              몇 시 방문 예정인가요? (설치 상태도 이동중으로 변경됩니다)
+            </p>
             <input
               type="time"
               value={transitModal.eta}
@@ -2061,6 +2090,40 @@ export default function InstallsClient({
               </button>
               <button
                 onClick={() => setTransitModal(null)}
+                className="w-full py-2 rounded-lg text-slate-400 text-sm hover:text-slate-600"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {}
+      {transitNoticeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 w-80 flex flex-col gap-4">
+            <p className="text-sm font-bold text-slate-800">몇 시 방문 예정인가요?</p>
+            <input
+              type="time"
+              value={transitNoticeModal.eta}
+              onChange={(e) =>
+                setTransitNoticeModal((prev) => (prev ? { ...prev, eta: e.target.value } : prev))
+              }
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+            <p className="text-xs text-slate-400 -mt-2">
+              ※ 설치 상태는 바뀌지 않고, 고객에게 이동중 알림톡만 발송됩니다.
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={submitTransitNotice}
+                disabled={sendingTransitNotice}
+                className="w-full py-2 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 disabled:opacity-50"
+              >
+                {sendingTransitNotice ? "처리 중..." : "이동중 알림톡 발송"}
+              </button>
+              <button
+                onClick={() => setTransitNoticeModal(null)}
                 className="w-full py-2 rounded-lg text-slate-400 text-sm hover:text-slate-600"
               >
                 취소
@@ -2845,7 +2908,7 @@ export default function InstallsClient({
                         {mineOnly ? (
                           canEdit && inst.status !== "completed" ? (
                             <button
-                              onClick={() => handleStatusChange(inst.id, "in_transit")}
+                              onClick={() => setTransitNoticeModal({ id: inst.id, eta: "" })}
                               className="text-xs font-semibold px-2 py-1 rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors whitespace-nowrap"
                             >
                               이동중 톡

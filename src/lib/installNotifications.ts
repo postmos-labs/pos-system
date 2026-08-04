@@ -37,11 +37,13 @@ export async function sendApprovedInstallNotification({
   status,
   userId,
   eta,
+  requireStatusMatch = true,
 }: {
   installationId: string;
   status: string;
   userId: string;
   eta?: string;
+  requireStatusMatch?: boolean;
 }) {
   const admin = createAdminClient();
   const { data, error: lookupError } = await admin
@@ -55,7 +57,7 @@ export async function sendApprovedInstallNotification({
   if (lookupError || !data) return { error: lookupError?.message ?? "설치건을 찾을 수 없습니다." };
 
   const installation = data as InstallationNotification;
-  if (installation.status !== status)
+  if (requireStatusMatch && installation.status !== status)
     return { error: "현재 설치 상태와 알림톡 발송 상태가 다릅니다." };
   const templateKey = notificationStatus(installation.delivery_type, status);
   if (!templateKey) return { error: null };

@@ -204,6 +204,20 @@ export async function changeInstallationStatus(input: {
   return { error: null, notificationError: notification.error };
 }
 
+export async function sendInstallTransitNotice(installationId: string, eta?: string) {
+  const editor = await getInstallationEditor();
+  if ("error" in editor) return { error: editor.error };
+
+  const result = await sendApprovedInstallNotification({
+    installationId,
+    status: "in_transit",
+    userId: editor.user.id,
+    eta,
+    requireStatusMatch: false,
+  });
+  return { error: result.error };
+}
+
 export async function changeInstallationAssignment(
   installationId: string,
   assignedTo: string | null,
