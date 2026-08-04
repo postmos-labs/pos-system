@@ -56,7 +56,7 @@ const STATUS_ORDER_INSTALL = ["received", "preparing", "scheduled", "in_transit"
 const STATUS_ORDER_DELIVERY = ["received", "preparing", "delivery_sent", "completed"];
 
 const STATUS_ORDER_AS = ["received", "scheduled", "in_transit", "completed"];
-const APPROVAL_TARGETS = new Set(["preparing", "scheduled", "in_transit", "delivery_sent"]);
+const APPROVAL_TARGETS = new Set(["preparing", "scheduled", "delivery_sent"]);
 function statusOrderFor(deliveryType?: string) {
   if (deliveryType === "delivery") return STATUS_ORDER_DELIVERY;
   if (deliveryType === "as") return STATUS_ORDER_AS;
@@ -967,42 +967,26 @@ export default function InstallsClient({
     try {
       const { id, eta } = transitModal;
       const sendEta = skipEta ? undefined : eta.trim() || undefined;
-      const note = await promptNote(approvalRequestPrompt);
-      if (note === null) return;
-      const result = await requestInstallationStatusApproval({
+      const result = await changeInstallationStatus({
         installationId: id,
-        targetStatus: "in_transit",
+        status: "in_transit",
         eta: sendEta,
         skipNotify: skipNotify || !!skipSend,
-        note,
       });
       if (result.error) {
-        toast.error("출발 승인요청 실패: " + result.error);
+        toast.error("이동중 처리 실패: " + result.error);
         return;
       }
-      const nextApproval = pendingApproval(
-        id,
-        "in_transit",
-        note,
-        result.approvalStatus ?? "requested",
-        { eta: sendEta, skip_notify: skipNotify || !!skipSend },
+      setInstalls((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, status: "in_transit" } : item)),
       );
-      setCompletionApprovals((prev) => ({ ...prev, [id]: nextApproval }));
-      setApprovalNoteHistory((prev) => ({
-        ...prev,
-        [id]: [...(prev[id] ?? []), ...nextApproval.approval_notes],
-      }));
       setTransitModal(null);
       if (result.notificationError)
-        toast.warning(
-          "승인요청은 등록됐지만 팝업 알림에 실패했습니다: " + result.notificationError,
-        );
-      toast.success(
-        `출발 ${result.approvalStatus === "responsible_approved" ? "최종" : "1차"} 승인을 요청했습니다.`,
-      );
+        toast.warning("상태는 변경됐지만 알림톡 발송에 실패했습니다: " + result.notificationError);
+      toast.success("이동중 상태로 변경했습니다.");
     } catch (e) {
       toast.error(
-        "출발 승인요청 중 오류가 발생했습니다: " + (e instanceof Error ? e.message : String(e)),
+        "이동중 처리 중 오류가 발생했습니다: " + (e instanceof Error ? e.message : String(e)),
       );
     } finally {
       setSendingTransit(false);
