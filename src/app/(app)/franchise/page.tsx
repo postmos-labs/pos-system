@@ -35,6 +35,10 @@ export default async function FranchisePage({ searchParams }: Props) {
   const kstToday = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const kstDayStart = new Date(`${kstToday}T00:00:00+09:00`);
   const kstNextDayStart = new Date(kstDayStart.getTime() + 24 * 60 * 60 * 1000);
+  const kstPrevDayStart = new Date(kstDayStart.getTime() - 24 * 60 * 60 * 1000);
+  const kstYesterday = new Date(kstDayStart.getTime() - 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
 
   const [
     { data: rows, error },
@@ -42,6 +46,7 @@ export default async function FranchisePage({ searchParams }: Props) {
     { data: csProfiles },
     { data: currentProfile },
     { data: todayCompletionLogs },
+    { data: yesterdayCompletionLogs },
     { data: transferApprovals },
   ] = await Promise.all([
     supabase
@@ -64,6 +69,12 @@ export default async function FranchisePage({ searchParams }: Props) {
       .gte("created_at", kstDayStart.toISOString())
       .lt("created_at", kstNextDayStart.toISOString()),
     supabase
+      .from("franchise_application_logs")
+      .select("franchise_application_id")
+      .in("to_status", ["card_done", "toss_review_done"])
+      .gte("created_at", kstPrevDayStart.toISOString())
+      .lt("created_at", kstDayStart.toISOString()),
+    supabase
       .from("franchise_transfer_approvals")
       .select(
         "franchise_application_id,status,delivery_type,requested_by,requested_by_name,requested_at,approved_by,approved_by_name,approved_at,cs_approved_by,cs_approved_by_name,cs_approved_at,approval_notes",
@@ -72,6 +83,9 @@ export default async function FranchisePage({ searchParams }: Props) {
 
   const todayCompletedIds = [
     ...new Set((todayCompletionLogs ?? []).map((log) => log.franchise_application_id)),
+  ];
+  const yesterdayCompletedIds = [
+    ...new Set((yesterdayCompletionLogs ?? []).map((log) => log.franchise_application_id)),
   ];
 
   // franchise_next_check_dates 1:1 임베드 결과(객체 또는 배열)를 next_check_date로 평탄화
@@ -173,6 +187,8 @@ export default async function FranchisePage({ searchParams }: Props) {
           linkedInternets={linkedInternets}
           todayDate={kstToday}
           todayCompletedIds={todayCompletedIds}
+          yesterdayDate={kstYesterday}
+          yesterdayCompletedIds={yesterdayCompletedIds}
           initialTransferApprovals={
             Object.fromEntries(
               (transferApprovals ?? []).map((approval) => [

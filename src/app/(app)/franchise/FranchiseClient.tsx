@@ -146,6 +146,8 @@ interface Props {
   linkedInternets?: Record<string, { id: string; status: string | null; category: string | null }>;
   todayDate: string;
   todayCompletedIds: string[];
+  yesterdayDate: string;
+  yesterdayCompletedIds: string[];
   initialTransferApprovals: Record<string, TransferApproval>;
 }
 
@@ -1081,6 +1083,8 @@ export default function FranchiseClient({
   linkedInternets = {},
   todayDate,
   todayCompletedIds,
+  yesterdayDate,
+  yesterdayCompletedIds,
   initialTransferApprovals,
 }: Props) {
   const router = useRouter();
@@ -1339,6 +1343,10 @@ export default function FranchiseClient({
   }, [router]);
 
   const todayCompletedIdSet = useMemo(() => new Set(todayCompletedIds), [todayCompletedIds]);
+  const yesterdayCompletedIdSet = useMemo(
+    () => new Set(yesterdayCompletedIds),
+    [yesterdayCompletedIds],
+  );
 
   type FilterSkip = {
     skipView?: boolean;
@@ -1362,8 +1370,7 @@ export default function FranchiseClient({
           (!APPROVED_STATUS_SET.has(row.status) || !todayCompletedIdSet.has(row.id))
         )
           return false;
-        if (activeKpi === "persistent_absence" && row.status !== "persistent_absence")
-          return false;
+        if (activeKpi === "persistent_absence" && row.status !== "persistent_absence") return false;
       }
       if (!skip.skipView) {
         if (
@@ -1376,8 +1383,7 @@ export default function FranchiseClient({
         if (tableView === "doc_incomplete" && row.status !== "doc_incomplete") return false;
         if (tableView === "doc_waiting" && row.status !== "doc_waiting") return false;
         if (tableView === "approved" && !APPROVED_STATUS_SET.has(row.status)) return false;
-        if (tableView === "persistent_absence" && row.status !== "persistent_absence")
-          return false;
+        if (tableView === "persistent_absence" && row.status !== "persistent_absence") return false;
         if (tableView === "canceled" && row.status !== "canceled") return false;
       }
       if (!skip.skipStatus && statusFilter && row.status !== statusFilter) return false;
@@ -1705,6 +1711,55 @@ export default function FranchiseClient({
       persistent_absence: base.filter((row) => row.status === "persistent_absence").length,
     };
   }, [localRows, search, matchesFilters, todayDate, todayCompletedIdSet]);
+
+  const stageStats = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const base = localRows.filter((row) => {
+      if (!matchesFilters(row, { skipView: true, skipKpi: true, skipStatus: true })) return false;
+      if (!term) return true;
+      const haystack =
+        `${row.business_name ?? ""} ${row.owner_name ?? ""} ${row.phone ?? ""} ${row.business_number ?? ""}`.toLowerCase();
+      return haystack.includes(term);
+    });
+    const todayReceived = base.filter(
+      (row) => format(new Date(row.created_at), "yyyy-MM-dd") === todayDate,
+    ).length;
+    const yesterdayReceived = base.filter(
+      (row) => format(new Date(row.created_at), "yyyy-MM-dd") === yesterdayDate,
+    ).length;
+    const todayCompleted = base.filter(
+      (row) => APPROVED_STATUS_SET.has(row.status) && todayCompletedIdSet.has(row.id),
+    ).length;
+    const yesterdayCompleted = base.filter(
+      (row) => APPROVED_STATUS_SET.has(row.status) && yesterdayCompletedIdSet.has(row.id),
+    ).length;
+    const approvedTotal = base.filter((row) => APPROVED_STATUS_SET.has(row.status)).length;
+    const total = base.length;
+    return {
+      todayReceived,
+      todayReceivedTrend: todayReceived - yesterdayReceived,
+      docWaiting: base.filter((row) => row.status === "doc_waiting").length,
+      docIncomplete: base.filter((row) => row.status === "doc_incomplete").length,
+      reviewing: base.filter((row) => REVIEWING_STATUS_SET.has(row.status)).length,
+      todayCompleted,
+      todayCompletedTrend: todayCompleted - yesterdayCompleted,
+      canceled: base.filter((row) => row.status === "canceled").length,
+      persistentAbsence: base.filter((row) => row.status === "persistent_absence").length,
+      total,
+      approvedTotal,
+      overallCompletionRate: total > 0 ? Math.round((approvedTotal / total) * 100) : 0,
+      todayCompletionRate:
+        todayReceived > 0 ? Math.round((todayCompleted / todayReceived) * 100) : null,
+    };
+  }, [
+    localRows,
+    search,
+    matchesFilters,
+    todayDate,
+    yesterdayDate,
+    todayCompletedIdSet,
+    yesterdayCompletedIdSet,
+  ]);
 
   const successRateStats = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -2537,10 +2592,10 @@ export default function FranchiseClient({
             : newStatus === "canceled"
               ? `'취소'로 상태만 변경됩니다. (고객 안내 메시지는 발송되지 않습니다)`
               : newStatus === "doc_waiting"
-            ? `'${APPLICANT_TYPE_LABEL[row.applicant_type]}' 서류 안내 메시지가 고객에게 발송됩니다. 아래에서 보낼 템플릿이 맞는지 확인 후 진행하세요.`
-            : newStatus === "toss_review_done"
-              ? `토스심사완료로 변경하면 고객에게 메시지가 발송되고, 입력된 정보로 설치 작업이 자동 생성됩니다.`
-              : `'${FRANCHISE_STATUS_LABEL[newStatus]}'(으)로 변경하면 고객에게 메시지가 발송됩니다.`;
+                ? `'${APPLICANT_TYPE_LABEL[row.applicant_type]}' 서류 안내 메시지가 고객에게 발송됩니다. 아래에서 보낼 템플릿이 맞는지 확인 후 진행하세요.`
+                : newStatus === "toss_review_done"
+                  ? `토스심사완료로 변경하면 고객에게 메시지가 발송되고, 입력된 정보로 설치 작업이 자동 생성됩니다.`
+                  : `'${FRANCHISE_STATUS_LABEL[newStatus]}'(으)로 변경하면 고객에게 메시지가 발송됩니다.`;
     setStatusConfirm({
       row,
       newStatus,
@@ -3060,6 +3115,7 @@ export default function FranchiseClient({
         page={page}
         totalPages={totalPages}
         kpiCounts={kpiCounts}
+        stageStats={stageStats}
         successRateStats={successRateStats}
         activeKpi={activeKpi}
         tableView={tableView}

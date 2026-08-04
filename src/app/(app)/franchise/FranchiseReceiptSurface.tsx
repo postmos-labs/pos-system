@@ -16,7 +16,11 @@ import {
   PlusIcon,
   SearchIcon,
   StickyNoteIcon,
+  TrendingDownIcon,
+  TrendingUpIcon,
+  TrophyIcon,
   UserXIcon,
+  XCircleIcon,
 } from "lucide-react";
 import type {
   ApplicantType,
@@ -50,6 +54,22 @@ type KpiKey =
   | "today_completed"
   | "persistent_absence";
 type SortBy = "updated_at" | "created_at" | "open_date" | "install_date" | "status" | "manual";
+
+export interface StageStats {
+  todayReceived: number;
+  todayReceivedTrend: number;
+  docWaiting: number;
+  docIncomplete: number;
+  reviewing: number;
+  todayCompleted: number;
+  todayCompletedTrend: number;
+  canceled: number;
+  persistentAbsence: number;
+  total: number;
+  approvedTotal: number;
+  overallCompletionRate: number;
+  todayCompletionRate: number | null;
+}
 
 export type ColumnSortKey =
   | "reception_date"
@@ -90,6 +110,7 @@ interface Props {
   page: number;
   totalPages: number;
   kpiCounts: Record<KpiKey, number>;
+  stageStats: StageStats;
   successRateStats: {
     day1: { rate: number | null; total: number };
     day30: { rate: number | null; total: number };
@@ -360,44 +381,19 @@ export default function FranchiseReceiptSurface(props: Props) {
             : props.tableView === "canceled"
               ? "canceled"
               : props.tableView;
-  const kpis = [
-    {
-      key: "today_received" as KpiKey,
-      label: "오늘 접수",
-      icon: FileTextIcon,
-      tone: "bg-blue-500/12 text-blue-600",
-    },
-    {
-      key: "doc_waiting" as KpiKey,
-      label: "서류 대기",
-      icon: ClockIcon,
-      tone: "bg-amber-500/12 text-amber-600",
-    },
-    {
-      key: "doc_incomplete" as KpiKey,
-      label: "서류 미비",
-      icon: FileWarningIcon,
-      tone: "bg-red-500/12 text-red-600",
-    },
-    {
-      key: "reviewing" as KpiKey,
-      label: "심사 중",
-      icon: SearchIcon,
-      tone: "bg-blue-500/12 text-blue-600",
-    },
-    {
-      key: "today_completed" as KpiKey,
-      label: "오늘 완료",
-      icon: CheckIcon,
-      tone: "bg-emerald-500/12 text-emerald-600",
-    },
-    {
-      key: "persistent_absence" as KpiKey,
-      label: "지속적 부재",
-      icon: UserXIcon,
-      tone: "bg-orange-500/12 text-orange-600",
-    },
-  ];
+  const trendBadge = (value: number) => {
+    if (value === 0) return null;
+    const up = value > 0;
+    const Icon = up ? TrendingUpIcon : TrendingDownIcon;
+    return (
+      <span
+        className={`inline-flex items-center gap-0.5 text-xs font-semibold ${up ? "text-emerald-600" : "text-red-500"}`}
+      >
+        <Icon className="size-3" />
+        {Math.abs(value)}
+      </span>
+    );
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 p-6">
@@ -433,31 +429,166 @@ export default function FranchiseReceiptSurface(props: Props) {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-6">
-        {kpis.map((kpi) => {
-          const Icon = kpi.icon;
-          return (
-            <button
-              key={kpi.key}
-              type="button"
-              onClick={() => props.onKpiChange(kpi.key)}
-              className="border-border bg-card shadow-card hover:border-primary/40 focus-visible:border-primary focus-visible:ring-primary/30 flex min-h-24 items-center gap-3 rounded-xl border px-5 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
-            >
-              <span
-                className={`flex size-11 shrink-0 items-center justify-center rounded-full ${kpi.tone}`}
-              >
-                <Icon className="size-5" />
+      <div className="flex items-stretch gap-2.5">
+        <div className="border-border bg-card shadow-card flex flex-1 flex-col gap-3 rounded-xl border p-4">
+          <button
+            type="button"
+            onClick={() => props.onKpiChange("today_received")}
+            className="hover:text-primary focus-visible:ring-primary/30 flex items-center justify-between rounded-lg text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          >
+            <span className="flex items-center gap-2 text-sm font-bold">
+              <span className="flex size-6.5 items-center justify-center rounded-full bg-blue-500/12 text-blue-600">
+                <FileTextIcon className="size-3.5" />
               </span>
-              <span className="min-w-0">
-                <span className="text-muted-foreground block truncate text-xs">{kpi.label}</span>
-                <span className="text-foreground mt-1 block text-2xl font-bold">
-                  {props.kpiCounts[kpi.key]}
-                  <small className="text-muted-foreground ml-1 text-xs font-medium">건</small>
+              접수
+            </span>
+            <ChevronRightIcon className="text-muted-foreground size-4" />
+          </button>
+          <div className="flex items-stretch gap-3.5">
+            <button
+              type="button"
+              onClick={() => props.onKpiChange("today_received")}
+              className="focus-visible:ring-primary/30 flex flex-1 flex-col gap-1 rounded-lg text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            >
+              <span className="text-muted-foreground text-xs">오늘 접수</span>
+              <span className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-bold text-blue-600">
+                  {props.stageStats.todayReceived}
                 </span>
+                {trendBadge(props.stageStats.todayReceivedTrend)}
               </span>
             </button>
-          );
-        })}
+            <span className="border-border w-px border-l" />
+            <div className="flex flex-1 flex-col justify-between gap-1.5">
+              <button
+                type="button"
+                onClick={() => props.onKpiChange("doc_waiting")}
+                className="hover:text-primary focus-visible:ring-primary/30 flex items-center justify-between rounded text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              >
+                <span className="text-muted-foreground flex items-center gap-1.5">
+                  <ClockIcon className="size-3 text-amber-500" />
+                  서류 대기
+                </span>
+                <span className="ml-2 font-bold">{props.stageStats.docWaiting}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => props.onKpiChange("doc_incomplete")}
+                className="hover:text-primary focus-visible:ring-primary/30 flex items-center justify-between rounded text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              >
+                <span className="text-muted-foreground flex items-center gap-1.5">
+                  <FileWarningIcon className="size-3 text-red-500" />
+                  서류 미비
+                </span>
+                <span className="ml-2 font-bold">{props.stageStats.docIncomplete}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => props.onKpiChange("reviewing")}
+          className="border-border bg-card shadow-card hover:border-primary/40 focus-visible:border-primary focus-visible:ring-primary/30 flex flex-[0.65] flex-col gap-3 rounded-xl border p-4 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        >
+          <span className="flex items-center justify-between">
+            <span className="flex items-center gap-2 text-sm font-bold">
+              <span className="flex size-6.5 items-center justify-center rounded-full bg-purple-500/12 text-purple-600">
+                <SearchIcon className="size-3.5" />
+              </span>
+              진행
+            </span>
+            <ChevronRightIcon className="text-muted-foreground size-4" />
+          </span>
+          <span className="flex flex-col gap-1">
+            <span className="text-muted-foreground text-xs">심사 중</span>
+            <span className="text-2xl font-bold text-purple-600">{props.stageStats.reviewing}</span>
+          </span>
+        </button>
+
+        <div className="border-border bg-card shadow-card flex flex-1 flex-col gap-3 rounded-xl border p-4">
+          <button
+            type="button"
+            onClick={() => props.onKpiChange("today_completed")}
+            className="hover:text-primary focus-visible:ring-primary/30 flex items-center justify-between rounded-lg text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          >
+            <span className="flex items-center gap-2 text-sm font-bold">
+              <span className="flex size-6.5 items-center justify-center rounded-full bg-emerald-500/12 text-emerald-600">
+                <CheckIcon className="size-3.5" />
+              </span>
+              종료
+            </span>
+            <ChevronRightIcon className="text-muted-foreground size-4" />
+          </button>
+          <div className="flex items-stretch gap-3.5">
+            <button
+              type="button"
+              onClick={() => props.onKpiChange("today_completed")}
+              className="focus-visible:ring-primary/30 flex flex-1 flex-col gap-1 rounded-lg text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            >
+              <span className="text-muted-foreground text-xs">오늘 완료</span>
+              <span className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-bold text-emerald-600">
+                  {props.stageStats.todayCompleted}
+                </span>
+                {trendBadge(props.stageStats.todayCompletedTrend)}
+              </span>
+            </button>
+            <span className="border-border w-px border-l" />
+            <div className="flex flex-1 flex-col justify-between gap-1.5">
+              <button
+                type="button"
+                onClick={() => props.onTableViewChange("canceled")}
+                className="hover:text-primary focus-visible:ring-primary/30 flex items-center justify-between rounded text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              >
+                <span className="text-muted-foreground flex items-center gap-1.5">
+                  <XCircleIcon className="size-3 text-rose-500" />
+                  접수 취소
+                </span>
+                <span className="ml-2 font-bold">{props.stageStats.canceled}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => props.onKpiChange("persistent_absence")}
+                className="hover:text-primary focus-visible:ring-primary/30 flex items-center justify-between rounded text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              >
+                <span className="text-muted-foreground flex items-center gap-1.5">
+                  <UserXIcon className="size-3 text-orange-500" />
+                  지속적 부재
+                </span>
+                <span className="ml-2 font-bold">{props.stageStats.persistentAbsence}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-border bg-card flex flex-wrap items-center gap-4 rounded-xl border px-4 py-3">
+        <span className="flex items-center gap-2 text-sm font-bold whitespace-nowrap">
+          <span className="flex size-6.5 items-center justify-center rounded-full bg-blue-500/12 text-blue-600">
+            <PercentIcon className="size-3.5" />
+          </span>
+          전체 진행 현황
+        </span>
+        <span className="text-muted-foreground text-xs whitespace-nowrap tabular-nums">
+          {props.stageStats.approvedTotal} / {props.stageStats.total}건
+        </span>
+        <div className="bg-muted relative h-1.5 min-w-24 flex-1 overflow-hidden rounded-full">
+          <div
+            className="absolute inset-y-0 left-0 rounded-full bg-blue-500"
+            style={{ width: `${props.stageStats.overallCompletionRate}%` }}
+          />
+        </div>
+        <span className="text-sm font-bold whitespace-nowrap tabular-nums">
+          {props.stageStats.overallCompletionRate}%
+        </span>
+        <span className="bg-emerald-500/12 text-emerald-700 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold whitespace-nowrap">
+          <TrophyIcon className="size-3.5" />
+          오늘 완료율{" "}
+          {props.stageStats.todayCompletionRate === null
+            ? "-"
+            : `${props.stageStats.todayCompletionRate}%`}
+        </span>
       </div>
 
       <div className="border-border bg-card flex flex-col gap-2.5 rounded-xl border p-3.5">
