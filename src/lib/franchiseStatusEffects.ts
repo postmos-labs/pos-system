@@ -197,7 +197,10 @@ export function franchiseStatusChangeConfirm(
   newStatus: FranchiseStatus,
 ): { msg: string; canNotify: boolean } {
   const silentStatus =
-    newStatus === "completed" || newStatus === "hold" || newStatus === "persistent_absence";
+    newStatus === "completed" ||
+    newStatus === "hold" ||
+    newStatus === "persistent_absence" ||
+    newStatus === "canceled";
   const canNotify = !silentStatus && !!row.phone;
   const confirmMsg =
     newStatus === "completed"
@@ -206,7 +209,9 @@ export function franchiseStatusChangeConfirm(
         ? `'보류'로 상태만 변경됩니다. (고객 안내 메시지는 발송되지 않습니다)`
         : newStatus === "persistent_absence"
           ? `'지속적 부재'로 상태만 변경됩니다. (고객 안내 메시지는 발송되지 않습니다)`
-          : newStatus === "doc_waiting"
+          : newStatus === "canceled"
+            ? `'취소'로 상태만 변경됩니다. (고객 안내 메시지는 발송되지 않습니다)`
+            : newStatus === "doc_waiting"
           ? `'${APPLICANT_TYPE_LABEL[row.applicant_type]}' 서류 안내 메시지가 고객에게 발송됩니다. 진행하시겠습니까?`
           : `'${FRANCHISE_STATUS_LABEL[newStatus]}'(으)로 변경하면 고객에게 메시지가 발송됩니다.`;
   return {

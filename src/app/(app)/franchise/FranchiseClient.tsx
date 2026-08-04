@@ -171,7 +171,8 @@ type ReceiptTableView =
   | "doc_incomplete"
   | "doc_waiting"
   | "approved"
-  | "persistent_absence";
+  | "persistent_absence"
+  | "canceled";
 type ReceiptKpi =
   | "today_received"
   | "doc_waiting"
@@ -1368,7 +1369,8 @@ export default function FranchiseClient({
         if (
           tableView === "mine" &&
           ((row.sales_id !== currentUserId && row.cs_id !== currentUserId) ||
-            COMPLETED_STATUS_SET.has(row.status))
+            COMPLETED_STATUS_SET.has(row.status) ||
+            row.status === "canceled")
         )
           return false;
         if (tableView === "doc_incomplete" && row.status !== "doc_incomplete") return false;
@@ -1376,6 +1378,7 @@ export default function FranchiseClient({
         if (tableView === "approved" && !APPROVED_STATUS_SET.has(row.status)) return false;
         if (tableView === "persistent_absence" && row.status !== "persistent_absence")
           return false;
+        if (tableView === "canceled" && row.status !== "canceled") return false;
       }
       if (!skip.skipStatus && statusFilter && row.status !== statusFilter) return false;
       if (applicantTypeFilter && row.applicant_type !== applicantTypeFilter) return false;
@@ -1669,12 +1672,14 @@ export default function FranchiseClient({
       mine: base.filter(
         (row) =>
           (row.sales_id === currentUserId || row.cs_id === currentUserId) &&
-          !COMPLETED_STATUS_SET.has(row.status),
+          !COMPLETED_STATUS_SET.has(row.status) &&
+          row.status !== "canceled",
       ).length,
       doc_incomplete: base.filter((row) => row.status === "doc_incomplete").length,
       doc_waiting: base.filter((row) => row.status === "doc_waiting").length,
       approved: base.filter((row) => APPROVED_STATUS_SET.has(row.status)).length,
       persistent_absence: base.filter((row) => row.status === "persistent_absence").length,
+      canceled: base.filter((row) => row.status === "canceled").length,
     };
   }, [localRows, search, matchesFilters, currentUserId]);
 
@@ -2516,14 +2521,22 @@ export default function FranchiseClient({
   function handleStatusChange(row: FranchiseApplication, newStatus: FranchiseStatus) {
     if (newStatus === row.status) return;
 
-    const silentStatus = newStatus === "completed" || newStatus === "hold";
+    const silentStatus =
+      newStatus === "completed" ||
+      newStatus === "hold" ||
+      newStatus === "persistent_absence" ||
+      newStatus === "canceled";
     const canNotify = !silentStatus && !!row.phone;
     const confirmMsg =
       newStatus === "completed"
         ? `'완료'로 상태만 변경됩니다. (고객 안내 메시지는 발송되지 않습니다)`
         : newStatus === "hold"
           ? `'보류'로 상태만 변경됩니다. (고객 안내 메시지는 발송되지 않습니다)`
-          : newStatus === "doc_waiting"
+          : newStatus === "persistent_absence"
+            ? `'지속적 부재'로 상태만 변경됩니다. (고객 안내 메시지는 발송되지 않습니다)`
+            : newStatus === "canceled"
+              ? `'취소'로 상태만 변경됩니다. (고객 안내 메시지는 발송되지 않습니다)`
+              : newStatus === "doc_waiting"
             ? `'${APPLICANT_TYPE_LABEL[row.applicant_type]}' 서류 안내 메시지가 고객에게 발송됩니다. 아래에서 보낼 템플릿이 맞는지 확인 후 진행하세요.`
             : newStatus === "toss_review_done"
               ? `토스심사완료로 변경하면 고객에게 메시지가 발송되고, 입력된 정보로 설치 작업이 자동 생성됩니다.`
@@ -2558,6 +2571,8 @@ export default function FranchiseClient({
   const canNotifyConfirm = statusConfirm
     ? statusConfirm.newStatus !== "completed" &&
       statusConfirm.newStatus !== "hold" &&
+      statusConfirm.newStatus !== "persistent_absence" &&
+      statusConfirm.newStatus !== "canceled" &&
       !!statusConfirm.row.phone
     : false;
 

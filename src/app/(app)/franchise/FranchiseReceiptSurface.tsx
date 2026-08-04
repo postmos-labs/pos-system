@@ -40,7 +40,8 @@ type TableView =
   | "doc_incomplete"
   | "doc_waiting"
   | "approved"
-  | "persistent_absence";
+  | "persistent_absence"
+  | "canceled";
 type KpiKey =
   | "today_received"
   | "doc_waiting"
@@ -340,6 +341,12 @@ export default function FranchiseReceiptSurface(props: Props) {
       count: props.tableViewCounts.persistent_absence,
       view: "persistent_absence" as TableView,
     },
+    {
+      key: "canceled",
+      label: "취소",
+      count: props.tableViewCounts.canceled,
+      view: "canceled" as TableView,
+    },
   ];
   const activeTab =
     props.activeKpi === "reviewing"
@@ -350,7 +357,9 @@ export default function FranchiseReceiptSurface(props: Props) {
           ? "techDone"
           : props.tableView === "persistent_absence"
             ? "persistentAbsence"
-            : props.tableView;
+            : props.tableView === "canceled"
+              ? "canceled"
+              : props.tableView;
   const kpis = [
     {
       key: "today_received" as KpiKey,
