@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { ChevronLeft, ChevronRight, X, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -195,6 +195,9 @@ export default function CalendarClient({
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [localManualEvents, setLocalManualEvents] = useState(manualEvents);
   const [localInstallRows, setLocalInstallRows] = useState(installRows);
+  useEffect(() => {
+    setLocalInstallRows(installRows);
+  }, [installRows]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newMemo, setNewMemo] = useState("");
