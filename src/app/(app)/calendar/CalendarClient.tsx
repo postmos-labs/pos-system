@@ -177,6 +177,7 @@ export default function CalendarClient({
   techProfiles = [],
   currentUserId,
   canViewAssigned = false,
+  showLegend = true,
 }: {
   tickets: CalendarTicket[];
   franchiseRows?: CalendarFranchiseRow[];
@@ -186,6 +187,7 @@ export default function CalendarClient({
   techProfiles?: { id: string; name: string }[];
   currentUserId: string;
   canViewAssigned?: boolean;
+  showLegend?: boolean;
 }) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -426,6 +428,14 @@ export default function CalendarClient({
     return map;
   }, [eventMap, activeTab, currentUserId]);
 
+  const visibleLegendItems = useMemo(() => {
+    const present = new Set<string>();
+    for (const events of Object.values(eventMap)) {
+      for (const ev of events) present.add(ev.category);
+    }
+    return LEGEND_ITEMS.filter((li) => present.has(li.category));
+  }, [eventMap]);
+
   const visibleEventMap = useMemo(() => {
     if (!selectedCategory) return tabFilteredEventMap;
     const map: Record<string, CalendarEvent[]> = {};
@@ -536,25 +546,27 @@ export default function CalendarClient({
         </div>
 
         {}
-        <div className="flex flex-wrap gap-3 mb-3">
-          {LEGEND_ITEMS.map((li) => (
-            <button
-              key={li.category}
-              type="button"
-              onClick={() => toggleCategory(li.category)}
-              className={`flex items-center gap-1.5 text-[13px] px-1.5 py-1 rounded-md cursor-pointer transition-all hover:bg-slate-100 ${
-                selectedCategory === li.category
-                  ? "bg-slate-100 text-slate-800 font-semibold"
-                  : selectedCategory
-                    ? "text-slate-400 opacity-40 hover:opacity-70"
-                    : "text-slate-500"
-              }`}
-            >
-              <span className={`w-3 h-3 rounded-sm ${li.color}`} />
-              {li.category}
-            </button>
-          ))}
-        </div>
+        {showLegend && (
+          <div className="flex flex-wrap gap-3 mb-3">
+            {visibleLegendItems.map((li) => (
+              <button
+                key={li.category}
+                type="button"
+                onClick={() => toggleCategory(li.category)}
+                className={`flex items-center gap-1.5 text-[13px] px-1.5 py-1 rounded-md cursor-pointer transition-all hover:bg-slate-100 ${
+                  selectedCategory === li.category
+                    ? "bg-slate-100 text-slate-800 font-semibold"
+                    : selectedCategory
+                      ? "text-slate-400 opacity-40 hover:opacity-70"
+                      : "text-slate-500"
+                }`}
+              >
+                <span className={`w-3 h-3 rounded-sm ${li.color}`} />
+                {li.category}
+              </button>
+            ))}
+          </div>
+        )}
 
         {}
         <div className="grid grid-cols-7 mb-1">

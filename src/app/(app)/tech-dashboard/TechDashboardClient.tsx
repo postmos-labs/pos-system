@@ -11,8 +11,11 @@ import {
   Clock4,
   X,
   ArrowUpRight,
+  RefreshCw,
 } from "lucide-react";
 import CalendarClient from "../calendar/CalendarClient";
+import { createClient } from "@/lib/supabase/client";
+import { fetchTechStats, monthRange, type TechStats } from "./stats";
 
 type InstallRow = {
   id: string;
@@ -104,39 +107,67 @@ function Gauge({
   );
 }
 
+function todayYMD() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+}
+
 export default function TechDashboardClient({
   profileName,
-  monthLabel,
   currentUserId,
-  cards,
-  installRate,
-  asRate,
-  weeklyBars,
+  initialDateFrom,
+  initialDateTo,
+  initialStats,
   calendarInstallRows,
   techProfiles,
   searchRows,
 }: {
   profileName: string;
-  monthLabel: string;
   currentUserId: string;
-  cards: {
-    totalSchedule: number;
-    totalInstall: number;
-    totalAs: number;
-    pendingInstall: number;
-    completedInstall: number;
-    completedAs: number;
-    pendingTransfer: number;
-  };
-  installRate: number;
-  asRate: number;
-  weeklyBars: { label: string; install: number; as: number }[];
+  initialDateFrom: string;
+  initialDateTo: string;
+  initialStats: TechStats;
   calendarInstallRows: CalendarInstallRow[];
   techProfiles: { id: string; name: string }[];
   searchRows: InstallRow[];
 }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<InstallRow | null>(null);
+
+  const [dateFrom, setDateFrom] = useState(initialDateFrom);
+  const [dateTo, setDateTo] = useState(initialDateTo);
+  const [appliedFrom, setAppliedFrom] = useState(initialDateFrom);
+  const [appliedTo, setAppliedTo] = useState(initialDateTo);
+  const [stats, setStats] = useState(initialStats);
+  const [loading, setLoading] = useState(false);
+
+  async function applyRange(from: string, to: string) {
+    if (!from || !to || from > to) return;
+    setLoading(true);
+    try {
+      const supabase = createClient();
+      const next = await fetchTechStats(supabase, from, to);
+      setStats(next);
+      setDateFrom(from);
+      setDateTo(to);
+      setAppliedFrom(from);
+      setAppliedTo(to);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function setThisMonth() {
+    const today = new Date();
+    const { start, end } = monthRange(today.getFullYear(), today.getMonth() + 1);
+    applyRange(start, end);
+  }
+
+  function setLastMonth() {
+    const today = new Date();
+    const d = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const { start, end } = monthRange(d.getFullYear(), d.getMonth() + 1);
+    applyRange(start, end);
+  }
 
   const results = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -150,52 +181,53 @@ export default function TechDashboardClient({
       .slice(0, 8);
   }, [search, searchRows]);
 
-  const maxWeekly = Math.max(...weeklyBars.map((w) => w.install + w.as), 1);
+  const maxWeekly = Math.max(...stats.weeklyBars.map((w) => w.install + w.as), 1);
+  const periodLabel = `${appliedFrom} ~ ${appliedTo}`;
 
   const summaryCards = [
     {
       label: "전체 일정",
-      value: cards.totalSchedule,
-      sub: `설치 ${cards.totalInstall}건 · AS ${cards.totalAs}건`,
+      value: stats.cards.totalSchedule,
+      sub: `설치 ${stats.cards.totalInstall}건 · AS ${stats.cards.totalAs}건`,
       icon: CalendarDays,
       color: "text-blue-600",
       bg: "bg-blue-50",
     },
     {
       label: "설치 예정",
-      value: cards.pendingInstall,
-      sub: monthLabel,
+      value: stats.cards.pendingInstall,
+      sub: periodLabel,
       icon: Clock4,
       color: "text-blue-600",
       bg: "bg-blue-50",
     },
     {
       label: "설치 완료",
-      value: cards.completedInstall,
-      sub: `${monthLabel} 누적`,
+      value: stats.cards.completedInstall,
+      sub: "기간 누적",
       icon: CheckCircle2,
       color: "text-emerald-600",
       bg: "bg-emerald-50",
     },
     {
       label: "AS 접수",
-      value: cards.totalAs,
-      sub: `${monthLabel} 누적`,
+      value: stats.cards.totalAs,
+      sub: "기간 누적",
       icon: Wrench,
       color: "text-amber-600",
       bg: "bg-amber-50",
     },
     {
       label: "AS 완료",
-      value: cards.completedAs,
-      sub: `처리율 ${asRate}%`,
+      value: stats.cards.completedAs,
+      sub: `처리율 ${stats.asRate}%`,
       icon: CheckCircle2,
       color: "text-emerald-600",
       bg: "bg-emerald-50",
     },
     {
       label: "이관 대기",
-      value: cards.pendingTransfer,
+      value: stats.cards.pendingTransfer,
       sub: "CS → 설치관리 승인 대기",
       icon: ArrowLeftRight,
       color: "text-purple-600",
@@ -205,11 +237,51 @@ export default function TechDashboardClient({
 
   return (
     <div className="p-6 max-w-[1360px] mx-auto space-y-5">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">기술지원 대시보드</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
-          {profileName}님 · {monthLabel} 설치·A/S 현황
-        </p>
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">기술지원 대시보드</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {profileName}님 · {periodLabel} 설치·A/S 현황
+          </p>
+        </div>
+
+        {}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={setThisMonth}
+            className="text-xs font-medium px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            이번달
+          </button>
+          <button
+            onClick={setLastMonth}
+            className="text-xs font-medium px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            지난달
+          </button>
+          <input
+            type="date"
+            value={dateFrom}
+            max={todayYMD()}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="text-sm border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          />
+          <span className="text-slate-400 text-sm">~</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="text-sm border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          />
+          <button
+            onClick={() => applyRange(dateFrom, dateTo)}
+            disabled={loading}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+            조회
+          </button>
+        </div>
       </div>
 
       {}
@@ -281,6 +353,7 @@ export default function TechDashboardClient({
               installRows={calendarInstallRows}
               techProfiles={techProfiles}
               currentUserId={currentUserId}
+              showLegend={false}
             />
           </div>
         </div>
@@ -292,14 +365,14 @@ export default function TechDashboardClient({
             <div className="flex gap-2">
               <Gauge
                 label="설치율"
-                percent={installRate}
-                sub={`완료 ${cards.completedInstall} / ${cards.totalInstall}건`}
+                percent={stats.installRate}
+                sub={`완료 ${stats.cards.completedInstall} / ${stats.cards.totalInstall}건`}
                 color="#3652CC"
               />
               <Gauge
                 label="AS 처리율"
-                percent={asRate}
-                sub={`완료 ${cards.completedAs} / ${cards.totalAs}건`}
+                percent={stats.asRate}
+                sub={`완료 ${stats.cards.completedAs} / ${stats.cards.totalAs}건`}
                 color="#C77817"
               />
             </div>
@@ -319,11 +392,11 @@ export default function TechDashboardClient({
                 </span>
               </div>
             </div>
-            <div className="flex items-end gap-3 h-28">
-              {weeklyBars.map((w) => (
+            <div className="flex items-end gap-3 h-28 overflow-x-auto">
+              {stats.weeklyBars.map((w) => (
                 <div
                   key={w.label}
-                  className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end"
+                  className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end min-w-8"
                 >
                   <div
                     className="w-full max-w-9 rounded-t-sm overflow-hidden flex flex-col-reverse"
