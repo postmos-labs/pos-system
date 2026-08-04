@@ -1348,6 +1348,14 @@ export default function FranchiseClient({
     [yesterdayCompletedIds],
   );
 
+  const isTransferredOut = useCallback(
+    (rowId: string) => {
+      const linked = localLinkedInstalls[rowId];
+      return !!linked && linked.status !== "rejected";
+    },
+    [localLinkedInstalls],
+  );
+
   type FilterSkip = {
     skipView?: boolean;
     skipKpi?: boolean;
@@ -1364,7 +1372,11 @@ export default function FranchiseClient({
           return false;
         if (activeKpi === "doc_waiting" && row.status !== "doc_waiting") return false;
         if (activeKpi === "doc_incomplete" && row.status !== "doc_incomplete") return false;
-        if (activeKpi === "reviewing" && !REVIEWING_STATUS_SET.has(row.status)) return false;
+        if (
+          activeKpi === "reviewing" &&
+          (!REVIEWING_STATUS_SET.has(row.status) || isTransferredOut(row.id))
+        )
+          return false;
         if (
           activeKpi === "today_completed" &&
           (!APPROVED_STATUS_SET.has(row.status) || !todayCompletedIdSet.has(row.id))
@@ -1409,6 +1421,7 @@ export default function FranchiseClient({
       activeKpi,
       todayDate,
       todayCompletedIdSet,
+      isTransferredOut,
       tableView,
       currentUserId,
       statusFilter,
@@ -1704,13 +1717,15 @@ export default function FranchiseClient({
       ).length,
       doc_waiting: base.filter((row) => row.status === "doc_waiting").length,
       doc_incomplete: base.filter((row) => row.status === "doc_incomplete").length,
-      reviewing: base.filter((row) => REVIEWING_STATUS_SET.has(row.status)).length,
+      reviewing: base.filter(
+        (row) => REVIEWING_STATUS_SET.has(row.status) && !isTransferredOut(row.id),
+      ).length,
       today_completed: base.filter(
         (row) => APPROVED_STATUS_SET.has(row.status) && todayCompletedIdSet.has(row.id),
       ).length,
       persistent_absence: base.filter((row) => row.status === "persistent_absence").length,
     };
-  }, [localRows, search, matchesFilters, todayDate, todayCompletedIdSet]);
+  }, [localRows, search, matchesFilters, todayDate, todayCompletedIdSet, isTransferredOut]);
 
   const stageStats = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -1735,7 +1750,9 @@ export default function FranchiseClient({
     ).length;
     const approvedTotal = base.filter((row) => APPROVED_STATUS_SET.has(row.status)).length;
     const total = base.length;
-    const reviewing = base.filter((row) => REVIEWING_STATUS_SET.has(row.status)).length;
+    const reviewing = base.filter(
+      (row) => REVIEWING_STATUS_SET.has(row.status) && !isTransferredOut(row.id),
+    ).length;
     // 오늘 완료 / 오늘 접수는 서로 다른 코호트라 100%를 넘을 수 있어 지표로 부적합.
     // 대신 "지금 진행중(심사중) + 오늘 완료" 중 오늘 완료된 비율로 0~100% 범위를 보장한다.
     const todayCompletionPool = reviewing + todayCompleted;
@@ -1763,6 +1780,7 @@ export default function FranchiseClient({
     yesterdayDate,
     todayCompletedIdSet,
     yesterdayCompletedIdSet,
+    isTransferredOut,
   ]);
 
   const successRateStats = useMemo(() => {
