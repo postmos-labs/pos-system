@@ -1971,7 +1971,11 @@ export default function InstallsClient({
 
       {}
       {notePrompt && (
-        <FormModal title={notePrompt.title} onClose={() => resolveNotePrompt(null)}>
+        <FormModal
+          title={notePrompt.title}
+          onClose={() => resolveNotePrompt(null)}
+          zIndexClassName="z-[60]"
+        >
           <div className="space-y-4">
             <div>
               <label className="mb-1.5 block text-sm font-semibold text-slate-700">비고</label>

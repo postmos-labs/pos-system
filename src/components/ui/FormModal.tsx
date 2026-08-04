@@ -8,6 +8,7 @@ interface Props {
   onClose: () => void;
   children: ReactNode;
   maxWidthClassName?: string;
+  zIndexClassName?: string;
 }
 
 // 등록/입력 폼을 화면 중앙 모달로 띄우는 공용 래퍼 (변경관리 탭 스타일)
@@ -16,9 +17,12 @@ export default function FormModal({
   onClose,
   children,
   maxWidthClassName = "max-w-md",
+  zIndexClassName = "z-50",
 }: Props) {
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+    <div
+      className={`fixed inset-0 bg-black/30 flex items-center justify-center ${zIndexClassName} p-4`}
+    >
       <div
         className={`bg-white border border-slate-200 rounded-2xl p-6 w-full ${maxWidthClassName} max-h-[90vh] overflow-y-auto shadow-xl`}
       >
