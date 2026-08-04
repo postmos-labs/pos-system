@@ -1,0 +1,427 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  Search,
+  CalendarDays,
+  CheckCircle2,
+  Wrench,
+  ArrowLeftRight,
+  Clock4,
+  X,
+  ArrowUpRight,
+} from "lucide-react";
+import CalendarClient from "../calendar/CalendarClient";
+
+type InstallRow = {
+  id: string;
+  customer_name: string | null;
+  contact_name: string | null;
+  customer_phone: string | null;
+  address: string | null;
+  status: string;
+  delivery_type: string | null;
+  scheduled_date: string | null;
+  scheduled_time: string | null;
+  assigned_to: string | null;
+  notes: string | null;
+  franchise_application_id: string | null;
+  assignee: { name: string } | null;
+};
+
+type CalendarInstallRow = {
+  id: string;
+  customer_name?: string | null;
+  status: string;
+  scheduled_date?: string | null;
+  assigned_to?: string | null;
+  delivery_type?: string | null;
+  assignee?: { name: string } | null;
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  received: "접수",
+  preparing: "제품준비",
+  scheduled: "일정확정",
+  in_transit: "이동중",
+  delivery_sent: "택배발송",
+  completed: "완료",
+  rejected: "반려",
+};
+
+function statusLabel(status: string, deliveryType: string | null) {
+  if (status === "completed" && deliveryType === "as") return "AS완료";
+  return STATUS_LABEL[status] ?? status;
+}
+
+function statusChipColor(status: string) {
+  if (status === "completed") return "bg-emerald-50 text-emerald-600 border-emerald-200";
+  if (status === "rejected") return "bg-red-50 text-red-600 border-red-200";
+  if (status === "in_transit") return "bg-blue-50 text-blue-600 border-blue-200";
+  return "bg-amber-50 text-amber-600 border-amber-200";
+}
+
+function Gauge({
+  label,
+  percent,
+  sub,
+  color,
+}: {
+  label: string;
+  percent: number;
+  sub: string;
+  color: string;
+}) {
+  const clamped = Math.max(0, Math.min(100, percent));
+  const circumference = 130;
+  return (
+    <div className="flex-1 flex flex-col items-center gap-1.5">
+      <svg width="112" height="70" viewBox="0 0 120 70">
+        <path
+          d="M10 65 A50 50 0 0 1 110 65"
+          fill="none"
+          stroke="currentColor"
+          className="text-slate-100"
+          strokeWidth="10"
+          strokeLinecap="round"
+        />
+        <path
+          d="M10 65 A50 50 0 0 1 110 65"
+          fill="none"
+          stroke={color}
+          strokeWidth="10"
+          strokeLinecap="round"
+          strokeDasharray={`${(clamped / 100) * circumference} ${circumference}`}
+        />
+        <text x="60" y="52" textAnchor="middle" fontSize="20" fontWeight="700" fill="#1e293b">
+          {clamped}%
+        </text>
+      </svg>
+      <div className="text-xs font-semibold text-slate-600">{label}</div>
+      <div className="text-[11px] text-slate-400">{sub}</div>
+    </div>
+  );
+}
+
+export default function TechDashboardClient({
+  profileName,
+  monthLabel,
+  currentUserId,
+  cards,
+  installRate,
+  asRate,
+  weeklyBars,
+  calendarInstallRows,
+  techProfiles,
+  searchRows,
+}: {
+  profileName: string;
+  monthLabel: string;
+  currentUserId: string;
+  cards: {
+    totalSchedule: number;
+    totalInstall: number;
+    totalAs: number;
+    pendingInstall: number;
+    completedInstall: number;
+    completedAs: number;
+    pendingTransfer: number;
+  };
+  installRate: number;
+  asRate: number;
+  weeklyBars: { label: string; install: number; as: number }[];
+  calendarInstallRows: CalendarInstallRow[];
+  techProfiles: { id: string; name: string }[];
+  searchRows: InstallRow[];
+}) {
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<InstallRow | null>(null);
+
+  const results = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return [];
+    return searchRows
+      .filter((r) =>
+        [r.customer_name, r.contact_name, r.customer_phone, r.address]
+          .filter(Boolean)
+          .some((v) => (v as string).toLowerCase().includes(q)),
+      )
+      .slice(0, 8);
+  }, [search, searchRows]);
+
+  const maxWeekly = Math.max(...weeklyBars.map((w) => w.install + w.as), 1);
+
+  const summaryCards = [
+    {
+      label: "전체 일정",
+      value: cards.totalSchedule,
+      sub: `설치 ${cards.totalInstall}건 · AS ${cards.totalAs}건`,
+      icon: CalendarDays,
+      color: "text-blue-600",
+      bg: "bg-blue-50",
+    },
+    {
+      label: "설치 예정",
+      value: cards.pendingInstall,
+      sub: monthLabel,
+      icon: Clock4,
+      color: "text-blue-600",
+      bg: "bg-blue-50",
+    },
+    {
+      label: "설치 완료",
+      value: cards.completedInstall,
+      sub: `${monthLabel} 누적`,
+      icon: CheckCircle2,
+      color: "text-emerald-600",
+      bg: "bg-emerald-50",
+    },
+    {
+      label: "AS 접수",
+      value: cards.totalAs,
+      sub: `${monthLabel} 누적`,
+      icon: Wrench,
+      color: "text-amber-600",
+      bg: "bg-amber-50",
+    },
+    {
+      label: "AS 완료",
+      value: cards.completedAs,
+      sub: `처리율 ${asRate}%`,
+      icon: CheckCircle2,
+      color: "text-emerald-600",
+      bg: "bg-emerald-50",
+    },
+    {
+      label: "이관 대기",
+      value: cards.pendingTransfer,
+      sub: "CS → 설치관리 승인 대기",
+      icon: ArrowLeftRight,
+      color: "text-purple-600",
+      bg: "bg-purple-50",
+    },
+  ];
+
+  return (
+    <div className="p-6 max-w-[1360px] mx-auto space-y-5">
+      <div>
+        <h1 className="text-xl font-bold text-slate-900">기술지원 대시보드</h1>
+        <p className="text-sm text-slate-500 mt-0.5">
+          {profileName}님 · {monthLabel} 설치·A/S 현황
+        </p>
+      </div>
+
+      {}
+      <div className="relative bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+        <div className="relative max-w-md">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="상호명, 고객명, 전화번호, 주소 검색"
+            className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        {results.length > 0 && (
+          <div className="absolute left-4 top-[calc(100%-4px)] w-full max-w-md bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden z-20">
+            {results.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => {
+                  setSelected(r);
+                  setSearch("");
+                }}
+                className="w-full flex items-center justify-between gap-3 px-4 py-2.5 border-b border-slate-100 last:border-0 hover:bg-slate-50 text-left"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900 truncate">
+                    {r.customer_name || "상호명 미입력"}
+                  </p>
+                  <p className="text-xs text-slate-400 truncate">
+                    {[r.address, r.customer_phone].filter(Boolean).join(" · ")}
+                  </p>
+                </div>
+                <span
+                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border whitespace-nowrap ${statusChipColor(r.status)}`}
+                >
+                  {statusLabel(r.status, r.delivery_type)}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {summaryCards.map((c) => (
+          <div key={c.label} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+            <div
+              className={`w-9 h-9 rounded-xl ${c.bg} ${c.color} flex items-center justify-center mb-2.5`}
+            >
+              <c.icon size={17} />
+            </div>
+            <p className="text-2xl font-bold text-slate-900">{c.value}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{c.label}</p>
+            <p className="text-[11px] text-slate-400 mt-1">{c.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1.7fr_1fr] gap-5 items-start">
+        {}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden h-[600px] flex flex-col">
+          <div className="px-5 py-3.5 border-b border-slate-100">
+            <p className="text-sm font-bold text-slate-900">설치 / AS 일정 캘린더</p>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <CalendarClient
+              tickets={[]}
+              installRows={calendarInstallRows}
+              techProfiles={techProfiles}
+              currentUserId={currentUserId}
+            />
+          </div>
+        </div>
+
+        {}
+        <div className="flex flex-col gap-5">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <p className="text-sm font-bold text-slate-900 mb-3">설치 / AS 처리 현황</p>
+            <div className="flex gap-2">
+              <Gauge
+                label="설치율"
+                percent={installRate}
+                sub={`완료 ${cards.completedInstall} / ${cards.totalInstall}건`}
+                color="#3652CC"
+              />
+              <Gauge
+                label="AS 처리율"
+                percent={asRate}
+                sub={`완료 ${cards.completedAs} / ${cards.totalAs}건`}
+                color="#C77817"
+              />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-bold text-slate-900">기간별 처리 현황</p>
+              <div className="flex items-center gap-3 text-[11px] text-slate-400">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-sm bg-blue-600 inline-block" />
+                  설치
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-sm bg-amber-500 inline-block" />
+                  A/S
+                </span>
+              </div>
+            </div>
+            <div className="flex items-end gap-3 h-28">
+              {weeklyBars.map((w) => (
+                <div
+                  key={w.label}
+                  className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end"
+                >
+                  <div
+                    className="w-full max-w-9 rounded-t-sm overflow-hidden flex flex-col-reverse"
+                    style={{
+                      height: `${((w.install + w.as) / maxWeekly) * 100}%`,
+                      minHeight: w.install + w.as > 0 ? "4px" : "0",
+                    }}
+                  >
+                    <div
+                      className="bg-blue-600 w-full"
+                      style={{
+                        height: `${w.install + w.as > 0 ? (w.install / (w.install + w.as)) * 100 : 0}%`,
+                      }}
+                    />
+                    <div
+                      className="bg-amber-500 w-full"
+                      style={{
+                        height: `${w.install + w.as > 0 ? (w.as / (w.install + w.as)) * 100 : 0}%`,
+                      }}
+                    />
+                  </div>
+                  <span className="text-[11px] text-slate-400">{w.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {}
+      {selected && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40 flex justify-end"
+          onClick={() => setSelected(null)}
+        >
+          <div
+            className="w-full max-w-sm bg-white h-full shadow-2xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100">
+              <div>
+                <p className="text-base font-bold text-slate-900">
+                  {selected.customer_name || "상호명 미입력"}
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">{selected.address || "주소 미입력"}</p>
+              </div>
+              <button
+                onClick={() => setSelected(null)}
+                className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-50 flex-shrink-0"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              <span
+                className={`inline-flex items-center text-xs font-bold px-3 py-1 rounded-full border ${statusChipColor(selected.status)}`}
+              >
+                {statusLabel(selected.status, selected.delivery_type)}
+              </span>
+
+              <div>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-2">
+                  작업 정보
+                </p>
+                <div className="grid grid-cols-[76px_1fr] gap-y-2.5 gap-x-2 text-sm">
+                  <span className="text-slate-400">유형</span>
+                  <span className="text-slate-900 font-medium">
+                    {selected.delivery_type === "as" ? "A/S" : "설치"}
+                  </span>
+                  <span className="text-slate-400">담당 기사</span>
+                  <span className="text-slate-900 font-medium">
+                    {selected.assignee?.name ?? "미배정"}
+                  </span>
+                  <span className="text-slate-400">예정일</span>
+                  <span className="text-slate-900 font-medium">
+                    {selected.scheduled_date ?? "-"} {selected.scheduled_time ?? ""}
+                  </span>
+                  <span className="text-slate-400">연락처</span>
+                  <span className="text-slate-900 font-medium">
+                    {selected.customer_phone ?? "-"}
+                  </span>
+                  <span className="text-slate-400">비고</span>
+                  <span className="text-slate-900 font-medium">{selected.notes || "-"}</span>
+                </div>
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t border-slate-100">
+              <Link
+                href={`/installs?id=${selected.id}`}
+                className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+              >
+                설치관리에서 열기
+                <ArrowUpRight size={14} />
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

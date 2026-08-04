@@ -6,6 +6,7 @@ import {
   Database,
   FileEdit,
   FileText,
+  Gauge,
   HardHat,
   Images,
   LayoutDashboard,
@@ -63,6 +64,7 @@ export const ROLE_FOLDERS: NavGroup[] = [
     label: "기술지원",
     icon: HardHat,
     items: [
+      { href: "/tech-dashboard", label: "기술지원 대시보드", icon: Gauge },
       { href: "/installs", label: "설치 관리", icon: Package },
       { href: "/installs/delivery", label: "택배 발송", icon: Truck },
       { href: "/installs/mine", label: "기사 페이지", icon: HardHat },
