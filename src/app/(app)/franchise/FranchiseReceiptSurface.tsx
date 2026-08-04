@@ -998,7 +998,7 @@ export default function FranchiseReceiptSurface(props: Props) {
           </table>
         </div>
 
-        <div className="relative flex min-h-14 items-center justify-between gap-3.5 px-4 py-2.5">
+        <div className="border-border bg-card sticky bottom-0 z-10 flex min-h-14 items-center justify-between gap-3.5 border-t px-4 py-2.5 shadow-[0_-2px_8px_rgba(0,0,0,0.04)]">
           {props.selected.size > 0 ? (
             <div className="border-border bg-card shadow-card flex flex-wrap items-center gap-3 rounded-lg border px-3.5 py-2">
               <span className="text-foreground text-sm font-semibold">
