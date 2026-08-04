@@ -964,44 +964,49 @@ export default function InstallsClient({
   async function submitTransit(skipEta?: boolean, skipSend?: boolean) {
     if (!transitModal) return;
     setSendingTransit(true);
-    const { id, eta } = transitModal;
-    const sendEta = skipEta ? undefined : eta.trim() || undefined;
-    const note = await promptNote(approvalRequestPrompt);
-    if (note === null) {
+    try {
+      const { id, eta } = transitModal;
+      const sendEta = skipEta ? undefined : eta.trim() || undefined;
+      const note = await promptNote(approvalRequestPrompt);
+      if (note === null) return;
+      const result = await requestInstallationStatusApproval({
+        installationId: id,
+        targetStatus: "in_transit",
+        eta: sendEta,
+        skipNotify: skipNotify || !!skipSend,
+        note,
+      });
+      if (result.error) {
+        toast.error("출발 승인요청 실패: " + result.error);
+        return;
+      }
+      const nextApproval = pendingApproval(
+        id,
+        "in_transit",
+        note,
+        result.approvalStatus ?? "requested",
+        { eta: sendEta, skip_notify: skipNotify || !!skipSend },
+      );
+      setCompletionApprovals((prev) => ({ ...prev, [id]: nextApproval }));
+      setApprovalNoteHistory((prev) => ({
+        ...prev,
+        [id]: [...(prev[id] ?? []), ...nextApproval.approval_notes],
+      }));
+      setTransitModal(null);
+      if (result.notificationError)
+        toast.warning(
+          "승인요청은 등록됐지만 팝업 알림에 실패했습니다: " + result.notificationError,
+        );
+      toast.success(
+        `출발 ${result.approvalStatus === "responsible_approved" ? "최종" : "1차"} 승인을 요청했습니다.`,
+      );
+    } catch (e) {
+      toast.error(
+        "출발 승인요청 중 오류가 발생했습니다: " + (e instanceof Error ? e.message : String(e)),
+      );
+    } finally {
       setSendingTransit(false);
-      return;
     }
-    const result = await requestInstallationStatusApproval({
-      installationId: id,
-      targetStatus: "in_transit",
-      eta: sendEta,
-      skipNotify: skipNotify || !!skipSend,
-      note,
-    });
-    if (result.error) {
-      setSendingTransit(false);
-      toast.error("출발 승인요청 실패: " + result.error);
-      return;
-    }
-    const nextApproval = pendingApproval(
-      id,
-      "in_transit",
-      note,
-      result.approvalStatus ?? "requested",
-      { eta: sendEta, skip_notify: skipNotify || !!skipSend },
-    );
-    setCompletionApprovals((prev) => ({ ...prev, [id]: nextApproval }));
-    setApprovalNoteHistory((prev) => ({
-      ...prev,
-      [id]: [...(prev[id] ?? []), ...nextApproval.approval_notes],
-    }));
-    setTransitModal(null);
-    setSendingTransit(false);
-    if (result.notificationError)
-      toast.warning("승인요청은 등록됐지만 팝업 알림에 실패했습니다: " + result.notificationError);
-    toast.success(
-      `출발 ${result.approvalStatus === "responsible_approved" ? "최종" : "1차"} 승인을 요청했습니다.`,
-    );
   }
 
   async function submitSchedule() {
@@ -1822,7 +1827,9 @@ export default function InstallsClient({
   }, [installs]);
 
   const deliveryCompletionRate =
-    deliveryStats.total > 0 ? Math.round((deliveryStats.completed / deliveryStats.total) * 100) : null;
+    deliveryStats.total > 0
+      ? Math.round((deliveryStats.completed / deliveryStats.total) * 100)
+      : null;
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto space-y-5">
