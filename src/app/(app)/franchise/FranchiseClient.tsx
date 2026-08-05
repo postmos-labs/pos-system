@@ -1155,6 +1155,8 @@ export default function FranchiseClient({
   const [activeKpi, setActiveKpi] = useState<ReceiptKpi | null>(null);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [successRateFrom, setSuccessRateFrom] = useState(() => `${todayDate.slice(0, 7)}-01`);
+  const [successRateTo, setSuccessRateTo] = useState(todayDate);
   const [bulkAssignModal, setBulkAssignModal] = useState(false);
   const [bulkAssignCs, setBulkAssignCs] = useState("");
   const [bulkAssignSales, setBulkAssignSales] = useState("");
@@ -1792,19 +1794,21 @@ export default function FranchiseClient({
         `${row.business_name ?? ""} ${row.owner_name ?? ""} ${row.phone ?? ""} ${row.business_number ?? ""}`.toLowerCase();
       return haystack.includes(term);
     });
-    const dayMs = 24 * 60 * 60 * 1000;
-    const todayStartMs = new Date(`${todayDate}T00:00:00+09:00`).getTime();
-    const rateForWindow = (days: number) => {
-      const fromMs = todayStartMs - (days - 1) * dayMs;
-      const windowRows = base.filter((row) => new Date(row.created_at).getTime() >= fromMs);
-      if (windowRows.length === 0) return { rate: null as number | null, total: 0 };
-      const success = windowRows.filter((row) =>
-        RECEPTION_SUCCESS_STATUS_SET.has(row.status),
-      ).length;
-      return { rate: Math.round((success / windowRows.length) * 100), total: windowRows.length };
+    const rangeFrom =
+      successRateFrom && successRateFrom <= successRateTo ? successRateFrom : successRateTo;
+    const fromMs = new Date(`${rangeFrom}T00:00:00+09:00`).getTime();
+    const toMs = new Date(`${successRateTo}T23:59:59.999+09:00`).getTime();
+    const windowRows = base.filter((row) => {
+      const t = new Date(row.created_at).getTime();
+      return t >= fromMs && t <= toMs;
+    });
+    const success = windowRows.filter((row) => RECEPTION_SUCCESS_STATUS_SET.has(row.status)).length;
+    return {
+      rate: windowRows.length === 0 ? null : Math.round((success / windowRows.length) * 100),
+      total: windowRows.length,
+      success,
     };
-    return { day1: rateForWindow(1), day30: rateForWindow(30) };
-  }, [localRows, search, matchesFilters, todayDate]);
+  }, [localRows, search, matchesFilters, successRateFrom, successRateTo]);
 
   const allChecked = pagedRows.length > 0 && pagedRows.every((r) => selected.has(r.id));
 
@@ -3139,6 +3143,10 @@ export default function FranchiseClient({
         kpiCounts={kpiCounts}
         stageStats={stageStats}
         successRateStats={successRateStats}
+        successRateFrom={successRateFrom}
+        successRateTo={successRateTo}
+        onSuccessRateFromChange={setSuccessRateFrom}
+        onSuccessRateToChange={(value) => setSuccessRateTo(value > todayDate ? todayDate : value)}
         activeKpi={activeKpi}
         tableView={tableView}
         tableViewCounts={tableViewCounts}

@@ -111,10 +111,11 @@ interface Props {
   totalPages: number;
   kpiCounts: Record<KpiKey, number>;
   stageStats: StageStats;
-  successRateStats: {
-    day1: { rate: number | null; total: number };
-    day30: { rate: number | null; total: number };
-  };
+  successRateStats: { rate: number | null; total: number; success: number };
+  successRateFrom: string;
+  successRateTo: string;
+  onSuccessRateFromChange: (value: string) => void;
+  onSuccessRateToChange: (value: string) => void;
   activeKpi: KpiKey | null;
   tableView: TableView;
   tableViewCounts: Record<TableView, number>;
@@ -423,9 +424,31 @@ export default function FranchiseReceiptSurface(props: Props) {
           icon={PercentIcon}
           tone="fuchsia"
           stats={[
-            { rate: props.successRateStats.day1.rate, label: "1일" },
-            { rate: props.successRateStats.day30.rate, label: "30일" },
+            {
+              rate: props.successRateStats.rate,
+              label: "선택 기간",
+              detail: `${props.successRateStats.success}/${props.successRateStats.total}건`,
+            },
           ]}
+          controls={
+            <div className="flex items-center gap-1">
+              <input
+                aria-label="성공률 시작일"
+                type="date"
+                value={props.successRateFrom}
+                onChange={(event) => props.onSuccessRateFromChange(event.target.value)}
+                className={`${selectBase} h-7 w-[120px] text-xs`}
+              />
+              <span className="text-muted-foreground text-xs">~</span>
+              <input
+                aria-label="성공률 종료일"
+                type="date"
+                value={props.successRateTo}
+                onChange={(event) => props.onSuccessRateToChange(event.target.value)}
+                className={`${selectBase} h-7 w-[120px] text-xs`}
+              />
+            </div>
+          }
         />
       </div>
 
