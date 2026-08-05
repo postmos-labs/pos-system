@@ -38,13 +38,13 @@ export interface NavGroup {
 }
 
 export const COMMON_NAV: NavItem[] = [
-  { href: "/dashboard", label: "대시보드", icon: LayoutDashboard },
+  { href: "/approvals", label: "승인함", icon: ShieldCheck },
+  { href: "/overview", label: "공통 대시보드", icon: LayoutDashboard },
   { href: "/kpi", label: "KPI", icon: ChartNoAxesCombined },
   { href: "/calendar", label: "캘린더", icon: CalendarDays },
   { href: "/merchants", label: "가맹점", icon: Store },
   { href: "/contracts", label: "계약서 / 서명", icon: PenLine },
   { href: "/dev-requests", label: "개발요청", icon: Code2 },
-  { href: "/approval-logs", label: "승인요청/반려 로그", icon: ShieldCheck },
 ];
 
 export const ROLE_FOLDERS: NavGroup[] = [
@@ -53,6 +53,7 @@ export const ROLE_FOLDERS: NavGroup[] = [
     label: "CS",
     icon: ClipboardList,
     items: [
+      { href: "/dashboard", label: "CS팀 대시보드", icon: LayoutDashboard },
       { href: "/franchise", label: "가맹 접수", icon: FileText },
       { href: "/changes", label: "변경 관리", icon: FileEdit },
       { href: "/woo", label: "우국상 관리", icon: BookUser },

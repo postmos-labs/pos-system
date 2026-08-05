@@ -18,63 +18,10 @@ import {
   UserX,
   CalendarClock,
   ArrowRight,
-  ClipboardCheck,
 } from "lucide-react";
 import ExcelDownloadButton from "./ExcelDownloadButton";
-import ApprovalButton from "./ApprovalButton";
-import TransferApprovalItem from "./TransferApprovalItem";
-import RejectedTransferItem from "./RejectedTransferItem";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
-import type { ApprovalNote } from "@/lib/approvalNotes";
-
-type CompletionApproval = {
-  installation_id: string;
-  target_status: string;
-  requested_by: string;
-  requested_by_name: string;
-  requested_at: string;
-  approval_notes: ApprovalNote[];
-  installation: { id: string; customer_name: string | null; address: string | null } | null;
-};
-
-type TransferApproval = {
-  franchise_application_id: string;
-  requested_by: string;
-  requested_by_name: string;
-  requested_at: string;
-  cs_approved_by_name: string | null;
-  approval_notes: ApprovalNote[];
-  franchise: {
-    id: string;
-    business_name: string | null;
-    owner_name: string | null;
-    address: string | null;
-    phone: string | null;
-  } | null;
-};
-
-type RejectedTransfer = {
-  franchise_application_id: string;
-  updated_at: string;
-  rejection_reason: string | null;
-  approval_notes: ApprovalNote[];
-  franchise: {
-    id: string;
-    business_name: string | null;
-    owner_name: string | null;
-    address: string | null;
-    phone: string | null;
-  } | null;
-};
-
-const INSTALL_STEP_LABEL: Record<string, string> = {
-  preparing: "제품준비",
-  scheduled: "일정확정",
-  in_transit: "출발",
-  delivery_sent: "택배발송",
-  completed: "완료",
-};
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -176,48 +123,6 @@ export default async function DashboardPage() {
     .order("updated_at", { ascending: false })
     .limit(30);
 
-  const completionApprovalQuery =
-    p.approval_role === "tech_responsible" || p.approval_role === "team_lead"
-      ? supabase
-          .from("installation_completion_approvals")
-          .select(
-            "installation_id, target_status, requested_by, requested_by_name, requested_at, approval_notes, installation:installations(id, customer_name, address)",
-          )
-          .eq(
-            "status",
-            p.approval_role === "tech_responsible" ? "requested" : "responsible_approved",
-          )
-          .neq("requested_by", userId)
-          .order("requested_at", { ascending: true })
-          .limit(5)
-      : null;
-
-  const transferApprovalQuery =
-    p.approval_role === "cs_responsible" || p.approval_role === "team_lead"
-      ? supabase
-          .from("franchise_transfer_approvals")
-          .select(
-            "franchise_application_id, requested_by, requested_by_name, requested_at, cs_approved_by_name, approval_notes, franchise:franchise_applications(id, business_name, owner_name, address, phone)",
-          )
-          .eq(
-            "status",
-            p.approval_role === "cs_responsible" ? "requested" : "cs_responsible_approved",
-          )
-          .neq("requested_by", userId)
-          .order("requested_at", { ascending: true })
-          .limit(5)
-      : null;
-
-  const rejectedTransferQuery = supabase
-    .from("franchise_transfer_approvals")
-    .select(
-      "franchise_application_id, updated_at, rejection_reason, approval_notes, franchise:franchise_applications(id, business_name, owner_name, address, phone)",
-    )
-    .eq("status", "rejected")
-    .eq("requested_by", userId)
-    .order("updated_at", { ascending: false })
-    .limit(5);
-
   const [
     { count: unassignedFranchise },
     { count: unassignedInstall },
@@ -226,9 +131,6 @@ export default async function DashboardPage() {
     todayFranchiseResult,
     { data: monthlyFranchise },
     { data: completedInstalls },
-    completionApprovalsResult,
-    transferApprovalsResult,
-    rejectedTransfersResult,
   ] = await Promise.all([
     p.role === "admin" || p.role === "master"
       ? unassignedFranchiseQuery
@@ -241,9 +143,6 @@ export default async function DashboardPage() {
     todayFranchiseQuery ?? Promise.resolve({ data: [] }),
     p.role !== "tech" ? monthlyFranchiseQuery : Promise.resolve({ data: [] as any[] }),
     avgDaysQuery,
-    completionApprovalQuery ?? Promise.resolve({ data: [] as CompletionApproval[] }),
-    transferApprovalQuery ?? Promise.resolve({ data: [] as TransferApproval[] }),
-    rejectedTransferQuery,
   ]);
 
   const monthlyStats: { label: string; total: number; done: number }[] = [];
@@ -311,12 +210,6 @@ export default async function DashboardPage() {
 
   const todayInstalls = (todayInstallsResult.data ?? []) as any[];
   const todayFranchise = (todayFranchiseResult.data ?? []) as any[];
-  const completionApprovals = (completionApprovalsResult.data ?? []) as CompletionApproval[];
-  const transferApprovals = (transferApprovalsResult.data ?? []) as TransferApproval[];
-  const rejectedTransfers = (rejectedTransfersResult.data ?? []) as unknown as RejectedTransfer[];
-  const isApprover = ["cs_responsible", "tech_responsible", "team_lead"].includes(
-    p.approval_role ?? "",
-  );
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -330,109 +223,6 @@ export default async function DashboardPage() {
         </div>
         {(p.role === "admin" || p.role === "master" || p.role === "cs") && <ExcelDownloadButton />}
       </div>
-
-      {isApprover && (
-        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-100">
-            <ClipboardCheck size={18} className="text-blue-600" />
-            <div>
-              <h2 className="font-bold text-slate-900">승인 대기 항목</h2>
-              <p className="text-xs text-slate-500 mt-0.5">내 승인이 필요한 요청입니다.</p>
-            </div>
-          </div>
-          {completionApprovals.length > 0 || transferApprovals.length > 0 ? (
-            <>
-              {completionApprovals.length > 0 && (
-                <div className="divide-y divide-slate-100">
-                  {completionApprovals.map((approval) => (
-                    <div
-                      key={approval.installation_id}
-                      className="flex items-center gap-4 px-6 py-3.5 hover:bg-slate-50 transition-colors"
-                    >
-                      <Link
-                        href={`/installs?id=${approval.installation_id}`}
-                        className="flex min-w-0 flex-1 items-center gap-4"
-                      >
-                        <span className="w-2 h-2 rounded-full bg-amber-500" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-slate-900 truncate">
-                            {approval.installation?.customer_name ?? "설치 건"}
-                          </p>
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            {approval.requested_by_name} ·{" "}
-                            {INSTALL_STEP_LABEL[approval.target_status] ?? approval.target_status}{" "}
-                            {p.approval_role === "team_lead" ? "최종 " : "1차 "}승인요청
-                          </p>
-                        </div>
-                        <ArrowRight size={16} className="text-slate-400" />
-                      </Link>
-                      <ApprovalButton
-                        type={p.approval_role === "team_lead" ? "tech_final" : "completion"}
-                        id={approval.installation_id}
-                        notes={approval.approval_notes}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-              {transferApprovals.length > 0 && (
-                <div className="divide-y divide-slate-100">
-                  {transferApprovals.map((approval) => (
-                    <div
-                      key={approval.franchise_application_id}
-                      className="flex items-center gap-4 px-6 py-3.5 hover:bg-slate-50 transition-colors"
-                    >
-                      <TransferApprovalItem
-                        id={approval.franchise_application_id}
-                        businessName={approval.franchise?.business_name ?? null}
-                        ownerName={approval.franchise?.owner_name ?? null}
-                        address={approval.franchise?.address ?? null}
-                        phone={approval.franchise?.phone ?? null}
-                        requesterName={approval.requested_by_name}
-                        csApproverName={approval.cs_approved_by_name}
-                        approvalRole={p.approval_role as "cs_responsible" | "team_lead"}
-                        notes={approval.approval_notes}
-                      />
-                      <ApprovalButton
-                        type={p.approval_role === "cs_responsible" ? "cs_transfer" : "transfer"}
-                        id={approval.franchise_application_id}
-                        notes={approval.approval_notes}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="px-6 py-4 text-sm text-slate-500">승인 대기 중인 요청이 없습니다.</div>
-          )}
-        </section>
-      )}
-
-      {rejectedTransfers.length > 0 && (
-        <section className="bg-white rounded-2xl border border-red-200 shadow-sm overflow-hidden">
-          <div className="flex items-center gap-2 px-6 py-4 border-b border-red-100">
-            <AlertTriangle size={18} className="text-red-600" />
-            <div>
-              <h2 className="font-bold text-slate-900">반려된 이관 요청</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                반려 사유를 확인하고 다시 요청해주세요.
-              </p>
-            </div>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {rejectedTransfers.map((item) => (
-              <RejectedTransferItem
-                key={item.franchise_application_id}
-                id={item.franchise_application_id}
-                businessName={item.franchise?.business_name ?? null}
-                ownerName={item.franchise?.owner_name ?? null}
-                notes={item.approval_notes}
-              />
-            ))}
-          </div>
-        </section>
-      )}
 
       {}
       {(p.role === "admin" || p.role === "master") &&

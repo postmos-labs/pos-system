@@ -145,15 +145,6 @@ export default function Sidebar({ profile }: Props) {
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-2">
         {COMMON_NAV.filter((item) => {
           if (profile.role === "developer" && item.href === "/kpi") return false;
-          if (item.href === "/approval-logs") {
-            return (
-              profile.role === "admin" ||
-              profile.role === "master" ||
-              ["cs_responsible", "tech_responsible", "team_lead"].includes(
-                profile.approval_role ?? "",
-              )
-            );
-          }
           return true;
         }).map((item) => (
           <NavLink key={item.href} item={item} />

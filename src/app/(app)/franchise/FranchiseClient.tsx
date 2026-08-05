@@ -38,7 +38,7 @@ import {
   approveCsResponsibleTransfer,
   approveFranchiseTransfer,
   requestFranchiseTransfer,
-} from "../dashboard/actions";
+} from "../approvals/actions";
 import type {
   ApplicantType,
   EquipmentItem,
