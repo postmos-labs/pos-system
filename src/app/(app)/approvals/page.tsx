@@ -209,7 +209,7 @@ export default async function ApprovalsPage() {
         </section>
       )}
 
-      {isApprover && rejectedTransfers.length > 0 && (
+      {rejectedTransfers.length > 0 && (
         <section className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
           <div className="flex items-center gap-2 border-b border-red-100 px-6 py-4">
             <AlertTriangle size={18} className="text-red-600" />
