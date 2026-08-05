@@ -1,9 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { CalendarDays, CircleDollarSign, PackageCheck, Search } from "lucide-react";
+import { CalendarDays, CircleDollarSign, Gift, PackageCheck, Search } from "lucide-react";
+import PromotionManager from "./PromotionManager";
+import { formatNumber } from "./formatters";
 
-const FRONT_UNIT_PRICE_EXCL_VAT = 330000; // 부가세 미포함
-const FRONT_UNIT_PRICE_INCL_VAT = 363000; // 부가세 포함
+const FRONT_UNIT_PRICE = 220000; // 프론트 1대당 부가서비스 수수료
 
 type SearchParams = Promise<{
   from?: string | string[] | undefined;
@@ -21,6 +22,16 @@ type InstallationRow = {
   created_at: string;
   items: unknown;
   status: string;
+};
+
+type SettlementPromotion = {
+  id: string;
+  name: string;
+  unit_rate: number;
+  achieved_count: number;
+  start_date: string;
+  end_date: string;
+  memo: string | null;
 };
 
 function firstParam(value: string | string[] | undefined) {
@@ -74,16 +85,19 @@ function formatDateTime(value: string) {
   }).format(date);
 }
 
-function formatNumber(value: number) {
-  return value.toLocaleString("ko-KR");
-}
-
 export default async function OverviewPage({ searchParams }: { searchParams: SearchParams }) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  const canManage = ["admin", "master", "cs"].includes(profile?.role ?? "");
 
   const defaults = getDefaultDateRange();
   const params = await searchParams;
@@ -94,12 +108,21 @@ export default async function OverviewPage({ searchParams }: { searchParams: Sea
   const rangeFrom = dateFrom <= dateTo ? dateFrom : defaults.from;
   const rangeTo = dateFrom <= dateTo ? dateTo : defaults.to;
 
-  const { data: installationData } = await supabase
-    .from("installations")
-    .select("id, customer_name, created_at, items, status")
-    .gte("created_at", `${rangeFrom}T00:00:00+09:00`)
-    .lt("created_at", `${nextDate(rangeTo)}T00:00:00+09:00`)
-    .order("created_at", { ascending: false });
+  const [{ data: installationData }, { data: promotionData }] = await Promise.all([
+    supabase
+      .from("installations")
+      .select("id, customer_name, created_at, items, status")
+      .gte("created_at", `${rangeFrom}T00:00:00+09:00`)
+      .lt("created_at", `${nextDate(rangeTo)}T00:00:00+09:00`)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("settlement_promotions")
+      .select("id, name, unit_rate, achieved_count, start_date, end_date, memo")
+      .lte("start_date", rangeTo)
+      .gte("end_date", rangeFrom)
+      .order("start_date", { ascending: false })
+      .order("created_at", { ascending: false }),
+  ]);
 
   const installations = (installationData ?? []) as unknown as InstallationRow[];
   const rows = installations
@@ -109,8 +132,14 @@ export default async function OverviewPage({ searchParams }: { searchParams: Sea
     }))
     .filter((installation) => installation.frontQuantity > 0);
   const totalQuantity = rows.reduce((total, row) => total + row.frontQuantity, 0);
-  const amountExclVat = totalQuantity * FRONT_UNIT_PRICE_EXCL_VAT;
-  const amountInclVat = totalQuantity * FRONT_UNIT_PRICE_INCL_VAT;
+  const amount = totalQuantity * FRONT_UNIT_PRICE;
+  const promotions = ((promotionData ?? []) as unknown as SettlementPromotion[]).map(
+    (promotion) => ({
+      ...promotion,
+      amount: promotion.unit_rate * promotion.achieved_count,
+    }),
+  );
+  const promotionAmount = promotions.reduce((total, promotion) => total + promotion.amount, 0);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
@@ -158,7 +187,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Sea
         </button>
       </form>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <section className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-600">
             <PackageCheck className="size-5 text-blue-600" />
@@ -171,20 +200,27 @@ export default async function OverviewPage({ searchParams }: { searchParams: Sea
         <section className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-600">
             <CircleDollarSign className="size-5 text-emerald-600" />
-            정산 예상 금액
+            부가서비스 수수료 예상 금액
           </div>
-          <div className="space-y-2 text-sm">
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-slate-500">부가세 미포함</span>
-              <strong className="text-xl text-slate-900">{formatNumber(amountExclVat)}원</strong>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-slate-500">부가세 포함</span>
-              <strong className="text-xl text-emerald-700">{formatNumber(amountInclVat)}원</strong>
-            </div>
+          <p className="text-4xl font-bold text-emerald-700">{formatNumber(amount)}원</p>
+          <p className="mt-1 text-sm text-slate-500">
+            프론트 {formatNumber(totalQuantity)}대 × {formatNumber(FRONT_UNIT_PRICE)}원
+          </p>
+        </section>
+
+        <section className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-600">
+            <Gift className="size-5 text-amber-600" />
+            프로모션 보상금액
           </div>
+          <p className="text-4xl font-bold text-amber-700">{formatNumber(promotionAmount)}원</p>
+          <p className="mt-1 text-sm text-slate-500">
+            겹치는 프로모션 {formatNumber(promotions.length)}건
+          </p>
         </section>
       </div>
+
+      <PromotionManager promotions={promotions} canManage={canManage} />
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 px-6 py-4">
