@@ -264,7 +264,10 @@ export default function PromotionManager({
               />
             </label>
             <label>
-              <span className="mb-1.5 block text-xs font-semibold text-slate-600">건당 단가</span>
+              <span className="mb-1.5 block text-xs font-semibold text-slate-600">
+                건당 단가
+                <span className="ml-1 font-normal text-slate-400">(부가세 별도 금액으로 입력)</span>
+              </span>
               <input
                 required
                 min="0"
@@ -275,6 +278,10 @@ export default function PromotionManager({
                 placeholder="원"
                 className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
               />
+              <p className="mt-1 text-[11px] text-slate-400">
+                토스 정산서에 적힌 단가(부가세 포함)를 그대로 넣지 말고 1.1로 나눈 값을 입력하세요.
+                예: &quot;13만 2천원&quot; → 120,000원
+              </p>
             </label>
             <label>
               <span className="mb-1.5 block text-xs font-semibold text-slate-600">달성 건수</span>
