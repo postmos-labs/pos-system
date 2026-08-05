@@ -48,11 +48,14 @@ function nextDate(value: string) {
   return date.toISOString().slice(0, 10);
 }
 
+const FRONT_ITEM_NAMES = new Set(["프론트", "토스프론트"]);
+
 function frontQuantity(items: unknown) {
   if (!Array.isArray(items)) return 0;
 
   return (items as InstallationItem[]).reduce((total, item) => {
-    if (item?.name !== "프론트" || typeof item.quantity !== "number") return total;
+    if (!item || !FRONT_ITEM_NAMES.has(item.name) || typeof item.quantity !== "number")
+      return total;
     return total + item.quantity;
   }, 0);
 }
