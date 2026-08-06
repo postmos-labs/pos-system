@@ -43,6 +43,133 @@ async function getInstallationEditor() {
   return { user, profile };
 }
 
+const POST_HISTORY_STATUSES = new Set(["completed", "delivery_sent"]);
+
+function isMissingInstallationPostHistoryTable(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "42P01" ||
+    error.code === "PGRST205" ||
+    /installation_post_history|schema cache|relation .* does not exist/i.test(error.message ?? "")
+  );
+}
+
+export type InstallationPostHistoryRecord = {
+  id: string;
+  installation_id: string;
+  merchant_id: string | null;
+  content: string;
+  created_by: string | null;
+  created_at: string;
+  creator?: { name: string } | { name: string }[] | null;
+};
+
+export async function getInstallationPostHistory(installationId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !installationId)
+    return { data: [] as InstallationPostHistoryRecord[], available: true };
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("installation_post_history")
+    .select(
+      "id,installation_id,merchant_id,content,created_by,created_at,creator:profiles!installation_post_history_created_by_fkey(name)",
+    )
+    .eq("installation_id", installationId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    if (isMissingInstallationPostHistoryTable(error)) {
+      return { data: [] as InstallationPostHistoryRecord[], available: false };
+    }
+    console.error("설치 후 히스토리 조회 실패:", error.message);
+    return { data: [] as InstallationPostHistoryRecord[], available: true };
+  }
+
+  return {
+    data: (data ?? []) as InstallationPostHistoryRecord[],
+    available: true,
+  };
+}
+
+export async function addInstallationPostHistory(input: {
+  installationId: string;
+  content: string;
+}) {
+  const editor = await getInstallationEditor();
+  if ("error" in editor) return { error: editor.error, skipped: false, history: null };
+
+  const content = input.content.trim();
+  if (!input.installationId || !content) {
+    return { error: "메모 내용을 입력해주세요.", skipped: false, history: null };
+  }
+  if (content.length > 2000) {
+    return { error: "메모는 2,000자 이하로 입력해주세요.", skipped: false, history: null };
+  }
+
+  const admin = createAdminClient();
+  const { data: installation, error: installationError } = await admin
+    .from("installations")
+    .select("status,franchise_application_id")
+    .eq("id", input.installationId)
+    .single();
+  if (installationError || !installation) {
+    return {
+      error: installationError?.message ?? "설치건을 찾을 수 없습니다.",
+      skipped: false,
+      history: null,
+    };
+  }
+  if (!POST_HISTORY_STATUSES.has(installation.status)) {
+    return {
+      error: "설치완료 또는 택배발송 이후에만 메모를 추가할 수 있습니다.",
+      skipped: false,
+      history: null,
+    };
+  }
+
+  let merchantId: string | null = null;
+  if (installation.franchise_application_id) {
+    const { data: merchant } = await admin
+      .from("merchants")
+      .select("id")
+      .eq("franchise_application_id", installation.franchise_application_id)
+      .maybeSingle();
+    merchantId = merchant?.id ?? null;
+  }
+
+  const { data: history, error: insertError } = await admin
+    .from("installation_post_history")
+    .insert({
+      installation_id: input.installationId,
+      merchant_id: merchantId,
+      content,
+      created_by: editor.user.id,
+    })
+    .select(
+      "id,installation_id,merchant_id,content,created_by,created_at,creator:profiles!installation_post_history_created_by_fkey(name)",
+    )
+    .single();
+
+  if (insertError) {
+    if (isMissingInstallationPostHistoryTable(insertError)) {
+      return { error: null, skipped: true, history: null };
+    }
+    return { error: insertError.message, skipped: false, history: null };
+  }
+
+  revalidatePath("/installs");
+  revalidatePath("/merchants");
+  return {
+    error: null,
+    skipped: false,
+    history: history as InstallationPostHistoryRecord,
+  };
+}
+
 export async function createInstallation(input: {
   customerName: string;
   contactName?: string | null;

@@ -2,7 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import ChangesClient from "./ChangesClient";
 
-export default async function ChangesPage() {
+interface Props {
+  searchParams: Promise<{ id?: string }>;
+}
+
+export default async function ChangesPage({ searchParams }: Props) {
+  const { id } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -43,6 +48,7 @@ export default async function ChangesPage() {
           currentUserId={user.id}
           currentUserName={currentProfile?.name ?? ""}
           currentUserRole={currentProfile?.role ?? ""}
+          initialHighlightId={id}
         />
       )}
     </div>

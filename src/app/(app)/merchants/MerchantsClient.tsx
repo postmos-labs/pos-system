@@ -1,64 +1,202 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
-import { MapPin, Phone, Search } from "lucide-react";
+import { ExternalLink, MapPin, Phone, Search } from "lucide-react";
 import { deleteMerchants } from "./actions";
+import type { Merchant360Merchant, WorkHistoryCategory, WorkHistoryItem } from "./merchant360";
 import EmptyState from "@/components/ui/EmptyState";
 import BulkDeleteActions from "@/components/ui/BulkDeleteActions";
 import BulkConfirmDialog from "@/components/ui/BulkConfirmDialog";
 
-interface Merchant {
-  id: string;
-  business_name: string;
-  owner_name?: string;
-  phone: string;
-  address: string;
-  pos_model?: string;
-  created_at: string;
-  sales?: { name: string } | null;
+interface Props {
+  merchants: Merchant360Merchant[];
+  selectedId: string | null;
+  selectedMerchant: Merchant360Merchant | null;
+  history: WorkHistoryItem[];
+  page: number;
+  totalPages: number;
 }
 
-export default function MerchantsClient({ merchants }: { merchants: Merchant[] }) {
+const HISTORY_TABS: Array<{ key: "all" | WorkHistoryCategory; label: string }> = [
+  { key: "all", label: "전체" },
+  { key: "reception", label: "접수" },
+  { key: "install", label: "설치" },
+  { key: "as", label: "AS" },
+  { key: "change", label: "변경" },
+  { key: "post", label: "설치·배송 이후 히스토리" },
+];
+
+const HISTORY_CATEGORY_LABEL: Record<WorkHistoryCategory, string> = {
+  reception: "접수",
+  install: "설치",
+  as: "AS",
+  change: "변경",
+  post: "설치·배송 이후",
+};
+
+function formatDate(value: string) {
+  return format(new Date(value), "yyyy.M.d HH:mm", { locale: ko });
+}
+
+function DetailField({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50/70 px-3.5 py-3">
+      <p className="mb-1 text-[11px] font-semibold text-slate-400">{label}</p>
+      <p className="whitespace-pre-wrap break-words text-sm text-slate-800">{value || "-"}</p>
+    </div>
+  );
+}
+
+function MerchantDetailPanel({
+  merchant,
+  history,
+}: {
+  merchant: Merchant360Merchant | null;
+  history: WorkHistoryItem[];
+}) {
+  const [tab, setTab] = useState<"all" | WorkHistoryCategory>("all");
+
+  const filteredHistory = useMemo(
+    () => (tab === "all" ? history : history.filter((item) => item.category === tab)),
+    [history, tab],
+  );
+
+  if (!merchant) {
+    return (
+      <div className="flex min-h-[420px] flex-1 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white text-sm text-slate-400">
+        가맹점을 선택하면 상세 정보가 표시됩니다.
+      </div>
+    );
+  }
+
+  return (
+    <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="shrink-0 border-b border-slate-100 px-5 py-5 md:px-6">
+        <h2 className="text-lg font-bold text-slate-900">{merchant.business_name}</h2>
+        <p className="mt-1 text-sm text-slate-500">가맹점 기본 정보</p>
+        <div className="mt-5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          <DetailField label="대표자" value={merchant.owner_name} />
+          <DetailField label="연락처" value={merchant.phone} />
+          <DetailField label="주소" value={merchant.address} />
+          <DetailField label="상세주소" value={merchant.address_detail} />
+          <div className="sm:col-span-2">
+            <DetailField label="메모" value={merchant.memo} />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col px-5 py-5 md:px-6">
+        <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
+          <h3 className="text-sm font-bold text-slate-900">관련 업무 이력</h3>
+          <span className="text-xs text-slate-400">{filteredHistory.length}건</span>
+        </div>
+        <div className="mb-4 flex shrink-0 gap-1 overflow-x-auto border-b border-slate-100 pb-px">
+          {HISTORY_TABS.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setTab(item.key)}
+              className={`whitespace-nowrap border-b-2 px-2.5 py-2 text-xs font-semibold transition-colors ${tab === item.key ? "border-blue-600 text-blue-600" : "border-transparent text-slate-400 hover:text-slate-700"}`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          {filteredHistory.length === 0 ? (
+            <p className="py-12 text-center text-sm text-slate-400">관련 업무 이력이 없습니다.</p>
+          ) : (
+            <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+              {filteredHistory.map((item) => (
+                <article key={`${item.category}-${item.id}`} className="px-3.5 py-3.5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-800">{item.title}</p>
+                      <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-slate-500">
+                        {item.summary}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${item.statusClass}`}
+                    >
+                      {item.status}
+                    </span>
+                  </div>
+                  <div className="mt-2.5 flex items-center justify-between gap-3 text-[11px] text-slate-400">
+                    <span className="flex items-center gap-2">
+                      <span className="font-semibold text-slate-500">
+                        {HISTORY_CATEGORY_LABEL[item.category]}
+                      </span>
+                      <time dateTime={item.date}>{formatDate(item.date)}</time>
+                    </span>
+                    <Link
+                      href={item.href}
+                      className="inline-flex shrink-0 items-center gap-1 font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      관련 화면 열기 <ExternalLink size={12} />
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export default function MerchantsClient({
+  merchants,
+  selectedId,
+  selectedMerchant,
+  history,
+  page,
+}: Props) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [isPending, startTransition] = useTransition();
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [search, setSearch] = useState("");
 
-  const filteredMerchants = search.trim()
-    ? merchants.filter((m) => {
-        const q = search.trim().toLowerCase();
-        return (
-          m.business_name?.toLowerCase().includes(q) ||
-          m.phone?.toLowerCase().includes(q) ||
-          m.sales?.name?.toLowerCase().includes(q)
-        );
-      })
-    : merchants;
+  const filteredMerchants = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return merchants;
+    return merchants.filter((merchant) =>
+      [merchant.business_name, merchant.owner_name, merchant.phone, merchant.address]
+        .filter(Boolean)
+        .some((value) => value!.toLowerCase().includes(query)),
+    );
+  }, [merchants, search]);
 
   const allChecked =
-    filteredMerchants.length > 0 && filteredMerchants.every((m) => selected.has(m.id));
+    filteredMerchants.length > 0 &&
+    filteredMerchants.every((merchant) => selected.has(merchant.id));
+
+  function selectMerchant(id: string) {
+    router.replace(`/merchants?page=${page}&id=${id}`);
+  }
 
   function toggleAll() {
-    setSelected(allChecked ? new Set() : new Set(filteredMerchants.map((m) => m.id)));
+    setSelected(allChecked ? new Set() : new Set(filteredMerchants.map((merchant) => merchant.id)));
   }
 
   function toggleOne(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+    setSelected((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }
 
-  function handleDelete() {
-    if (selected.size === 0) return;
-    setDeleteConfirmOpen(true);
+  function confirmDeleteOpen() {
+    if (selected.size > 0) setDeleteConfirmOpen(true);
   }
 
   async function confirmDelete() {
@@ -71,95 +209,108 @@ export default function MerchantsClient({ merchants }: { merchants: Merchant[] }
       return;
     }
     setSelected(new Set());
-    startTransition(() => router.refresh());
+    router.refresh();
   }
 
   return (
-    <div>
-      <div className="relative mb-3">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="상호명, 연락처, 담당 영업으로 검색"
-          className="w-full text-sm border border-slate-200 rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-
-      {filteredMerchants.length > 0 && (
-        <div className="flex items-center gap-3 mb-3">
-          <input
-            type="checkbox"
-            checked={allChecked}
-            onChange={toggleAll}
-            className="w-4 h-4 accent-blue-600 cursor-pointer"
-          />
-          <span className="text-xs text-slate-400 font-medium">전체 선택</span>
-        </div>
-      )}
-
-      {selected.size > 0 && (
-        <BulkDeleteActions
-          count={selected.size}
-          deleting={deleting}
-          onDelete={handleDelete}
-          onCancel={() => setSelected(new Set())}
-        />
-      )}
-
-      {filteredMerchants.length === 0 && (
-        <EmptyState message={search.trim() ? "검색 결과가 없습니다" : "등록된 가맹점이 없습니다"} />
-      )}
-
-      <div className="grid gap-3 md:grid-cols-2">
-        {filteredMerchants.map((m) => (
-          <div
-            key={m.id}
-            className="relative bg-white rounded-xl border border-slate-200 p-4 hover:shadow-sm transition-shadow"
-          >
+    <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
+      <section className="flex min-h-[360px] min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className="shrink-0 border-b border-slate-100 p-4">
+          <div className="relative">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
-              type="checkbox"
-              checked={selected.has(m.id)}
-              onChange={() => toggleOne(m.id)}
-              onClick={(e) => e.stopPropagation()}
-              className="absolute top-4 right-4 w-4 h-4 accent-blue-600 cursor-pointer z-10"
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="상호명, 대표자, 연락처, 주소 검색"
+              className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <Link href={`/merchants/${m.id}`} className="block pr-6">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <p className="font-semibold text-slate-900">{m.business_name}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{m.owner_name}</p>
-                </div>
-                {m.pos_model && (
-                  <span className="text-xs bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-full">
-                    {m.pos_model}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-4 text-xs text-slate-700">
-                <span className="flex items-center gap-1">
-                  <Phone size={11} />
-                  {m.phone}
-                </span>
-                <span className="flex items-center gap-1 truncate" title={m.address}>
-                  <MapPin size={11} />
-                  {m.address}
-                </span>
-              </div>
-              <div className="flex items-center justify-between mt-2 text-xs text-slate-500">
-                <span>
-                  영업:{" "}
-                  <span className={m.sales?.name ? "" : "text-slate-400"}>
-                    {m.sales?.name ?? "-"}
-                  </span>
-                </span>
-                <span>{format(new Date(m.created_at), "M/d", { locale: ko })}</span>
-              </div>
-            </Link>
           </div>
-        ))}
-      </div>
+          {filteredMerchants.length > 0 && (
+            <label className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-400">
+              <input
+                type="checkbox"
+                checked={allChecked}
+                onChange={toggleAll}
+                className="h-4 w-4 cursor-pointer accent-blue-600"
+              />
+              전체 선택
+            </label>
+          )}
+        </div>
+
+        {selected.size > 0 && (
+          <div className="shrink-0 px-4 pt-3">
+            <BulkDeleteActions
+              count={selected.size}
+              deleting={deleting}
+              onDelete={confirmDeleteOpen}
+              onCancel={() => setSelected(new Set())}
+            />
+          </div>
+        )}
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          {filteredMerchants.length === 0 ? (
+            <EmptyState
+              message={search.trim() ? "검색 결과가 없습니다" : "등록된 가맹점이 없습니다"}
+            />
+          ) : (
+            <div className="flex flex-col gap-2">
+              {filteredMerchants.map((merchant) => {
+                const active = merchant.id === selectedId;
+                return (
+                  <div
+                    key={merchant.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={active}
+                    onClick={() => selectMerchant(merchant.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") selectMerchant(merchant.id);
+                    }}
+                    className={`relative cursor-pointer rounded-xl border p-3.5 text-left transition-colors ${active ? "border-blue-300 bg-blue-50/70" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.has(merchant.id)}
+                      onChange={() => toggleOne(merchant.id)}
+                      onClick={(event) => event.stopPropagation()}
+                      className="absolute right-3.5 top-3.5 h-4 w-4 cursor-pointer accent-blue-600"
+                    />
+                    <div className="pr-7">
+                      <p className="truncate text-sm font-semibold text-slate-900">
+                        {merchant.business_name}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-500">{merchant.owner_name || "-"}</p>
+                    </div>
+                    <div className="mt-3 flex flex-col gap-1 text-xs text-slate-600">
+                      <span className="flex items-center gap-1.5 truncate">
+                        <Phone size={12} /> {merchant.phone || "-"}
+                      </span>
+                      <span
+                        className="flex items-center gap-1.5 truncate"
+                        title={merchant.address ?? ""}
+                      >
+                        <MapPin size={12} /> {merchant.address || "주소 미입력"}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-[11px] text-slate-400">
+                      등록 {format(new Date(merchant.created_at), "yyyy.M.d", { locale: ko })}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <MerchantDetailPanel
+        key={selectedMerchant?.id ?? "empty"}
+        merchant={selectedMerchant}
+        history={history}
+      />
 
       <BulkConfirmDialog
         open={deleteConfirmOpen}
@@ -168,8 +319,8 @@ export default function MerchantsClient({ merchants }: { merchants: Merchant[] }
         confirmText="삭제"
         confirmColor="red"
         items={merchants
-          .filter((m) => selected.has(m.id))
-          .map((m) => ({ id: m.id, label: m.business_name }))}
+          .filter((merchant) => selected.has(merchant.id))
+          .map((merchant) => ({ id: merchant.id, label: merchant.business_name }))}
         onCancel={() => setDeleteConfirmOpen(false)}
         onConfirm={confirmDelete}
       />

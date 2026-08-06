@@ -73,6 +73,7 @@ interface Props {
   currentUserId: string;
   currentUserName: string;
   currentUserRole: string;
+  initialHighlightId?: string;
 }
 
 interface EditableTextProps {
@@ -161,6 +162,7 @@ export default function ChangesClient({
   currentUserId,
   currentUserName,
   currentUserRole,
+  initialHighlightId,
 }: Props) {
   const router = useRouter();
   const [localRows, setLocalRows] = useState(rows);
@@ -173,7 +175,7 @@ export default function ChangesClient({
   const [dateTo, setDateTo] = useState("");
   const [sortBy, setSortBy] = useState<"created_at" | "reception_date" | "status">("created_at");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(initialHighlightId ?? null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(defaultCreateForm());
   const [submitting, setSubmitting] = useState(false);
@@ -769,6 +771,7 @@ export default function ChangesClient({
               pagedRows.map((row) => (
                 <Fragment key={row.id}>
                   <tr
+                    id={`change-row-${row.id}`}
                     className="border-t border-slate-100 hover:bg-blue-50 transition-colors cursor-pointer"
                     onClick={() => toggleExpand(row)}
                   >

@@ -26,6 +26,7 @@ import { NotificationHistory } from "@/components/ui/NotificationHistory";
 import FormModal from "@/components/ui/FormModal";
 import HistoryButton from "@/components/ui/HistoryButton";
 import MemoHistoryPanel from "@/components/ui/MemoHistoryPanel";
+import InstallationPostHistoryPanel from "@/components/ui/InstallationPostHistoryPanel";
 import RateBadge from "@/components/ui/RateBadge";
 import InstallationActivityHistory from "@/components/ui/InstallationActivityHistory";
 import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
@@ -732,6 +733,7 @@ export default function InstallsClient({
   const [skipNotify, setSkipNotify] = useState(false);
   const [rowDragId, setRowDragId] = useState<string | null>(null);
   const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
+  const [postHistoryOpenId, setPostHistoryOpenId] = useState<string | null>(null);
   const [savingRowId, setSavingRowId] = useState<string | null>(null);
   const [notePrompt, setNotePrompt] = useState<{
     title: string;
@@ -3364,6 +3366,15 @@ export default function InstallsClient({
                               <span />
                             )}
                             <div className="flex items-center gap-2">
+                              {["completed", "delivery_sent"].includes(inst.status) && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPostHistoryOpenId(inst.id)}
+                                  className="rounded-lg border border-blue-200 px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50"
+                                >
+                                  완료 이후 메모
+                                </button>
+                              )}
                               <button
                                 onClick={() => saveRowNow(inst.id)}
                                 disabled={savingRowId === inst.id}
@@ -3548,6 +3559,19 @@ export default function InstallsClient({
               labelMap={STATUS_LABELS}
               franchiseApplicationId={row.franchise_application_id}
               franchiseStatusLabelMap={FRANCHISE_STATUS_LABEL as Record<string, string>}
+            />
+          );
+        })()}
+
+      {postHistoryOpenId &&
+        (() => {
+          const row = installs.find((install) => install.id === postHistoryOpenId);
+          if (!row || !["completed", "delivery_sent"].includes(row.status)) return null;
+          return (
+            <InstallationPostHistoryPanel
+              installationId={row.id}
+              title={row.customer_name}
+              onClose={() => setPostHistoryOpenId(null)}
             />
           );
         })()}
