@@ -166,6 +166,7 @@ export interface FranchiseApplication {
   case_type?: FranchiseCaseType;
   is_rental?: boolean;
   is_installment?: boolean;
+  is_large_franchise?: boolean;
   merchant_id?: string | null;
   previous_snapshot?: FranchisePreviousSnapshot | null;
   reception_date?: string;
