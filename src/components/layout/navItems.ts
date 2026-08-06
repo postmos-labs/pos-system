@@ -1,9 +1,9 @@
 import {
   CalendarDays,
+  Building2,
   ClipboardList,
   Code2,
   Database,
-  FileText,
   Gauge,
   HardHat,
   Images,
@@ -71,7 +71,7 @@ export const ROLE_FOLDERS: NavGroup[] = [
 ];
 
 export const BOTTOM_NAV: NavItem[] = [
-  { href: "/paper-orders", label: "용지 요청", icon: FileText },
+  { href: "/large-franchises", label: "대형 가맹점", icon: Building2 },
 ];
 
 export const ADMIN_NAV: NavItem[] = [{ href: "/admin/users", label: "직원 관리", icon: Users }];

@@ -1,13 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import FranchiseClient from "./FranchiseClient";
-import { fetchFranchiseListData } from "./fetchFranchiseListData";
+import FranchiseClient from "../franchise/FranchiseClient";
+import { fetchFranchiseListData } from "../franchise/fetchFranchiseListData";
 
 interface Props {
   searchParams: Promise<{ status?: string; highlight?: string }>;
 }
 
-export default async function FranchisePage({ searchParams }: Props) {
+export default async function LargeFranchisesPage({ searchParams }: Props) {
   const { status, highlight } = await searchParams;
   const supabase = await createClient();
   const {
@@ -28,7 +28,7 @@ export default async function FranchisePage({ searchParams }: Props) {
     linkedInternets,
     todayDate,
     yesterdayDate,
-  } = await fetchFranchiseListData(supabase, user.id, false);
+  } = await fetchFranchiseListData(supabase, user.id, true);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -54,7 +54,7 @@ export default async function FranchisePage({ searchParams }: Props) {
           initialTransferApprovals={Object.fromEntries(
             transferApprovals.map((approval) => [approval.franchise_application_id, approval]),
           )}
-          mode="default"
+          mode="large_franchise"
         />
       )}
     </div>

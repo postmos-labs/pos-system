@@ -1,5 +1,6 @@
 import {
   LayoutDashboard,
+  Building2,
   Store,
   Package,
   PenLine,
@@ -10,7 +11,6 @@ import {
   BookUser,
   Wifi,
   RefreshCw,
-  FileText,
   Network,
   FileEdit,
   Images,
@@ -76,7 +76,7 @@ export const MASTER_NAV: NavItem[] = [
 ];
 
 export const BOTTOM_NAV: NavItem[] = [
-  { href: "/paper-orders", label: "용지 요청", icon: FileText },
+  { href: "/large-franchises", label: "대형 가맹점", icon: Building2 },
 ];
 
 /** breadcrumb 등에서 쓰는 평탄화된 목록. 폴더 소속 항목은 folderLabel을 함께 갖는다. */
