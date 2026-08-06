@@ -1,10 +1,8 @@
 import {
-  BookUser,
   CalendarDays,
   ClipboardList,
   Code2,
   Database,
-  FileEdit,
   FileText,
   Gauge,
   HardHat,
@@ -19,7 +17,6 @@ import {
   Store,
   Truck,
   Users,
-  Wifi,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/types";
@@ -50,15 +47,9 @@ export const COMMON_NAV: NavItem[] = [
 export const ROLE_FOLDERS: NavGroup[] = [
   {
     key: "cs",
-    label: "CS",
-    icon: ClipboardList,
-    items: [
-      { href: "/dashboard", label: "CS팀 대시보드", icon: LayoutDashboard },
-      { href: "/franchise", label: "가맹 접수", icon: FileText },
-      { href: "/changes", label: "변경 관리", icon: FileEdit },
-      { href: "/woo", label: "우국상 관리", icon: BookUser },
-      { href: "/internet", label: "인터넷 관리", icon: Wifi },
-    ],
+    label: "CS 업무",
+    icon: LayoutDashboard,
+    items: [{ href: "/dashboard", label: "CS 업무", icon: LayoutDashboard }],
   },
   {
     key: "tech",
@@ -116,7 +107,7 @@ export function breadcrumbForPath(pathname: string) {
 
   for (const group of ROLE_FOLDERS) {
     const child = group.items.find((item) => isNavItemActive(pathname, item.href));
-    if (child) return [group.label, child.label];
+    if (child) return group.items.length === 1 ? [child.label] : [group.label, child.label];
   }
 
   const managed = [...BOTTOM_NAV, ...ADMIN_NAV, ...MASTER_NAV].find((item) =>

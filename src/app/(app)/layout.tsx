@@ -5,6 +5,7 @@ import AppHeader from "@/components/layout/AppHeader";
 import MobileNav from "@/components/layout/MobileNav";
 import RealtimeNotification from "@/components/layout/RealtimeNotification";
 import ScheduleAlertBanner from "@/components/layout/ScheduleAlertBanner";
+import CsTabBar from "@/components/layout/CsTabBar";
 import { ToastProvider } from "@/components/ui/Toast";
 import type { Profile } from "@/types";
 
@@ -213,6 +214,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <AppHeader profile={profile as Profile} />
           </div>
           <main className="min-h-0 flex-1 overflow-y-auto pb-16 md:pb-0 md:[&>.h-screen]:h-full">
+            <CsTabBar />
             {children}
           </main>
         </div>

@@ -152,6 +152,7 @@ export default function Sidebar({ profile }: Props) {
 
         {ROLE_FOLDERS.map((folder, index) => {
           const open = collapsed || openFolders.has(folder.key);
+          const singleItem = folder.items.length === 1 ? folder.items[0] : null;
           return (
             <div
               key={folder.key}
@@ -159,27 +160,33 @@ export default function Sidebar({ profile }: Props) {
                 " ",
               )}
             >
-              {!collapsed && (
-                <button
-                  type="button"
-                  onClick={() => toggleFolder(folder.key)}
-                  className="flex w-full items-center gap-2 px-2.5 pb-1.5 pt-1.5 text-[11px] font-semibold tracking-wide text-slate-400 hover:text-slate-700"
-                >
-                  <span>{folder.label}</span>
-                  <ChevronDown
-                    className={[
-                      "ml-auto size-3.5 transition-transform",
-                      open ? "rotate-180" : "",
-                    ].join(" ")}
-                  />
-                </button>
-              )}
-              {open && (
-                <div className="flex flex-col gap-1">
-                  {folder.items.map((item) => (
-                    <NavLink key={item.href} item={item} folderKey={folder.key} />
-                  ))}
-                </div>
+              {singleItem ? (
+                <NavLink item={singleItem} folderKey={folder.key} />
+              ) : (
+                <>
+                  {!collapsed && (
+                    <button
+                      type="button"
+                      onClick={() => toggleFolder(folder.key)}
+                      className="flex w-full items-center gap-2 px-2.5 pb-1.5 pt-1.5 text-[11px] font-semibold tracking-wide text-slate-400 hover:text-slate-700"
+                    >
+                      <span>{folder.label}</span>
+                      <ChevronDown
+                        className={[
+                          "ml-auto size-3.5 transition-transform",
+                          open ? "rotate-180" : "",
+                        ].join(" ")}
+                      />
+                    </button>
+                  )}
+                  {open && (
+                    <div className="flex flex-col gap-1">
+                      {folder.items.map((item) => (
+                        <NavLink key={item.href} item={item} folderKey={folder.key} />
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           );
