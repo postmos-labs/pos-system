@@ -149,6 +149,7 @@ interface Props {
   yesterdayDate: string;
   yesterdayCompletedIds: string[];
   initialTransferApprovals: Record<string, TransferApproval>;
+  mode?: "default" | "large_franchise";
 }
 
 type TransferApproval = {
@@ -1086,6 +1087,7 @@ export default function FranchiseClient({
   yesterdayDate,
   yesterdayCompletedIds,
   initialTransferApprovals,
+  mode = "default",
 }: Props) {
   const router = useRouter();
   const toast = useToast();
@@ -2175,6 +2177,29 @@ export default function FranchiseClient({
     [toast],
   );
 
+  const toggleLargeFranchise = useCallback(
+    async (row: FranchiseApplication) => {
+      const isLargeFranchise = mode !== "large_franchise";
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("franchise_applications")
+        .update({ is_large_franchise: isLargeFranchise })
+        .eq("id", row.id);
+      if (error) {
+        toast.error("대형 가맹점 이동 실패: " + error.message);
+        return;
+      }
+      setLocalRows((prev) => prev.filter((r) => r.id !== row.id));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(row.id);
+        return next;
+      });
+      toast.success(isLargeFranchise ? "대형가맹점으로 이동했습니다" : "가맹접수로 되돌렸습니다");
+    },
+    [mode, toast],
+  );
+
   // 히스토리 패널의 메모 삭제/핀 토글. realtime 구독이 테이블 변경마다 전체 행을 다시 받아와
   // updated_at 기준으로 병합하기 때문에(mergeRowsPreservingIdentity), 다른 필드 저장과 동일하게
   // DB 반영이 끝난 뒤에만 로컬 상태를 갱신한다 (선반영하면 그 사이 refresh가 로컬 값을 되돌려버림)
@@ -3189,6 +3214,8 @@ export default function FranchiseClient({
         onToggleRow={toggleOne}
         onSaveField={saveField}
         onSaveNextCheckDate={saveNextCheckDate}
+        onToggleLargeFranchise={toggleLargeFranchise}
+        mode={mode}
         onApplicantTypeChange={updateApplicantType}
         onCsChange={updateCs}
         onStatusChange={handleStatusChange}

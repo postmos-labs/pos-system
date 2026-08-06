@@ -1,6 +1,15 @@
 # 가맹접수(franchise-receipts) 프로세스 재설계
 
-> 현재 이 문서는 설계 논의를 정리한 것이며, 아직 구현 전 단계입니다.
+## 2026-08-06 대형 가맹점 분리
+
+- `franchise_applications.is_large_franchise`를 additive 방식의 영구 boolean 플래그로 추가한다.
+- 기본 가맹접수 조회는 `is_large_franchise = false`만 가져오고, `/large-franchises`는 같은 fetch와
+  클라이언트 화면을 재사용하면서 `is_large_franchise = true`만 조회한다.
+- 확인일 색상 정렬 열의 별 토글은 DB 플래그를 변경해 두 목록 사이에서 행을 이동시키며, 즉시 반응을
+  위해 로컬 목록도 함께 갱신한다.
+- 확인일은 기존 초록/노랑/빨강 severity를 날짜 텍스트에 적용하고 severity 1~3에서만 반짝인다.
+
+> 현재 이 문서는 설계 논의와 구현 흐름을 함께 기록합니다.
 > 관련 코드: `src/app/(app)/franchise/FranchiseClient.tsx`, `FranchiseCreateDialog.tsx`, `src/lib/franchiseStatusEffects.ts`
 
 ## 배경 (현재 문제)

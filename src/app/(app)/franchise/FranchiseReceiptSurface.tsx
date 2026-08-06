@@ -15,6 +15,7 @@ import {
   PercentIcon,
   PlusIcon,
   SearchIcon,
+  Star,
   StickyNoteIcon,
   TrendingDownIcon,
   TrendingUpIcon,
@@ -155,6 +156,8 @@ interface Props {
     value: string,
   ) => void | Promise<void>;
   onSaveNextCheckDate: (row: FranchiseApplication, value: string) => void | Promise<void>;
+  onToggleLargeFranchise: (row: FranchiseApplication) => void | Promise<void>;
+  mode?: "default" | "large_franchise";
   onApplicantTypeChange: (row: FranchiseApplication, value: ApplicantType) => void | Promise<void>;
   onCsChange: (row: FranchiseApplication, value: string) => void | Promise<void>;
   onStatusChange: (row: FranchiseApplication, value: FranchiseStatus) => void;
@@ -264,11 +267,10 @@ export function nextCheckSeverity(
   return 0;
 }
 
-function nextCheckDotColor(nextCheckDate: string | null | undefined, todayDate: string): string {
-  const severity = nextCheckSeverity(nextCheckDate, todayDate);
-  if (severity === 3) return "!bg-gradient-to-br !from-red-400 !to-red-600";
-  if (severity === 2) return "!bg-gradient-to-br !from-yellow-300 !to-yellow-500";
-  if (severity === 1) return "!bg-gradient-to-br !from-green-300 !to-green-500";
+function nextCheckTextColor(severity: ReturnType<typeof nextCheckSeverity>): string {
+  if (severity === 3) return "text-red-500";
+  if (severity === 2) return "text-yellow-500";
+  if (severity === 1) return "text-green-500";
   return "";
 }
 
@@ -857,17 +859,22 @@ export default function FranchiseReceiptSurface(props: Props) {
                       />
                     </td>
                     <td className="px-1 py-1.5 text-center">
-                      {(() => {
-                        const dot = nextCheckDotColor(row.next_check_date, props.todayDate);
-                        return dot ? (
-                          <span
-                            className="relative mx-auto flex size-8 items-center justify-center"
-                            title="확인일 경과"
-                          >
-                            <span className={`relative inline-block size-5 rounded-full ${dot}`} />
-                          </span>
-                        ) : null;
-                      })()}
+                      <button
+                        type="button"
+                        onClick={() => props.onToggleLargeFranchise(row)}
+                        aria-label={`${row.business_name || row.owner_name || "접수"} ${props.mode === "large_franchise" ? "가맹접수로 되돌리기" : "대형 가맹점으로 이동"}`}
+                        title={
+                          props.mode === "large_franchise"
+                            ? "가맹접수로 되돌리기"
+                            : "대형 가맹점으로 이동"
+                        }
+                        aria-pressed={props.mode === "large_franchise"}
+                        className="text-muted-foreground hover:text-foreground inline-flex size-8 items-center justify-center rounded-md transition-colors"
+                      >
+                        <Star
+                          className={`size-4 ${props.mode === "large_franchise" ? "fill-current text-amber-400" : ""}`}
+                        />
+                      </button>
                     </td>
                     <td className="px-2.5 py-2.5 whitespace-nowrap">
                       <input
@@ -975,13 +982,19 @@ export default function FranchiseReceiptSurface(props: Props) {
                       </select>
                     </td>
                     <td className="px-2.5 py-2.5 whitespace-nowrap">
-                      <input
-                        aria-label="확인일"
-                        type="date"
-                        value={row.next_check_date ?? ""}
-                        onChange={(event) => props.onSaveNextCheckDate(row, event.target.value)}
-                        className="h-auto border-none bg-transparent px-0 text-[12.5px] outline-none"
-                      />
+                      {(() => {
+                        const severity = nextCheckSeverity(row.next_check_date, props.todayDate);
+                        const color = nextCheckTextColor(severity);
+                        return (
+                          <input
+                            aria-label="확인일"
+                            type="date"
+                            value={row.next_check_date ?? ""}
+                            onChange={(event) => props.onSaveNextCheckDate(row, event.target.value)}
+                            className={`h-auto border-none bg-transparent px-0 text-[12.5px] outline-none ${color} ${severity > 0 ? "animate-pulse font-semibold" : ""}`}
+                          />
+                        );
+                      })()}
                     </td>
                     <td className="text-foreground min-w-[140px] px-2.5 py-2.5">
                       {memos.length > 0 ? (
