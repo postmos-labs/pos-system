@@ -80,12 +80,6 @@ export default async function MerchantDetailPage({ params }: Props) {
           <span>담당 영업: {merchant.sales?.name ?? "-"}</span>
           <span>등록일: {format(new Date(merchant.created_at), "yyyy.M.d", { locale: ko })}</span>
         </div>
-
-        {merchant.memo && (
-          <div className="mt-4 pt-4 border-t border-slate-100 text-sm text-slate-600 whitespace-pre-wrap">
-            {merchant.memo}
-          </div>
-        )}
       </div>
 
       <h2 className="text-sm font-semibold text-slate-900 mb-2">

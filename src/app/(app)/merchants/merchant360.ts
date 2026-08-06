@@ -1,4 +1,12 @@
-export type WorkHistoryCategory = "reception" | "install" | "as" | "change" | "post";
+export type WorkHistoryCategory =
+  | "reception"
+  | "install"
+  | "as"
+  | "change"
+  | "post"
+  | "memo_before"
+  | "memo_after_transfer"
+  | "memo_after_completion";
 
 export interface WorkHistoryItem {
   id: string;
@@ -18,7 +26,6 @@ export interface Merchant360Merchant {
   phone: string;
   address: string | null;
   address_detail: string | null;
-  memo: string | null;
   created_at: string;
   franchise_application_id?: string | null;
 }

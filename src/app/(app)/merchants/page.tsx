@@ -15,7 +15,7 @@ import {
   type TicketStatus,
 } from "@/types";
 import MerchantsClient from "./MerchantsClient";
-import type { Merchant360Merchant, WorkHistoryItem } from "./merchant360";
+import type { Merchant360Merchant, WorkHistoryCategory, WorkHistoryItem } from "./merchant360";
 
 const PAGE_SIZE = 50;
 
@@ -37,6 +37,49 @@ type TicketRow = {
   status: string;
   created_at: string;
 };
+
+type InstallationActivityLogRow = {
+  installation_id: string;
+  to_status: string | null;
+  created_at: string;
+};
+
+type MerchantMemoEntryRow = {
+  id: string;
+  content: string;
+  created_at: string;
+};
+
+function firstTimestamp(values: string[]) {
+  return values
+    .map((value) => new Date(value).getTime())
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b)[0];
+}
+
+function classifyMemo(
+  createdAt: string,
+  installations: InstallationRow[],
+  firstCompletionAt: number | undefined,
+): WorkHistoryCategory {
+  const activeInstallations = installations.filter(
+    (installation) => installation.status !== "rejected",
+  );
+  if (activeInstallations.length === 0) return "memo_before";
+
+  const memoAt = new Date(createdAt).getTime();
+  if (firstCompletionAt !== undefined && memoAt >= firstCompletionAt) {
+    return "memo_after_completion";
+  }
+
+  const firstTransferAt = firstTimestamp(
+    activeInstallations.map((installation) => installation.created_at),
+  );
+  if (firstTransferAt !== undefined && memoAt >= firstTransferAt) {
+    return "memo_after_transfer";
+  }
+  return "memo_before";
+}
 
 function installationStatusLabel(status: string, deliveryType: string | null) {
   if (status === "completed" && deliveryType === "as") return "AS완료";
@@ -75,7 +118,7 @@ async function loadMerchant360(
   const { data: merchant } = await supabase
     .from("merchants")
     .select(
-      "id,business_name,owner_name,phone,address,address_detail,memo,created_at,franchise_application_id",
+      "id,business_name,owner_name,phone,address,address_detail,created_at,franchise_application_id",
     )
     .eq("id", merchantId)
     .maybeSingle();
@@ -83,40 +126,50 @@ async function loadMerchant360(
   if (!merchant) return { merchant: null, history: [] };
 
   const franchiseApplicationId = merchant.franchise_application_id;
-  const [applicationResult, installationsResult, ticketsResult, changesResult, postHistoryResult] =
-    await Promise.all([
-      franchiseApplicationId
-        ? supabase
-            .from("franchise_applications")
-            .select("id,business_name,status,created_at")
-            .eq("id", franchiseApplicationId)
-            .maybeSingle()
-        : Promise.resolve({ data: null, error: null }),
-      franchiseApplicationId
-        ? supabase
-            .from("installations")
-            .select("id,customer_name,status,delivery_type,created_at")
-            .eq("franchise_application_id", franchiseApplicationId)
-            .in("delivery_type", ["install", "transfer", "as"])
-            .order("created_at", { ascending: false })
-        : Promise.resolve({ data: [] as InstallationRow[], error: null }),
-      supabase
-        .from("tickets")
-        .select("id,title,status,created_at")
-        .eq("merchant_id", merchantId)
-        .eq("type", "as")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("change_requests")
-        .select("id,business_name,change_type,status,before_value,after_value,created_at")
-        .eq("merchant_id", merchantId)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("installation_post_history")
-        .select("id,installation_id,content,created_at")
-        .eq("merchant_id", merchantId)
-        .order("created_at", { ascending: false }),
-    ]);
+  const [
+    applicationResult,
+    installationsResult,
+    ticketsResult,
+    changesResult,
+    postHistoryResult,
+    memoEntriesResult,
+  ] = await Promise.all([
+    franchiseApplicationId
+      ? supabase
+          .from("franchise_applications")
+          .select("id,business_name,status,created_at")
+          .eq("id", franchiseApplicationId)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    franchiseApplicationId
+      ? supabase
+          .from("installations")
+          .select("id,customer_name,status,delivery_type,created_at")
+          .eq("franchise_application_id", franchiseApplicationId)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] as InstallationRow[], error: null }),
+    supabase
+      .from("tickets")
+      .select("id,title,status,created_at")
+      .eq("merchant_id", merchantId)
+      .eq("type", "as")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("change_requests")
+      .select("id,business_name,change_type,status,before_value,after_value,created_at")
+      .eq("merchant_id", merchantId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("installation_post_history")
+      .select("id,installation_id,content,created_at")
+      .eq("merchant_id", merchantId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("merchant_memo_entries")
+      .select("id,content,created_at")
+      .eq("merchant_id", merchantId)
+      .order("created_at", { ascending: false }),
+  ]);
 
   const application = applicationResult.data as {
     id: string;
@@ -125,6 +178,15 @@ async function loadMerchant360(
     created_at: string;
   } | null;
   const installations = (installationsResult.data ?? []) as InstallationRow[];
+  const installationIds = installations.map((installation) => installation.id);
+  const activityLogsResult = installationIds.length
+    ? await supabase
+        .from("installation_activity_logs")
+        .select("installation_id,to_status,created_at")
+        .in("installation_id", installationIds)
+        .in("to_status", ["completed", "delivery_sent"])
+        .order("created_at", { ascending: true })
+    : { data: [] as InstallationActivityLogRow[], error: null };
   const tickets = (ticketsResult.data ?? []) as TicketRow[];
   const changes = (changesResult.data ?? []) as Array<{
     id: string;
@@ -143,6 +205,15 @@ async function loadMerchant360(
         content: string;
         created_at: string;
       }>);
+  const memoEntries = memoEntriesResult.error
+    ? []
+    : ((memoEntriesResult.data ?? []) as MerchantMemoEntryRow[]);
+  const activityLogs = (activityLogsResult.data ?? []) as InstallationActivityLogRow[];
+  const firstCompletionAt = firstTimestamp(
+    activityLogs
+      .filter((log) => log.to_status === "completed" || log.to_status === "delivery_sent")
+      .map((log) => log.created_at),
+  );
 
   const history: WorkHistoryItem[] = [];
   if (application) {
@@ -159,7 +230,9 @@ async function loadMerchant360(
     });
   }
 
-  for (const installation of installations) {
+  for (const installation of installations.filter((item) =>
+    ["install", "transfer", "as"].includes(item.delivery_type ?? ""),
+  )) {
     const isAs = installation.delivery_type === "as";
     const status = installationStatusLabel(installation.status, installation.delivery_type);
     history.push({
@@ -217,6 +290,32 @@ async function loadMerchant360(
     });
   }
 
+  for (const memo of memoEntries) {
+    const category = classifyMemo(memo.created_at, installations, firstCompletionAt);
+    const categoryLabel =
+      category === "memo_before"
+        ? "이관 전"
+        : category === "memo_after_transfer"
+          ? "이관 후"
+          : "설치완료 후";
+    const categoryClass =
+      category === "memo_before"
+        ? "bg-slate-100 text-slate-600"
+        : category === "memo_after_transfer"
+          ? "bg-blue-50 text-blue-600"
+          : "bg-emerald-50 text-emerald-600";
+    history.push({
+      id: memo.id,
+      date: memo.created_at,
+      title: "가맹점 메모",
+      summary: memo.content,
+      category,
+      status: categoryLabel,
+      statusClass: categoryClass,
+      href: `/merchants?id=${merchantId}`,
+    });
+  }
+
   history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   return { merchant: merchant as Merchant360Merchant, history };
 }
@@ -234,7 +333,7 @@ export default async function MerchantsPage({ searchParams }: Props) {
   const { data: merchants, count } = await supabase
     .from("merchants")
     .select(
-      "id,business_name,owner_name,phone,address,address_detail,memo,created_at,franchise_application_id",
+      "id,business_name,owner_name,phone,address,address_detail,created_at,franchise_application_id",
       { count: "exact" },
     )
     .order("created_at", { ascending: false })
