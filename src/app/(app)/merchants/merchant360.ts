@@ -3,10 +3,7 @@ export type WorkHistoryCategory =
   | "install"
   | "as"
   | "change"
-  | "post"
-  | "memo_before"
-  | "memo_after_transfer"
-  | "memo_after_completion";
+  | "post";
 
 export interface WorkHistoryItem {
   id: string;

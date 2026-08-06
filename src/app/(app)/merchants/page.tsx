@@ -15,7 +15,7 @@ import {
   type TicketStatus,
 } from "@/types";
 import MerchantsClient from "./MerchantsClient";
-import type { Merchant360Merchant, WorkHistoryCategory, WorkHistoryItem } from "./merchant360";
+import type { Merchant360Merchant, WorkHistoryItem } from "./merchant360";
 
 const PAGE_SIZE = 50;
 
@@ -37,49 +37,6 @@ type TicketRow = {
   status: string;
   created_at: string;
 };
-
-type InstallationActivityLogRow = {
-  installation_id: string;
-  to_status: string | null;
-  created_at: string;
-};
-
-type MerchantMemoEntryRow = {
-  id: string;
-  content: string;
-  created_at: string;
-};
-
-function firstTimestamp(values: string[]) {
-  return values
-    .map((value) => new Date(value).getTime())
-    .filter(Number.isFinite)
-    .sort((a, b) => a - b)[0];
-}
-
-function classifyMemo(
-  createdAt: string,
-  installations: InstallationRow[],
-  firstCompletionAt: number | undefined,
-): WorkHistoryCategory {
-  const activeInstallations = installations.filter(
-    (installation) => installation.status !== "rejected",
-  );
-  if (activeInstallations.length === 0) return "memo_before";
-
-  const memoAt = new Date(createdAt).getTime();
-  if (firstCompletionAt !== undefined && memoAt >= firstCompletionAt) {
-    return "memo_after_completion";
-  }
-
-  const firstTransferAt = firstTimestamp(
-    activeInstallations.map((installation) => installation.created_at),
-  );
-  if (firstTransferAt !== undefined && memoAt >= firstTransferAt) {
-    return "memo_after_transfer";
-  }
-  return "memo_before";
-}
 
 function installationStatusLabel(status: string, deliveryType: string | null) {
   if (status === "completed" && deliveryType === "as") return "AS완료";
@@ -132,7 +89,6 @@ async function loadMerchant360(
     ticketsResult,
     changesResult,
     postHistoryResult,
-    memoEntriesResult,
   ] = await Promise.all([
     franchiseApplicationId
       ? supabase
@@ -164,11 +120,6 @@ async function loadMerchant360(
       .select("id,installation_id,content,created_at")
       .eq("merchant_id", merchantId)
       .order("created_at", { ascending: false }),
-    supabase
-      .from("merchant_memo_entries")
-      .select("id,content,created_at")
-      .eq("merchant_id", merchantId)
-      .order("created_at", { ascending: false }),
   ]);
 
   const application = applicationResult.data as {
@@ -178,15 +129,6 @@ async function loadMerchant360(
     created_at: string;
   } | null;
   const installations = (installationsResult.data ?? []) as InstallationRow[];
-  const installationIds = installations.map((installation) => installation.id);
-  const activityLogsResult = installationIds.length
-    ? await supabase
-        .from("installation_activity_logs")
-        .select("installation_id,to_status,created_at")
-        .in("installation_id", installationIds)
-        .in("to_status", ["completed", "delivery_sent"])
-        .order("created_at", { ascending: true })
-    : { data: [] as InstallationActivityLogRow[], error: null };
   const tickets = (ticketsResult.data ?? []) as TicketRow[];
   const changes = (changesResult.data ?? []) as Array<{
     id: string;
@@ -205,15 +147,6 @@ async function loadMerchant360(
         content: string;
         created_at: string;
       }>);
-  const memoEntries = memoEntriesResult.error
-    ? []
-    : ((memoEntriesResult.data ?? []) as MerchantMemoEntryRow[]);
-  const activityLogs = (activityLogsResult.data ?? []) as InstallationActivityLogRow[];
-  const firstCompletionAt = firstTimestamp(
-    activityLogs
-      .filter((log) => log.to_status === "completed" || log.to_status === "delivery_sent")
-      .map((log) => log.created_at),
-  );
 
   const history: WorkHistoryItem[] = [];
   if (application) {
@@ -287,32 +220,6 @@ async function loadMerchant360(
       status: "기록",
       statusClass: "bg-violet-50 text-violet-600",
       href: `/installs?id=${item.installation_id}`,
-    });
-  }
-
-  for (const memo of memoEntries) {
-    const category = classifyMemo(memo.created_at, installations, firstCompletionAt);
-    const categoryLabel =
-      category === "memo_before"
-        ? "이관 전"
-        : category === "memo_after_transfer"
-          ? "이관 후"
-          : "설치완료 후";
-    const categoryClass =
-      category === "memo_before"
-        ? "bg-slate-100 text-slate-600"
-        : category === "memo_after_transfer"
-          ? "bg-blue-50 text-blue-600"
-          : "bg-emerald-50 text-emerald-600";
-    history.push({
-      id: memo.id,
-      date: memo.created_at,
-      title: "가맹점 메모",
-      summary: memo.content,
-      category,
-      status: categoryLabel,
-      statusClass: categoryClass,
-      href: `/merchants?id=${merchantId}`,
     });
   }
 

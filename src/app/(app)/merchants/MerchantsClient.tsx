@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { ExternalLink, MapPin, Phone, Search } from "lucide-react";
-import { addMerchantMemo, deleteMerchants } from "./actions";
+import { deleteMerchants } from "./actions";
 import type { Merchant360Merchant, WorkHistoryCategory, WorkHistoryItem } from "./merchant360";
 import EmptyState from "@/components/ui/EmptyState";
 import BulkDeleteActions from "@/components/ui/BulkDeleteActions";
@@ -28,9 +28,6 @@ const HISTORY_TABS: Array<{ key: "all" | WorkHistoryCategory; label: string }> =
   { key: "as", label: "AS" },
   { key: "change", label: "변경" },
   { key: "post", label: "설치·배송 이후 히스토리" },
-  { key: "memo_before", label: "이관 전 메모" },
-  { key: "memo_after_transfer", label: "이관 후 메모" },
-  { key: "memo_after_completion", label: "설치완료 후 메모" },
 ];
 
 const HISTORY_CATEGORY_LABEL: Record<WorkHistoryCategory, string> = {
@@ -39,9 +36,6 @@ const HISTORY_CATEGORY_LABEL: Record<WorkHistoryCategory, string> = {
   as: "AS",
   change: "변경",
   post: "설치·배송 이후",
-  memo_before: "이관 전 메모",
-  memo_after_transfer: "이관 후 메모",
-  memo_after_completion: "설치완료 후 메모",
 };
 
 function formatDate(value: string) {
@@ -64,10 +58,7 @@ function MerchantDetailPanel({
   merchant: Merchant360Merchant | null;
   history: WorkHistoryItem[];
 }) {
-  const router = useRouter();
   const [tab, setTab] = useState<"all" | WorkHistoryCategory>("all");
-  const [memoContent, setMemoContent] = useState("");
-  const [memoSubmitting, setMemoSubmitting] = useState(false);
 
   const filteredHistory = useMemo(
     () => (tab === "all" ? history : history.filter((item) => item.category === tab)),
@@ -82,30 +73,6 @@ function MerchantDetailPanel({
     );
   }
 
-  const merchantRecord = merchant;
-
-  async function submitMemo(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!memoContent.trim()) {
-      alert("메모 내용을 입력해주세요.");
-      return;
-    }
-
-    setMemoSubmitting(true);
-    const result = await addMerchantMemo(merchantRecord.id, memoContent);
-    setMemoSubmitting(false);
-    if (result.error) {
-      alert("메모 등록 실패: " + result.error);
-      return;
-    }
-    if (result.skipped) {
-      alert("메모 테이블이 아직 적용되지 않아 저장하지 않았습니다.");
-      return;
-    }
-    setMemoContent("");
-    router.refresh();
-  }
-
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <div className="shrink-0 border-b border-slate-100 px-5 py-5 md:px-6">
@@ -117,35 +84,6 @@ function MerchantDetailPanel({
           <DetailField label="주소" value={merchant.address} />
           <DetailField label="상세주소" value={merchant.address_detail} />
         </div>
-        <form
-          onSubmit={submitMemo}
-          className="mt-4 rounded-xl border border-blue-100 bg-blue-50/40 p-3"
-        >
-          <label
-            htmlFor="merchant-memo"
-            className="mb-2 block text-xs font-semibold text-slate-600"
-          >
-            메모 추가
-          </label>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <textarea
-              id="merchant-memo"
-              value={memoContent}
-              onChange={(event) => setMemoContent(event.target.value)}
-              placeholder="가맹점 관련 메모를 입력하세요"
-              rows={2}
-              maxLength={2000}
-              className="min-h-16 flex-1 resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-            />
-            <button
-              type="submit"
-              disabled={memoSubmitting || !memoContent.trim()}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              {memoSubmitting ? "등록 중..." : "등록"}
-            </button>
-          </div>
-        </form>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col px-5 py-5 md:px-6">
