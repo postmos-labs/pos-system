@@ -402,9 +402,13 @@ export default function FranchiseReceiptSurface(props: Props) {
     <div className="flex min-h-0 flex-1 flex-col gap-5 p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-foreground text-2xl font-bold tracking-tight">가맹 접수 관리</h1>
+          <h1 className="text-foreground text-2xl font-bold tracking-tight">
+            {props.mode === "large_franchise" ? "대형 가맹점" : "가맹 접수 관리"}
+          </h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            가맹 접수부터 기술지원 이관과 설치 완료까지 관리합니다.
+            {props.mode === "large_franchise"
+              ? "대형 가맹점으로 지정한 접수 건을 모아봅니다."
+              : "가맹 접수부터 기술지원 이관과 설치 완료까지 관리합니다."}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -419,202 +423,210 @@ export default function FranchiseReceiptSurface(props: Props) {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-md">
-        <RateBadge
-          title="접수 성공률"
-          description="접수 등록 건 중 카드가맹접수/토스심사접수완료 단계 이상에 도달한 비율"
-          icon={PercentIcon}
-          tone="fuchsia"
-          stats={[
-            {
-              rate: props.successRateStats.rate,
-              label: "선택 기간",
-              detail: `${props.successRateStats.success}/${props.successRateStats.total}건`,
-            },
-          ]}
-          controls={
-            <div className="flex items-center gap-1">
-              <input
-                aria-label="성공률 시작일"
-                type="date"
-                value={props.successRateFrom}
-                onChange={(event) => props.onSuccessRateFromChange(event.target.value)}
-                className={`${selectBase} h-7 w-[120px] text-xs`}
-              />
-              <span className="text-muted-foreground text-xs">~</span>
-              <input
-                aria-label="성공률 종료일"
-                type="date"
-                value={props.successRateTo}
-                onChange={(event) => props.onSuccessRateToChange(event.target.value)}
-                className={`${selectBase} h-7 w-[120px] text-xs`}
-              />
-            </div>
-          }
-        />
-      </div>
+      {props.mode !== "large_franchise" && (
+        <div className="mx-auto w-full max-w-md">
+          <RateBadge
+            title="접수 성공률"
+            description="접수 등록 건 중 카드가맹접수/토스심사접수완료 단계 이상에 도달한 비율"
+            icon={PercentIcon}
+            tone="fuchsia"
+            stats={[
+              {
+                rate: props.successRateStats.rate,
+                label: "선택 기간",
+                detail: `${props.successRateStats.success}/${props.successRateStats.total}건`,
+              },
+            ]}
+            controls={
+              <div className="flex items-center gap-1">
+                <input
+                  aria-label="성공률 시작일"
+                  type="date"
+                  value={props.successRateFrom}
+                  onChange={(event) => props.onSuccessRateFromChange(event.target.value)}
+                  className={`${selectBase} h-7 w-[120px] text-xs`}
+                />
+                <span className="text-muted-foreground text-xs">~</span>
+                <input
+                  aria-label="성공률 종료일"
+                  type="date"
+                  value={props.successRateTo}
+                  onChange={(event) => props.onSuccessRateToChange(event.target.value)}
+                  className={`${selectBase} h-7 w-[120px] text-xs`}
+                />
+              </div>
+            }
+          />
+        </div>
+      )}
 
-      <div className="flex items-stretch gap-2.5">
-        <div className="border-border bg-card shadow-card flex flex-1 flex-col gap-3 rounded-xl border p-4">
-          <button
-            type="button"
-            onClick={() => props.onKpiChange("today_received")}
-            className="hover:text-primary focus-visible:ring-primary/30 flex items-center justify-between rounded-lg text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
-          >
-            <span className="flex items-center gap-2 text-sm font-bold">
-              <span className="flex size-6.5 items-center justify-center rounded-full bg-blue-500/12 text-blue-600">
-                <FileTextIcon className="size-3.5" />
-              </span>
-              접수
-            </span>
-            <ChevronRightIcon className="text-muted-foreground size-4" />
-          </button>
-          <div className="flex items-stretch gap-3.5">
+      {props.mode !== "large_franchise" && (
+        <div className="flex items-stretch gap-2.5">
+          <div className="border-border bg-card shadow-card flex flex-1 flex-col gap-3 rounded-xl border p-4">
             <button
               type="button"
               onClick={() => props.onKpiChange("today_received")}
-              className="focus-visible:ring-primary/30 flex flex-1 flex-col gap-1 rounded-lg text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              className="hover:text-primary focus-visible:ring-primary/30 flex items-center justify-between rounded-lg text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
             >
-              <span className="text-muted-foreground text-xs">오늘 접수</span>
-              <span className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-bold text-blue-600">
-                  {props.stageStats.todayReceived}
+              <span className="flex items-center gap-2 text-sm font-bold">
+                <span className="flex size-6.5 items-center justify-center rounded-full bg-blue-500/12 text-blue-600">
+                  <FileTextIcon className="size-3.5" />
                 </span>
-                {trendBadge(props.stageStats.todayReceivedTrend)}
+                접수
               </span>
+              <ChevronRightIcon className="text-muted-foreground size-4" />
             </button>
-            <span className="border-border w-px border-l" />
-            <div className="flex flex-1 flex-col justify-between gap-1.5">
+            <div className="flex items-stretch gap-3.5">
               <button
                 type="button"
-                onClick={() => props.onKpiChange("doc_waiting")}
-                className="hover:text-primary focus-visible:ring-primary/30 flex items-center justify-between rounded text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                onClick={() => props.onKpiChange("today_received")}
+                className="focus-visible:ring-primary/30 flex flex-1 flex-col gap-1 rounded-lg text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
               >
-                <span className="text-muted-foreground flex items-center gap-1.5">
-                  <ClockIcon className="size-3 text-amber-500" />
-                  서류 대기
+                <span className="text-muted-foreground text-xs">오늘 접수</span>
+                <span className="flex items-baseline gap-1.5">
+                  <span className="text-2xl font-bold text-blue-600">
+                    {props.stageStats.todayReceived}
+                  </span>
+                  {trendBadge(props.stageStats.todayReceivedTrend)}
                 </span>
-                <span className="ml-2 font-bold">{props.stageStats.docWaiting}</span>
               </button>
-              <button
-                type="button"
-                onClick={() => props.onKpiChange("doc_incomplete")}
-                className="hover:text-primary focus-visible:ring-primary/30 flex items-center justify-between rounded text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
-              >
-                <span className="text-muted-foreground flex items-center gap-1.5">
-                  <FileWarningIcon className="size-3 text-red-500" />
-                  서류 미비
-                </span>
-                <span className="ml-2 font-bold">{props.stageStats.docIncomplete}</span>
-              </button>
+              <span className="border-border w-px border-l" />
+              <div className="flex flex-1 flex-col justify-between gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => props.onKpiChange("doc_waiting")}
+                  className="hover:text-primary focus-visible:ring-primary/30 flex items-center justify-between rounded text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                >
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <ClockIcon className="size-3 text-amber-500" />
+                    서류 대기
+                  </span>
+                  <span className="ml-2 font-bold">{props.stageStats.docWaiting}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => props.onKpiChange("doc_incomplete")}
+                  className="hover:text-primary focus-visible:ring-primary/30 flex items-center justify-between rounded text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                >
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <FileWarningIcon className="size-3 text-red-500" />
+                    서류 미비
+                  </span>
+                  <span className="ml-2 font-bold">{props.stageStats.docIncomplete}</span>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <button
-          type="button"
-          onClick={() => props.onKpiChange("reviewing")}
-          className="border-border bg-card shadow-card hover:border-primary/40 focus-visible:border-primary focus-visible:ring-primary/30 flex flex-[0.65] flex-col gap-3 rounded-xl border p-4 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
-        >
-          <span className="flex items-center justify-between">
-            <span className="flex items-center gap-2 text-sm font-bold">
-              <span className="flex size-6.5 items-center justify-center rounded-full bg-purple-500/12 text-purple-600">
-                <SearchIcon className="size-3.5" />
-              </span>
-              진행
-            </span>
-            <ChevronRightIcon className="text-muted-foreground size-4" />
-          </span>
-          <span className="flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">심사 중</span>
-            <span className="text-2xl font-bold text-purple-600">{props.stageStats.reviewing}</span>
-          </span>
-        </button>
-
-        <div className="border-border bg-card shadow-card flex flex-1 flex-col gap-3 rounded-xl border p-4">
           <button
             type="button"
-            onClick={() => props.onKpiChange("today_completed")}
-            className="hover:text-primary focus-visible:ring-primary/30 flex items-center justify-between rounded-lg text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            onClick={() => props.onKpiChange("reviewing")}
+            className="border-border bg-card shadow-card hover:border-primary/40 focus-visible:border-primary focus-visible:ring-primary/30 flex flex-[0.65] flex-col gap-3 rounded-xl border p-4 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
-            <span className="flex items-center gap-2 text-sm font-bold">
-              <span className="flex size-6.5 items-center justify-center rounded-full bg-emerald-500/12 text-emerald-600">
-                <CheckIcon className="size-3.5" />
+            <span className="flex items-center justify-between">
+              <span className="flex items-center gap-2 text-sm font-bold">
+                <span className="flex size-6.5 items-center justify-center rounded-full bg-purple-500/12 text-purple-600">
+                  <SearchIcon className="size-3.5" />
+                </span>
+                진행
               </span>
-              종료
+              <ChevronRightIcon className="text-muted-foreground size-4" />
             </span>
-            <ChevronRightIcon className="text-muted-foreground size-4" />
+            <span className="flex flex-col gap-1">
+              <span className="text-muted-foreground text-xs">심사 중</span>
+              <span className="text-2xl font-bold text-purple-600">
+                {props.stageStats.reviewing}
+              </span>
+            </span>
           </button>
-          <div className="flex items-stretch gap-3.5">
+
+          <div className="border-border bg-card shadow-card flex flex-1 flex-col gap-3 rounded-xl border p-4">
             <button
               type="button"
               onClick={() => props.onKpiChange("today_completed")}
-              className="focus-visible:ring-primary/30 flex flex-1 flex-col gap-1 rounded-lg text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              className="hover:text-primary focus-visible:ring-primary/30 flex items-center justify-between rounded-lg text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
             >
-              <span className="text-muted-foreground text-xs">오늘 완료</span>
-              <span className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-bold text-emerald-600">
-                  {props.stageStats.todayCompleted}
+              <span className="flex items-center gap-2 text-sm font-bold">
+                <span className="flex size-6.5 items-center justify-center rounded-full bg-emerald-500/12 text-emerald-600">
+                  <CheckIcon className="size-3.5" />
                 </span>
-                {trendBadge(props.stageStats.todayCompletedTrend)}
+                종료
               </span>
+              <ChevronRightIcon className="text-muted-foreground size-4" />
             </button>
-            <span className="border-border w-px border-l" />
-            <div className="flex flex-1 flex-col justify-between gap-1.5">
+            <div className="flex items-stretch gap-3.5">
               <button
                 type="button"
-                onClick={() => props.onTableViewChange("canceled")}
-                className="hover:text-primary focus-visible:ring-primary/30 flex items-center justify-between rounded text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                onClick={() => props.onKpiChange("today_completed")}
+                className="focus-visible:ring-primary/30 flex flex-1 flex-col gap-1 rounded-lg text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
               >
-                <span className="text-muted-foreground flex items-center gap-1.5">
-                  <XCircleIcon className="size-3 text-rose-500" />
-                  접수 취소
+                <span className="text-muted-foreground text-xs">오늘 완료</span>
+                <span className="flex items-baseline gap-1.5">
+                  <span className="text-2xl font-bold text-emerald-600">
+                    {props.stageStats.todayCompleted}
+                  </span>
+                  {trendBadge(props.stageStats.todayCompletedTrend)}
                 </span>
-                <span className="ml-2 font-bold">{props.stageStats.canceled}</span>
               </button>
-              <button
-                type="button"
-                onClick={() => props.onKpiChange("persistent_absence")}
-                className="hover:text-primary focus-visible:ring-primary/30 flex items-center justify-between rounded text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
-              >
-                <span className="text-muted-foreground flex items-center gap-1.5">
-                  <UserXIcon className="size-3 text-orange-500" />
-                  지속적 부재
-                </span>
-                <span className="ml-2 font-bold">{props.stageStats.persistentAbsence}</span>
-              </button>
+              <span className="border-border w-px border-l" />
+              <div className="flex flex-1 flex-col justify-between gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => props.onTableViewChange("canceled")}
+                  className="hover:text-primary focus-visible:ring-primary/30 flex items-center justify-between rounded text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                >
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <XCircleIcon className="size-3 text-rose-500" />
+                    접수 취소
+                  </span>
+                  <span className="ml-2 font-bold">{props.stageStats.canceled}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => props.onKpiChange("persistent_absence")}
+                  className="hover:text-primary focus-visible:ring-primary/30 flex items-center justify-between rounded text-left text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                >
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <UserXIcon className="size-3 text-orange-500" />
+                    지속적 부재
+                  </span>
+                  <span className="ml-2 font-bold">{props.stageStats.persistentAbsence}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="border-border bg-card flex flex-wrap items-center gap-4 rounded-xl border px-4 py-3">
-        <span className="flex items-center gap-2 text-sm font-bold whitespace-nowrap">
-          <span className="flex size-6.5 items-center justify-center rounded-full bg-blue-500/12 text-blue-600">
-            <PercentIcon className="size-3.5" />
+      {props.mode !== "large_franchise" && (
+        <div className="border-border bg-card flex flex-wrap items-center gap-4 rounded-xl border px-4 py-3">
+          <span className="flex items-center gap-2 text-sm font-bold whitespace-nowrap">
+            <span className="flex size-6.5 items-center justify-center rounded-full bg-blue-500/12 text-blue-600">
+              <PercentIcon className="size-3.5" />
+            </span>
+            전체 진행 현황
           </span>
-          전체 진행 현황
-        </span>
-        <span className="text-muted-foreground text-xs whitespace-nowrap tabular-nums">
-          {props.stageStats.approvedTotal} / {props.stageStats.total}건
-        </span>
-        <div className="bg-muted relative h-1.5 min-w-24 flex-1 overflow-hidden rounded-full">
-          <div
-            className="absolute inset-y-0 left-0 rounded-full bg-blue-500"
-            style={{ width: `${props.stageStats.overallCompletionRate}%` }}
-          />
+          <span className="text-muted-foreground text-xs whitespace-nowrap tabular-nums">
+            {props.stageStats.approvedTotal} / {props.stageStats.total}건
+          </span>
+          <div className="bg-muted relative h-1.5 min-w-24 flex-1 overflow-hidden rounded-full">
+            <div
+              className="absolute inset-y-0 left-0 rounded-full bg-blue-500"
+              style={{ width: `${props.stageStats.overallCompletionRate}%` }}
+            />
+          </div>
+          <span className="text-sm font-bold whitespace-nowrap tabular-nums">
+            {props.stageStats.overallCompletionRate}%
+          </span>
+          <span className="bg-emerald-500/12 text-emerald-700 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold whitespace-nowrap">
+            <TrophyIcon className="size-3.5" />
+            오늘 완료율{" "}
+            {props.stageStats.todayCompletionRate === null
+              ? "-"
+              : `${props.stageStats.todayCompletionRate}%`}
+          </span>
         </div>
-        <span className="text-sm font-bold whitespace-nowrap tabular-nums">
-          {props.stageStats.overallCompletionRate}%
-        </span>
-        <span className="bg-emerald-500/12 text-emerald-700 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold whitespace-nowrap">
-          <TrophyIcon className="size-3.5" />
-          오늘 완료율{" "}
-          {props.stageStats.todayCompletionRate === null
-            ? "-"
-            : `${props.stageStats.todayCompletionRate}%`}
-        </span>
-      </div>
+      )}
 
       <div className="border-border bg-card flex flex-col gap-2.5 rounded-xl border p-3.5">
         <div className="flex items-center gap-2">
