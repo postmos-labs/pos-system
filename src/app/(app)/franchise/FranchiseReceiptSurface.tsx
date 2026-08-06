@@ -424,44 +424,42 @@ export default function FranchiseReceiptSurface(props: Props) {
       </div>
 
       {props.mode !== "large_franchise" && (
-        <div className="mx-auto w-full max-w-md">
-          <RateBadge
-            title="접수 성공률"
-            description="접수 등록 건 중 카드가맹접수/토스심사접수완료 단계 이상에 도달한 비율"
-            icon={PercentIcon}
-            tone="fuchsia"
-            stats={[
-              {
-                rate: props.successRateStats.rate,
-                label: "선택 기간",
-                detail: `${props.successRateStats.success}/${props.successRateStats.total}건`,
-              },
-            ]}
-            controls={
-              <div className="flex items-center gap-1">
-                <input
-                  aria-label="성공률 시작일"
-                  type="date"
-                  value={props.successRateFrom}
-                  onChange={(event) => props.onSuccessRateFromChange(event.target.value)}
-                  className={`${selectBase} h-7 w-[120px] text-xs`}
-                />
-                <span className="text-muted-foreground text-xs">~</span>
-                <input
-                  aria-label="성공률 종료일"
-                  type="date"
-                  value={props.successRateTo}
-                  onChange={(event) => props.onSuccessRateToChange(event.target.value)}
-                  className={`${selectBase} h-7 w-[120px] text-xs`}
-                />
-              </div>
-            }
-          />
-        </div>
-      )}
-
-      {props.mode !== "large_franchise" && (
         <div className="flex items-stretch gap-2.5">
+          <div className="min-w-0 flex-[0.85]">
+            <RateBadge
+              title="접수 성공률"
+              description="접수 등록 건 중 카드가맹접수/토스심사접수완료 단계 이상에 도달한 비율"
+              icon={PercentIcon}
+              tone="fuchsia"
+              variant="flat"
+              stats={[
+                {
+                  rate: props.successRateStats.rate,
+                  label: "선택 기간",
+                  detail: `${props.successRateStats.success}/${props.successRateStats.total}건`,
+                },
+              ]}
+              controls={
+                <div className="flex w-full items-center justify-end gap-1">
+                  <input
+                    aria-label="성공률 시작일"
+                    type="date"
+                    value={props.successRateFrom}
+                    onChange={(event) => props.onSuccessRateFromChange(event.target.value)}
+                    className="border-border bg-surface-subtle h-[22px] w-[78px] rounded-md border px-1 text-[10px] outline-none"
+                  />
+                  <span className="text-muted-foreground text-[10px]">~</span>
+                  <input
+                    aria-label="성공률 종료일"
+                    type="date"
+                    value={props.successRateTo}
+                    onChange={(event) => props.onSuccessRateToChange(event.target.value)}
+                    className="border-border bg-surface-subtle h-[22px] w-[78px] rounded-md border px-1 text-[10px] outline-none"
+                  />
+                </div>
+              }
+            />
+          </div>
           <div className="border-border bg-card shadow-card flex flex-1 flex-col gap-3 rounded-xl border p-4">
             <button
               type="button"

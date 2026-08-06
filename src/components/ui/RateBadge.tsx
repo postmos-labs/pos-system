@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 
 export type RateBadgeTone = "fuchsia" | "blue" | "orange";
+export type RateBadgeVariant = "raised" | "flat";
 
 const TONE_CLASSES: Record<
   RateBadgeTone,
@@ -10,6 +11,7 @@ const TONE_CLASSES: Record<
     ring: string;
     track: string;
     icon: string;
+    flatIcon: string;
     text: string;
     sub: string;
   }
@@ -20,6 +22,7 @@ const TONE_CLASSES: Record<
     ring: "#c026d3",
     track: "#f5d0fe",
     icon: "bg-fuchsia-500/15 text-fuchsia-600",
+    flatIcon: "bg-fuchsia-500/12 text-fuchsia-600",
     text: "text-fuchsia-700",
     sub: "text-fuchsia-500/80",
   },
@@ -29,6 +32,7 @@ const TONE_CLASSES: Record<
     ring: "#2563eb",
     track: "#bfdbfe",
     icon: "bg-blue-500/15 text-blue-600",
+    flatIcon: "bg-blue-500/12 text-blue-600",
     text: "text-blue-700",
     sub: "text-blue-500/80",
   },
@@ -38,6 +42,7 @@ const TONE_CLASSES: Record<
     ring: "#ea580c",
     track: "#fed7aa",
     icon: "bg-orange-500/15 text-orange-600",
+    flatIcon: "bg-orange-500/12 text-orange-600",
     text: "text-orange-700",
     sub: "text-orange-500/80",
   },
@@ -104,6 +109,7 @@ interface Props {
   description: string;
   icon: LucideIcon;
   tone: RateBadgeTone;
+  variant?: RateBadgeVariant;
   stats: RateBadgeStat[];
   controls?: React.ReactNode;
 }
@@ -113,27 +119,46 @@ export default function RateBadge({
   description,
   icon: Icon,
   tone,
+  variant = "raised",
   stats,
   controls,
 }: Props) {
   const colors = TONE_CLASSES[tone];
+  const isFlat = variant === "flat";
   return (
     <div
       title={description}
-      className={`shadow-card flex w-full flex-col gap-3 rounded-xl border bg-gradient-to-br px-6 py-5 ${colors.border} ${colors.bg}`}
+      className={
+        isFlat
+          ? "border-border bg-card shadow-card flex h-full w-full flex-col gap-3 rounded-xl border p-4"
+          : `shadow-card flex w-full flex-col gap-3 rounded-xl border bg-gradient-to-br px-6 py-5 ${colors.border} ${colors.bg}`
+      }
     >
-      <div className="flex items-center gap-5">
+      <div className={`flex items-center ${isFlat ? "min-w-0 gap-2" : "gap-5"}`}>
         <span
-          className={`flex size-11 shrink-0 items-center justify-center rounded-full ${colors.icon}`}
+          className={`flex shrink-0 items-center justify-center rounded-full ${isFlat ? `size-6.5 ${colors.flatIcon}` : `size-11 ${colors.icon}`}`}
         >
-          <Icon className="size-5" />
+          <Icon className={isFlat ? "size-3.5" : "size-5"} />
         </span>
-        <span className={`block shrink-0 text-sm font-semibold ${colors.text}`}>{title}</span>
-        <span className="ml-auto flex items-center gap-5">
+        <span
+          className={
+            isFlat
+              ? "text-foreground block min-w-0 truncate text-sm font-bold"
+              : `block shrink-0 text-sm font-semibold ${colors.text}`
+          }
+        >
+          {title}
+        </span>
+        <span className={`ml-auto flex items-center ${isFlat ? "min-w-0 gap-2" : "gap-5"}`}>
           {stats.map((stat) => (
-            <span key={stat.label} className="flex flex-col items-center gap-1">
-              <RateRing rate={stat.rate} colors={colors} />
-              <span className={`text-[11px] font-medium ${colors.sub}`}>
+            <span
+              key={stat.label}
+              className={`flex flex-col items-center ${isFlat ? "gap-0.5" : "gap-1"}`}
+            >
+              <RateRing rate={stat.rate} size={isFlat ? 48 : 64} colors={colors} />
+              <span
+                className={`${isFlat ? "text-[10px]" : "text-[11px]"} whitespace-nowrap font-medium ${colors.sub}`}
+              >
                 {stat.label}
                 {stat.detail ? ` · ${stat.detail}` : ""}
               </span>
@@ -141,7 +166,17 @@ export default function RateBadge({
           ))}
         </span>
       </div>
-      {controls && <div className="flex items-center justify-end">{controls}</div>}
+      {controls && (
+        <div
+          className={
+            isFlat
+              ? "border-border flex items-center justify-end border-t pt-2.5"
+              : "flex items-center justify-end"
+          }
+        >
+          {controls}
+        </div>
+      )}
     </div>
   );
 }
