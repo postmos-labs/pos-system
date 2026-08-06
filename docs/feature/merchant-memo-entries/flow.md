@@ -16,3 +16,9 @@
 ```
 
 분류값은 저장하지 않고 매 조회마다 계산한다. 따라서 설치 상태가 변경되거나 완료 활동 로그가 추가되어도 과거 메모가 현재 업무 흐름에 맞는 탭으로 이동한다.
+
+## 2026-08-06 current audit
+
+- Already present and reused: `102_merchant_memo_entries.sql`, `103_merchant_memo_entries_backfill.sql`, and `addMerchantMemo()` in `merchants/actions.ts`.
+- Added: the merchant 360 query now defensively reads `merchant_memo_entries` with a `profiles` author join, recalculates stages from installations/activity logs, and returns an empty memo list when the new table is unavailable.
+- Added: the client now renders memo history as an independent section with a separate input, newest-first entries, timestamp/author text, and a stage badge; work-history tabs remain independent.

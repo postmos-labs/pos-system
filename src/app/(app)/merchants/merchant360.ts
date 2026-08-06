@@ -1,9 +1,6 @@
-export type WorkHistoryCategory =
-  | "reception"
-  | "install"
-  | "as"
-  | "change"
-  | "post";
+export type WorkHistoryCategory = "reception" | "install" | "as" | "change" | "post";
+
+export type MerchantMemoStage = "before_transfer" | "after_transfer" | "after_completion";
 
 export interface WorkHistoryItem {
   id: string;
@@ -14,6 +11,15 @@ export interface WorkHistoryItem {
   status: string;
   statusClass: string;
   href: string;
+}
+
+export interface MerchantMemoEntry {
+  id: string;
+  content: string;
+  created_at: string;
+  created_by: string | null;
+  author_name: string | null;
+  stage: MerchantMemoStage;
 }
 
 export interface Merchant360Merchant {

@@ -1,13 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { ExternalLink, MapPin, Phone, Search } from "lucide-react";
-import { deleteMerchants } from "./actions";
-import type { Merchant360Merchant, WorkHistoryCategory, WorkHistoryItem } from "./merchant360";
+import { addMerchantMemo, deleteMerchants } from "./actions";
+import type {
+  Merchant360Merchant,
+  MerchantMemoEntry,
+  MerchantMemoStage,
+  WorkHistoryCategory,
+  WorkHistoryItem,
+} from "./merchant360";
 import EmptyState from "@/components/ui/EmptyState";
 import BulkDeleteActions from "@/components/ui/BulkDeleteActions";
 import BulkConfirmDialog from "@/components/ui/BulkConfirmDialog";
@@ -17,6 +23,7 @@ interface Props {
   selectedId: string | null;
   selectedMerchant: Merchant360Merchant | null;
   history: WorkHistoryItem[];
+  memos: MerchantMemoEntry[];
   page: number;
   totalPages: number;
 }
@@ -42,6 +49,22 @@ function formatDate(value: string) {
   return format(new Date(value), "yyyy.M.d HH:mm", { locale: ko });
 }
 
+function formatMemoDate(value: string) {
+  return format(new Date(value), "yyyy. M. d. a h:mm", { locale: ko });
+}
+
+const MEMO_STAGE_LABEL: Record<MerchantMemoStage, string> = {
+  before_transfer: "이관 전",
+  after_transfer: "이관 후",
+  after_completion: "설치완료 후",
+};
+
+const MEMO_STAGE_CLASS: Record<MerchantMemoStage, string> = {
+  before_transfer: "bg-slate-100 text-slate-600",
+  after_transfer: "bg-blue-50 text-blue-600",
+  after_completion: "bg-emerald-50 text-emerald-600",
+};
+
 function DetailField({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div className="rounded-xl border border-slate-100 bg-slate-50/70 px-3.5 py-3">
@@ -54,11 +77,16 @@ function DetailField({ label, value }: { label: string; value: string | null | u
 function MerchantDetailPanel({
   merchant,
   history,
+  memos,
 }: {
   merchant: Merchant360Merchant | null;
   history: WorkHistoryItem[];
+  memos: MerchantMemoEntry[];
 }) {
+  const router = useRouter();
   const [tab, setTab] = useState<"all" | WorkHistoryCategory>("all");
+  const [memoContent, setMemoContent] = useState("");
+  const [memoSubmitting, setMemoSubmitting] = useState(false);
 
   const filteredHistory = useMemo(
     () => (tab === "all" ? history : history.filter((item) => item.category === tab)),
@@ -73,6 +101,27 @@ function MerchantDetailPanel({
     );
   }
 
+  const merchantId = merchant.id;
+
+  async function submitMemo(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!memoContent.trim()) return;
+
+    setMemoSubmitting(true);
+    const result = await addMerchantMemo(merchantId, memoContent);
+    setMemoSubmitting(false);
+    if (result.error) {
+      alert("메모 등록 실패: " + result.error);
+      return;
+    }
+    if (result.skipped) {
+      alert("메모 테이블이 아직 적용되지 않아 저장하지 않았습니다.");
+      return;
+    }
+    setMemoContent("");
+    router.refresh();
+  }
+
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <div className="shrink-0 border-b border-slate-100 px-5 py-5 md:px-6">
@@ -85,6 +134,60 @@ function MerchantDetailPanel({
           <DetailField label="상세주소" value={merchant.address_detail} />
         </div>
       </div>
+
+      <section className="shrink-0 border-b border-slate-100 px-5 py-4 md:px-6">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-bold text-slate-900">메모 히스토리</h3>
+          <span className="text-xs text-slate-400">{memos.length}건</span>
+        </div>
+        <form
+          onSubmit={submitMemo}
+          className="mt-3 rounded-xl border border-blue-100 bg-blue-50/40 p-3"
+        >
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <textarea
+              value={memoContent}
+              onChange={(event) => setMemoContent(event.target.value)}
+              placeholder="새 히스토리를 입력하세요"
+              rows={2}
+              maxLength={2000}
+              className="min-h-16 flex-1 resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            />
+            <button
+              type="submit"
+              disabled={memoSubmitting || !memoContent.trim()}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {memoSubmitting ? "등록 중..." : "새 히스토리 추가"}
+            </button>
+          </div>
+        </form>
+        {memos.length === 0 ? (
+          <p className="py-4 text-center text-xs text-slate-400">등록된 메모가 없습니다.</p>
+        ) : (
+          <div className="mt-3 max-h-48 overflow-y-auto rounded-xl border border-slate-200">
+            <div className="divide-y divide-slate-100">
+              {memos.map((memo) => (
+                <article key={memo.id} className="px-3.5 py-3">
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                    <span
+                      className={`rounded-full px-2 py-1 font-semibold ${MEMO_STAGE_CLASS[memo.stage]}`}
+                    >
+                      {MEMO_STAGE_LABEL[memo.stage]}
+                    </span>
+                    <time dateTime={memo.created_at}>{formatMemoDate(memo.created_at)}</time>
+                    <span>·</span>
+                    <span>{memo.author_name ?? "기존 기록"}</span>
+                  </div>
+                  <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-5 text-slate-700">
+                    {memo.content}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
 
       <div className="flex min-h-0 flex-1 flex-col px-5 py-5 md:px-6">
         <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
@@ -153,6 +256,7 @@ export default function MerchantsClient({
   selectedId,
   selectedMerchant,
   history,
+  memos,
   page,
 }: Props) {
   const router = useRouter();
@@ -307,6 +411,7 @@ export default function MerchantsClient({
         key={selectedMerchant?.id ?? "empty"}
         merchant={selectedMerchant}
         history={history}
+        memos={memos}
       />
 
       <BulkConfirmDialog

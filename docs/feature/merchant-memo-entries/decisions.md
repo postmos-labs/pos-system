@@ -14,3 +14,9 @@
 
 - `102`와 `103` SQL은 생성만 한다. dev/운영 Supabase에 연결하거나 실행하지 않는다.
 - 실제 적용 순서는 `102_merchant_memo_entries.sql` → `103_merchant_memo_entries_backfill.sql`이다.
+
+## 2026-08-06 implementation audit
+
+- `merchant_memo_entries` remains a separate section in the 360-degree view; its rows are not added to `WorkHistoryItem[]` or the six work-history tabs.
+- Author display uses the nullable `created_by -> profiles.name` relation. Backfilled rows with `created_by IS NULL` display as legacy records.
+- The memo list is capped and scrollable inside the fixed detail panel so the input, newest-first list, and related-work timeline remain usable in one screen.

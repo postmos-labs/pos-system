@@ -15,7 +15,12 @@ import {
   type TicketStatus,
 } from "@/types";
 import MerchantsClient from "./MerchantsClient";
-import type { Merchant360Merchant, WorkHistoryItem } from "./merchant360";
+import type {
+  Merchant360Merchant,
+  MerchantMemoEntry,
+  MerchantMemoStage,
+  WorkHistoryItem,
+} from "./merchant360";
 
 const PAGE_SIZE = 50;
 
@@ -37,6 +42,50 @@ type TicketRow = {
   status: string;
   created_at: string;
 };
+
+type InstallationActivityLogRow = {
+  installation_id: string;
+  to_status: string | null;
+  created_at: string;
+};
+
+type MerchantMemoEntryRow = {
+  id: string;
+  content: string;
+  created_at: string;
+  created_by: string | null;
+  author: { name: string }[];
+};
+
+function firstTimestamp(values: string[]) {
+  return values
+    .map((value) => new Date(value).getTime())
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b)[0];
+}
+
+function classifyMemo(
+  createdAt: string,
+  installations: InstallationRow[],
+  firstCompletionAt: number | undefined,
+): MerchantMemoStage {
+  const activeInstallations = installations.filter(
+    (installation) => installation.status !== "rejected",
+  );
+  if (activeInstallations.length === 0) return "before_transfer";
+
+  const memoAt = new Date(createdAt).getTime();
+  const firstTransferAt = firstTimestamp(
+    activeInstallations.map((installation) => installation.created_at),
+  );
+  if (!Number.isFinite(memoAt) || firstTransferAt === undefined || memoAt < firstTransferAt) {
+    return "before_transfer";
+  }
+  if (firstCompletionAt !== undefined && memoAt >= firstCompletionAt) {
+    return "after_completion";
+  }
+  return "after_transfer";
+}
 
 function installationStatusLabel(status: string, deliveryType: string | null) {
   if (status === "completed" && deliveryType === "as") return "AS완료";
@@ -71,7 +120,11 @@ function installationStatusClass(status: string) {
 async function loadMerchant360(
   supabase: Awaited<ReturnType<typeof createClient>>,
   merchantId: string,
-): Promise<{ merchant: Merchant360Merchant | null; history: WorkHistoryItem[] }> {
+): Promise<{
+  merchant: Merchant360Merchant | null;
+  history: WorkHistoryItem[];
+  memos: MerchantMemoEntry[];
+}> {
   const { data: merchant } = await supabase
     .from("merchants")
     .select(
@@ -80,7 +133,7 @@ async function loadMerchant360(
     .eq("id", merchantId)
     .maybeSingle();
 
-  if (!merchant) return { merchant: null, history: [] };
+  if (!merchant) return { merchant: null, history: [], memos: [] };
 
   const franchiseApplicationId = merchant.franchise_application_id;
   const [
@@ -89,6 +142,7 @@ async function loadMerchant360(
     ticketsResult,
     changesResult,
     postHistoryResult,
+    memoEntriesResult,
   ] = await Promise.all([
     franchiseApplicationId
       ? supabase
@@ -120,6 +174,11 @@ async function loadMerchant360(
       .select("id,installation_id,content,created_at")
       .eq("merchant_id", merchantId)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("merchant_memo_entries")
+      .select("id,content,created_at,created_by,author:profiles(name)")
+      .eq("merchant_id", merchantId)
+      .order("created_at", { ascending: false }),
   ]);
 
   const application = applicationResult.data as {
@@ -147,6 +206,28 @@ async function loadMerchant360(
         content: string;
         created_at: string;
       }>);
+  const memoEntries = memoEntriesResult.error
+    ? []
+    : ((memoEntriesResult.data ?? []) as MerchantMemoEntryRow[]);
+  const installationIds = installations.map((installation) => installation.id);
+  const activityLogsResult = installationIds.length
+    ? await supabase
+        .from("installation_activity_logs")
+        .select("installation_id,to_status,created_at")
+        .in("installation_id", installationIds)
+        .in("to_status", ["completed", "delivery_sent"])
+        .order("created_at", { ascending: true })
+    : { data: [] as InstallationActivityLogRow[], error: null };
+  const activityLogs = (activityLogsResult.data ?? []) as InstallationActivityLogRow[];
+  const firstCompletionAt = firstTimestamp(activityLogs.map((log) => log.created_at));
+  const memos: MerchantMemoEntry[] = memoEntries.map((memo) => ({
+    id: memo.id,
+    content: memo.content,
+    created_at: memo.created_at,
+    created_by: memo.created_by,
+    author_name: memo.author[0]?.name ?? null,
+    stage: classifyMemo(memo.created_at, installations, firstCompletionAt),
+  }));
 
   const history: WorkHistoryItem[] = [];
   if (application) {
@@ -224,7 +305,7 @@ async function loadMerchant360(
   }
 
   history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  return { merchant: merchant as Merchant360Merchant, history };
+  return { merchant: merchant as Merchant360Merchant, history, memos };
 }
 
 export default async function MerchantsPage({ searchParams }: Props) {
@@ -269,6 +350,7 @@ export default async function MerchantsPage({ searchParams }: Props) {
         selectedId={selectedId}
         selectedMerchant={selected?.merchant ?? null}
         history={selected?.history ?? []}
+        memos={selected?.memos ?? []}
         page={page}
         totalPages={totalPages}
       />
