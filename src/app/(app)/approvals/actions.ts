@@ -420,6 +420,10 @@ export async function approveFranchiseTransfer(
     .eq("status", "cs_responsible_approved");
   if (approvalError) return { error: approvalError.message };
 
+  // 기술지원 이관 시 설치 행에는 일부 접수 정보만 복사된다.
+  // 사업자번호·상세주소·영업담당자·오픈일은 installations 컬럼/입력값에 없을 수 있으므로,
+  // 101번 installations 트리거가 franchise_application_id로 원본 접수 행을 다시 조회한다.
+  // 원본의 nullable 값은 NULL로 유지되고, merchants의 NOT NULL 필드는 미입력으로 보완된다.
   const installValues = {
     customer_name: franchise.business_name || franchise.owner_name || "미입력",
     customer_phone: franchise.phone || null,
