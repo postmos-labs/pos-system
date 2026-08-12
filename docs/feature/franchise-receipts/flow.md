@@ -1,5 +1,10 @@
 # 가맹접수(franchise-receipts) 프로세스 재설계
 
+## 신규 접수 입력 보완 (2026-08-12)
+
+- 신규 접수 및 기존 매장 접수 등록 다이얼로그에서 `카드가맹접수일`을 입력할 수 있다.
+- 입력값은 기존 `franchise_applications.card_apply_date` 컬럼에 저장한다. 빈 값은 `NULL`로 저장하며 별도 스키마 변경은 하지 않는다.
+
 ## 2026-08-06 대형 가맹점 분리
 
 - `franchise_applications.is_large_franchise`를 additive 방식의 영구 boolean 플래그로 추가한다.

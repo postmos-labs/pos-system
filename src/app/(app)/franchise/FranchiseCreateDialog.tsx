@@ -54,6 +54,7 @@ export interface FranchiseCreateInput {
   merchant_id: string | null;
   previous_snapshot: FranchisePreviousSnapshot | null;
   reception_date: string;
+  card_apply_date: string;
   open_date: string;
   install_date: string;
   van_company: string;
@@ -105,6 +106,7 @@ function initialForm(mode: "new" | "existing"): FranchiseCreateInput {
     merchant_id: null,
     previous_snapshot: null,
     reception_date: receptionDate,
+    card_apply_date: "",
     open_date: "",
     install_date: "",
     van_company: "",
@@ -524,13 +526,23 @@ export default function FranchiseCreateDialog({
                         </div>
                       </Field>
                     </div>
-                    <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-3.5 md:grid-cols-4">
                       <Field label="접수날짜">
                         <input
                           type="date"
                           value={form.reception_date}
                           onChange={(event) =>
                             setForm({ ...form, reception_date: event.target.value })
+                          }
+                          className={inputClass}
+                        />
+                      </Field>
+                      <Field label="카드가맹접수일">
+                        <input
+                          type="date"
+                          value={form.card_apply_date}
+                          onChange={(event) =>
+                            setForm({ ...form, card_apply_date: event.target.value })
                           }
                           className={inputClass}
                         />
