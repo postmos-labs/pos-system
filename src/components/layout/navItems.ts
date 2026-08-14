@@ -49,7 +49,13 @@ export const ROLE_FOLDERS: NavGroup[] = [
     key: "cs",
     label: "CS 업무",
     icon: LayoutDashboard,
-    items: [{ href: "/dashboard", label: "CS 업무", icon: LayoutDashboard }],
+    items: [
+      { href: "/dashboard", label: "CS 대시보드", icon: LayoutDashboard },
+      { href: "/franchise", label: "가맹 접수", icon: ClipboardList },
+      { href: "/woo", label: "우국상 관리", icon: Users },
+      { href: "/changes", label: "변경 관리", icon: RefreshCw },
+      { href: "/internet", label: "인터넷 관리", icon: Network },
+    ],
   },
   {
     key: "tech",
