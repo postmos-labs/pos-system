@@ -1310,10 +1310,9 @@ export default function InstallsClient({
     if (!approval || !["requested", "responsible_approved"].includes(approval.status)) return;
     const isResponsible =
       profile.approval_role === "tech_responsible" && approval.status === "requested";
-    const isFinalStep =
-      approval.status === "responsible_approved" &&
-      (profile.approval_role === "team_lead" || profile.approval_role === "tech_responsible");
-    if (!isResponsible && !isFinalStep) {
+    const isTeamLead =
+      profile.approval_role === "team_lead" && approval.status === "responsible_approved";
+    if (!isResponsible && !isTeamLead) {
       toast.warning("현재 승인 단계의 권한이 없습니다.");
       return;
     }
@@ -1362,7 +1361,7 @@ export default function InstallsClient({
     } else {
       const approvalNotes = appendApprovalNote(
         approval.approval_notes,
-        { id: profile.id, name: profile.name, role: profile.approval_role ?? "team_lead" },
+        { id: profile.id, name: profile.name, role: "team_lead" },
         note,
         "final_approval",
       );
@@ -1415,8 +1414,7 @@ export default function InstallsClient({
     if (!approval || !["requested", "responsible_approved"].includes(approval.status)) return;
     const canReject =
       (profile.approval_role === "tech_responsible" && approval.status === "requested") ||
-      ((profile.approval_role === "team_lead" || profile.approval_role === "tech_responsible") &&
-        approval.status === "responsible_approved");
+      (profile.approval_role === "team_lead" && approval.status === "responsible_approved");
     if (!canReject) {
       toast.warning("현재 승인 단계의 권한이 없습니다.");
       return;
@@ -3073,8 +3071,7 @@ export default function InstallsClient({
                                 <>
                                   {((profile.approval_role === "tech_responsible" &&
                                     completionApprovals[inst.id]!.status === "requested") ||
-                                    ((profile.approval_role === "team_lead" ||
-                                      profile.approval_role === "tech_responsible") &&
+                                    (profile.approval_role === "team_lead" &&
                                       completionApprovals[inst.id]!.status ===
                                         "responsible_approved")) && (
                                     <button
@@ -3087,8 +3084,7 @@ export default function InstallsClient({
                                   )}
                                   {((profile.approval_role === "tech_responsible" &&
                                     completionApprovals[inst.id]!.status === "requested") ||
-                                    ((profile.approval_role === "team_lead" ||
-                                      profile.approval_role === "tech_responsible") &&
+                                    (profile.approval_role === "team_lead" &&
                                       completionApprovals[inst.id]!.status ===
                                         "responsible_approved")) && (
                                     <button
