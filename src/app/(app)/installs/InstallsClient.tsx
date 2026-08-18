@@ -1309,7 +1309,8 @@ export default function InstallsClient({
     const approval = completionApprovals[id];
     if (!approval || !["requested", "responsible_approved"].includes(approval.status)) return;
     const isResponsible =
-      profile.approval_role === "tech_responsible" && approval.status === "requested";
+      approval.status === "requested" &&
+      (profile.approval_role === "tech_responsible" || profile.approval_role === "team_lead");
     const isTeamLead =
       profile.approval_role === "team_lead" && approval.status === "responsible_approved";
     if (!isResponsible && !isTeamLead) {
@@ -1336,7 +1337,7 @@ export default function InstallsClient({
     if (isResponsible) {
       const approvalNotes = appendApprovalNote(
         approval.approval_notes,
-        { id: profile.id, name: profile.name, role: "tech_responsible" },
+        { id: profile.id, name: profile.name, role: profile.approval_role ?? "tech_responsible" },
         note,
         "first_approval",
       );
@@ -1404,7 +1405,7 @@ export default function InstallsClient({
       );
     toast.success(
       isResponsible
-        ? "기술지원책임 1차 승인 완료. 팀장 최종 승인을 기다립니다."
+        ? "1차 승인 완료. 팀장 최종 승인을 기다립니다."
         : `${statusLabel(approval.target_status)} 최종 승인 및 상태 반영이 완료됐습니다.`,
     );
   }
@@ -1413,7 +1414,8 @@ export default function InstallsClient({
     const approval = completionApprovals[id];
     if (!approval || !["requested", "responsible_approved"].includes(approval.status)) return;
     const canReject =
-      (profile.approval_role === "tech_responsible" && approval.status === "requested") ||
+      (approval.status === "requested" &&
+        (profile.approval_role === "tech_responsible" || profile.approval_role === "team_lead")) ||
       (profile.approval_role === "team_lead" && approval.status === "responsible_approved");
     if (!canReject) {
       toast.warning("현재 승인 단계의 권한이 없습니다.");
@@ -3069,8 +3071,9 @@ export default function InstallsClient({
                               </span>
                               {completionApprovals[inst.id]!.requested_by !== profile.id && (
                                 <>
-                                  {((profile.approval_role === "tech_responsible" &&
-                                    completionApprovals[inst.id]!.status === "requested") ||
+                                  {((completionApprovals[inst.id]!.status === "requested" &&
+                                    (profile.approval_role === "tech_responsible" ||
+                                      profile.approval_role === "team_lead")) ||
                                     (profile.approval_role === "team_lead" &&
                                       completionApprovals[inst.id]!.status ===
                                         "responsible_approved")) && (
@@ -3082,8 +3085,9 @@ export default function InstallsClient({
                                       반려
                                     </button>
                                   )}
-                                  {((profile.approval_role === "tech_responsible" &&
-                                    completionApprovals[inst.id]!.status === "requested") ||
+                                  {((completionApprovals[inst.id]!.status === "requested" &&
+                                    (profile.approval_role === "tech_responsible" ||
+                                      profile.approval_role === "team_lead")) ||
                                     (profile.approval_role === "team_lead" &&
                                       completionApprovals[inst.id]!.status ===
                                         "responsible_approved")) && (
