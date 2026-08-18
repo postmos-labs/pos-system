@@ -12,6 +12,7 @@ import type { Profile } from "@/types";
 type CompletionApproval = {
   installation_id: string;
   target_status: string;
+  status: string;
   requested_by: string;
   requested_by_name: string;
   requested_at: string;
@@ -79,11 +80,13 @@ export default async function ApprovalsPage() {
       ? supabase
           .from("installation_completion_approvals")
           .select(
-            "installation_id, target_status, requested_by, requested_by_name, requested_at, approval_notes, installation:installations(id, customer_name, address)",
+            "installation_id, target_status, status, requested_by, requested_by_name, requested_at, approval_notes, installation:installations(id, customer_name, address)",
           )
-          .eq(
+          .in(
             "status",
-            p.approval_role === "tech_responsible" ? "requested" : "responsible_approved",
+            p.approval_role === "tech_responsible"
+              ? ["requested", "responsible_approved"]
+              : ["responsible_approved"],
           )
           .neq("requested_by", userId)
           .order("requested_at", { ascending: true })
@@ -161,13 +164,15 @@ export default async function ApprovalsPage() {
                           <p className="mt-0.5 text-xs text-slate-500">
                             {approval.requested_by_name} ·{" "}
                             {INSTALL_STEP_LABEL[approval.target_status] ?? approval.target_status}{" "}
-                            {p.approval_role === "team_lead" ? "최종 " : "1차 "}승인요청
+                            {approval.status === "responsible_approved" ? "최종 " : "1차 "}승인요청
                           </p>
                         </div>
                         <ArrowRight size={16} className="text-slate-400" />
                       </Link>
                       <ApprovalButton
-                        type={p.approval_role === "team_lead" ? "tech_final" : "completion"}
+                        type={
+                          approval.status === "responsible_approved" ? "tech_final" : "completion"
+                        }
                         id={approval.installation_id}
                         notes={approval.approval_notes}
                       />

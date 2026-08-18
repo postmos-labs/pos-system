@@ -410,9 +410,9 @@ export async function requestInstallationStatusApproval(input: {
   }
   const editor = await getInstallationEditor();
   if ("error" in editor) return { error: editor.error, approvalId: null, approvalStatus: null };
-  if (!["tech_manager", "tech_responsible"].includes(editor.profile.approval_role ?? "")) {
+  if (!["tech", "admin", "master"].includes(editor.profile.role)) {
     return {
-      error: "기술지원매니저 또는 기술지원책임만 단계 승인을 요청할 수 있습니다.",
+      error: "기술지원팀만 단계 승인을 요청할 수 있습니다.",
       approvalId: null,
       approvalStatus: null,
     };
@@ -490,7 +490,7 @@ export async function requestInstallationStatusApproval(input: {
         {
           id: editor.user.id,
           name: editor.profile.name,
-          role: editor.profile.approval_role!,
+          role: editor.profile.approval_role ?? "tech_manager",
         },
         input.note,
         "request",
@@ -700,8 +700,11 @@ export async function approveInstallationStatusByTeamLead(installationId: string
     .select("name, approval_role")
     .eq("id", user.id)
     .single();
-  if (!profile || profile.approval_role !== "team_lead")
-    return { error: "팀장 최종 승인 권한이 없습니다.", notificationError: null };
+  if (
+    !profile ||
+    (profile.approval_role !== "team_lead" && profile.approval_role !== "tech_responsible")
+  )
+    return { error: "팀장 또는 기술지원책임 최종 승인 권한이 없습니다.", notificationError: null };
 
   const admin = createAdminClient();
   const { data: approval } = await admin
@@ -739,7 +742,7 @@ export async function approveInstallationStatusByTeamLead(installationId: string
         {
           id: user.id,
           name: profile.name,
-          role: "team_lead",
+          role: profile.approval_role,
         },
         note,
         "final_approval",
@@ -963,22 +966,23 @@ export async function rejectInstallationStatusApproval(installationId: string, r
     .select("id, name, approval_role")
     .eq("id", user.id)
     .single();
-  const expectedStatus =
-    profile?.approval_role === "tech_responsible"
-      ? "requested"
-      : profile?.approval_role === "team_lead"
-        ? "responsible_approved"
-        : null;
-  if (!expectedStatus) return { error: "반려 권한이 없습니다.", notificationError: null };
 
   const admin = createAdminClient();
   const { data: approval } = await admin
     .from("installation_completion_approvals")
-    .select("id, requested_by, target_status, approval_notes")
+    .select("id, requested_by, target_status, approval_notes, status")
     .eq("installation_id", installationId)
-    .eq("status", expectedStatus)
-    .single();
+    .in("status", ["requested", "responsible_approved"])
+    .order("requested_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
   if (!approval) return { error: "처리할 승인 요청이 없습니다.", notificationError: null };
+  const expectedStatus = approval.status;
+  const canReject =
+    (expectedStatus === "requested" && profile?.approval_role === "tech_responsible") ||
+    (expectedStatus === "responsible_approved" &&
+      (profile?.approval_role === "team_lead" || profile?.approval_role === "tech_responsible"));
+  if (!canReject) return { error: "반려 권한이 없습니다.", notificationError: null };
   if (approval.requested_by === user.id)
     return { error: "요청자는 직접 반려할 수 없습니다.", notificationError: null };
 
@@ -992,7 +996,9 @@ export async function rejectInstallationStatusApproval(installationId: string, r
             {
               id: user.id,
               name: profile!.name,
-              role: expectedStatus === "requested" ? "tech_responsible" : "team_lead",
+              role:
+                profile?.approval_role ??
+                (expectedStatus === "requested" ? "tech_responsible" : "team_lead"),
             },
             reason,
             "rejection",

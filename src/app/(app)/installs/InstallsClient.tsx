@@ -1167,8 +1167,8 @@ export default function InstallsClient({
 
   async function submitCompletion(skipCompleteSend?: boolean) {
     if (!completeModal) return;
-    if (!["tech_manager", "tech_responsible"].includes(profile.approval_role ?? "")) {
-      toast.warning("설치완료 승인요청은 기술지원매니저 또는 기술지원책임만 등록할 수 있습니다.");
+    if (!["tech", "admin", "master"].includes(profile.role)) {
+      toast.warning("설치완료 승인요청은 기술지원팀만 등록할 수 있습니다.");
       return;
     }
     if (completingRef.current) return;
@@ -1310,9 +1310,10 @@ export default function InstallsClient({
     if (!approval || !["requested", "responsible_approved"].includes(approval.status)) return;
     const isResponsible =
       profile.approval_role === "tech_responsible" && approval.status === "requested";
-    const isTeamLead =
-      profile.approval_role === "team_lead" && approval.status === "responsible_approved";
-    if (!isResponsible && !isTeamLead) {
+    const isFinalStep =
+      approval.status === "responsible_approved" &&
+      (profile.approval_role === "team_lead" || profile.approval_role === "tech_responsible");
+    if (!isResponsible && !isFinalStep) {
       toast.warning("현재 승인 단계의 권한이 없습니다.");
       return;
     }
@@ -1361,7 +1362,7 @@ export default function InstallsClient({
     } else {
       const approvalNotes = appendApprovalNote(
         approval.approval_notes,
-        { id: profile.id, name: profile.name, role: "team_lead" },
+        { id: profile.id, name: profile.name, role: profile.approval_role ?? "team_lead" },
         note,
         "final_approval",
       );
@@ -1412,11 +1413,11 @@ export default function InstallsClient({
   async function rejectCompletion(id: string) {
     const approval = completionApprovals[id];
     if (!approval || !["requested", "responsible_approved"].includes(approval.status)) return;
-    const isResponsible =
-      profile.approval_role === "tech_responsible" && approval.status === "requested";
-    const isTeamLead =
-      profile.approval_role === "team_lead" && approval.status === "responsible_approved";
-    if (!isResponsible && !isTeamLead) {
+    const canReject =
+      (profile.approval_role === "tech_responsible" && approval.status === "requested") ||
+      ((profile.approval_role === "team_lead" || profile.approval_role === "tech_responsible") &&
+        approval.status === "responsible_approved");
+    if (!canReject) {
       toast.warning("현재 승인 단계의 권한이 없습니다.");
       return;
     }
@@ -3068,13 +3069,14 @@ export default function InstallsClient({
                                   ? "1차 승인대기"
                                   : "최종 승인대기"}
                               </span>
-                              {((profile.approval_role === "tech_responsible" &&
-                                completionApprovals[inst.id]!.status === "requested") ||
-                                (profile.approval_role === "team_lead" &&
-                                  completionApprovals[inst.id]!.status ===
-                                    "responsible_approved")) &&
-                                completionApprovals[inst.id]!.requested_by !== profile.id && (
-                                  <>
+                              {completionApprovals[inst.id]!.requested_by !== profile.id && (
+                                <>
+                                  {((profile.approval_role === "tech_responsible" &&
+                                    completionApprovals[inst.id]!.status === "requested") ||
+                                    ((profile.approval_role === "team_lead" ||
+                                      profile.approval_role === "tech_responsible") &&
+                                      completionApprovals[inst.id]!.status ===
+                                        "responsible_approved")) && (
                                     <button
                                       onClick={() => rejectCompletion(inst.id)}
                                       disabled={completing}
@@ -3082,6 +3084,13 @@ export default function InstallsClient({
                                     >
                                       반려
                                     </button>
+                                  )}
+                                  {((profile.approval_role === "tech_responsible" &&
+                                    completionApprovals[inst.id]!.status === "requested") ||
+                                    ((profile.approval_role === "team_lead" ||
+                                      profile.approval_role === "tech_responsible") &&
+                                      completionApprovals[inst.id]!.status ===
+                                        "responsible_approved")) && (
                                     <button
                                       onClick={() => approveCompletion(inst.id)}
                                       disabled={completing}
@@ -3095,8 +3104,9 @@ export default function InstallsClient({
                                         ? "1차 승인"
                                         : "최종 승인"}
                                     </button>
-                                  </>
-                                )}
+                                  )}
+                                </>
+                              )}
                             </>
                           )}
                           {!!approvalNoteHistory[inst.id]?.length && (
