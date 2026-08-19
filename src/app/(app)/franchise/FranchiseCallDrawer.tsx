@@ -11,14 +11,19 @@ interface CallLogEntry {
   call_type: "missed" | "completed";
   created_at: string;
   user_name: string | null;
+  note: string | null;
 }
 
 interface Props {
   row: FranchiseApplication;
   currentUserName: string;
   onClose: () => void;
-  onRecordMissed: (row: FranchiseApplication, cancelReason?: string) => void | Promise<void>;
-  onRecordCompleted: (row: FranchiseApplication) => void | Promise<void>;
+  onRecordMissed: (
+    row: FranchiseApplication,
+    note?: string,
+    cancelReason?: string,
+  ) => void | Promise<void>;
+  onRecordCompleted: (row: FranchiseApplication, note?: string) => void | Promise<void>;
 }
 
 function formatEntryDate(value: string) {
@@ -36,6 +41,7 @@ export default function FranchiseCallDrawer({
   const [logs, setLogs] = useState<CallLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [note, setNote] = useState("");
   const missedCount = row.missed_call_count ?? 0;
   const aboutToCancel = missedCount === 2;
 
@@ -46,7 +52,7 @@ export default function FranchiseCallDrawer({
       const supabase = createClient();
       const { data } = await supabase
         .from("franchise_application_call_logs")
-        .select("id, call_type, created_at, user:profiles(name)")
+        .select("id, call_type, created_at, note, user:profiles(name)")
         .eq("franchise_application_id", row.id)
         .order("created_at", { ascending: false });
       if (!active) return;
@@ -56,12 +62,14 @@ export default function FranchiseCallDrawer({
             id: string;
             call_type: "missed" | "completed";
             created_at: string;
+            note: string | null;
             user: { name: string | null } | { name: string | null }[] | null;
           }>
         ).map((entry) => ({
           id: entry.id,
           call_type: entry.call_type,
           created_at: entry.created_at,
+          note: entry.note,
           user_name: Array.isArray(entry.user)
             ? (entry.user[0]?.name ?? null)
             : (entry.user?.name ?? null),
@@ -78,15 +86,16 @@ export default function FranchiseCallDrawer({
   async function handleMissed() {
     setSubmitting(true);
     try {
+      const trimmedNote = note.trim() || undefined;
       if (aboutToCancel) {
         const reason = window.prompt(
           "이번 통화 부재로 3회가 되어 접수가 자동으로 취소됩니다. 취소 사유를 입력해주세요 (선택).",
         );
         if (reason === null) return;
-        await onRecordMissed(row, reason || undefined);
+        await onRecordMissed(row, trimmedNote, reason || undefined);
       } else {
         if (!confirm("통화 부재를 기록하시겠습니까?")) return;
-        await onRecordMissed(row);
+        await onRecordMissed(row, trimmedNote);
       }
       setLogs((prev) => [
         {
@@ -94,9 +103,11 @@ export default function FranchiseCallDrawer({
           call_type: "missed",
           created_at: new Date().toISOString(),
           user_name: currentUserName,
+          note: trimmedNote ?? null,
         },
         ...prev,
       ]);
+      setNote("");
     } finally {
       setSubmitting(false);
     }
@@ -106,16 +117,19 @@ export default function FranchiseCallDrawer({
     if (!confirm("통화 완료를 기록하시겠습니까?")) return;
     setSubmitting(true);
     try {
-      await onRecordCompleted(row);
+      const trimmedNote = note.trim() || undefined;
+      await onRecordCompleted(row, trimmedNote);
       setLogs((prev) => [
         {
           id: `local-${Date.now()}`,
           call_type: "completed",
           created_at: new Date().toISOString(),
           user_name: currentUserName,
+          note: trimmedNote ?? null,
         },
         ...prev,
       ]);
+      setNote("");
     } finally {
       setSubmitting(false);
     }
@@ -156,6 +170,14 @@ export default function FranchiseCallDrawer({
         <p className="text-xs text-slate-500">
           부재중 통화가 3회 누적되면 접수가 자동으로 취소 상태로 전환됩니다.
         </p>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="통화 메모 (선택) — 부재/완료 기록에 함께 저장됩니다"
+          rows={2}
+          disabled={row.status === "canceled"}
+          className="w-full bg-slate-800 border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-2 py-1.5 text-sm resize-y text-white placeholder:text-slate-500 disabled:opacity-40"
+        />
         <div className="flex gap-2 pt-1">
           <button
             onClick={handleMissed}
@@ -181,20 +203,27 @@ export default function FranchiseCallDrawer({
         ) : logs.length === 0 ? (
           <p className="text-sm text-slate-400">통화 이력이 없습니다.</p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-2.5">
             {logs.map((entry) => (
-              <li key={entry.id} className="flex items-center gap-2 text-sm">
-                {entry.call_type === "missed" ? (
-                  <PhoneMissed size={14} className="text-red-300 shrink-0" />
-                ) : (
-                  <PhoneCall size={14} className="text-green-300 shrink-0" />
-                )}
-                <span className="text-slate-300">
-                  {entry.call_type === "missed" ? "부재" : "완료"}
-                </span>
-                <span className="text-slate-500">{formatEntryDate(entry.created_at)}</span>
-                {entry.user_name && (
-                  <span className="text-blue-300 font-semibold">{entry.user_name}</span>
+              <li key={entry.id} className="text-sm">
+                <div className="flex items-center gap-2">
+                  {entry.call_type === "missed" ? (
+                    <PhoneMissed size={14} className="text-red-300 shrink-0" />
+                  ) : (
+                    <PhoneCall size={14} className="text-green-300 shrink-0" />
+                  )}
+                  <span className="text-slate-300">
+                    {entry.call_type === "missed" ? "부재" : "완료"}
+                  </span>
+                  <span className="text-slate-500">{formatEntryDate(entry.created_at)}</span>
+                  {entry.user_name && (
+                    <span className="text-blue-300 font-semibold">{entry.user_name}</span>
+                  )}
+                </div>
+                {entry.note && (
+                  <p className="mt-1 ml-6 whitespace-pre-wrap break-words text-slate-300">
+                    {entry.note}
+                  </p>
                 )}
               </li>
             ))}

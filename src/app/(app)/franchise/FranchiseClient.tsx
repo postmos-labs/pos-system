@@ -2602,11 +2602,12 @@ export default function FranchiseClient({
     });
   }
 
-  async function recordMissedCall(row: FranchiseApplication, cancelReason?: string) {
+  async function recordMissedCall(row: FranchiseApplication, note?: string, cancelReason?: string) {
     const supabase = createClient();
     const { data, error } = await supabase.rpc("record_franchise_missed_call", {
       p_application_id: row.id,
       p_user_id: currentUserId,
+      p_note: note ?? null,
       p_cancel_reason: cancelReason ?? null,
     });
     if (error) {
@@ -2628,11 +2629,12 @@ export default function FranchiseClient({
     );
   }
 
-  async function recordCompletedCall(row: FranchiseApplication) {
+  async function recordCompletedCall(row: FranchiseApplication, note?: string) {
     const supabase = createClient();
     const { data, error } = await supabase.rpc("record_franchise_completed_call", {
       p_application_id: row.id,
       p_user_id: currentUserId,
+      p_note: note ?? null,
     });
     if (error) {
       toast.error("통화 기록 실패: " + error.message);
