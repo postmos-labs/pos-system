@@ -1088,6 +1088,7 @@ export default function FranchiseClient({
   const [vanFilter, setVanFilter] = useState("");
   const [channelFilter, setChannelFilter] = useState("");
   const [caseTypeFilter, setCaseTypeFilter] = useState("");
+  const [missedCallFilter, setMissedCallFilter] = useState("");
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(true);
   const [bulkStatusModal, setBulkStatusModal] = useState(false);
   const [bulkStatus, setBulkStatus] = useState<FranchiseStatus | "">("");
@@ -1347,6 +1348,8 @@ export default function FranchiseClient({
       if (applicantTypeFilter && row.applicant_type !== applicantTypeFilter) return false;
       if (!skip.skipChannel && channelFilter && row.channel !== channelFilter) return false;
       if (caseTypeFilter && row.case_type !== caseTypeFilter) return false;
+      if (missedCallFilter && (row.missed_call_count ?? 0) !== Number(missedCallFilter))
+        return false;
       if (
         vanFilter &&
         !row.van_company
@@ -1373,6 +1376,7 @@ export default function FranchiseClient({
       applicantTypeFilter,
       channelFilter,
       caseTypeFilter,
+      missedCallFilter,
       vanFilter,
       dateFrom,
       dateTo,
@@ -1429,6 +1433,7 @@ export default function FranchiseClient({
     applicantTypeFilter,
     channelFilter,
     caseTypeFilter,
+    missedCallFilter,
     vanFilter,
     sortBy,
     tableView,
@@ -1491,6 +1496,7 @@ export default function FranchiseClient({
     !applicantTypeFilter &&
     !channelFilter &&
     !caseTypeFilter &&
+    !missedCallFilter &&
     !vanFilter &&
     !dateFrom &&
     !dateTo &&
@@ -3165,6 +3171,7 @@ export default function FranchiseClient({
         applicantTypeFilter={applicantTypeFilter}
         channelFilter={channelFilter}
         caseTypeFilter={caseTypeFilter}
+        missedCallFilter={missedCallFilter}
         dateFrom={dateFrom}
         dateTo={dateTo}
         sortBy={sortBy}
@@ -3190,6 +3197,7 @@ export default function FranchiseClient({
         onApplicantTypeFilterChange={setApplicantTypeFilter}
         onChannelFilterChange={setChannelFilter}
         onCaseTypeFilterChange={setCaseTypeFilter}
+        onMissedCallFilterChange={setMissedCallFilter}
         onDateFromChange={setDateFrom}
         onDateToChange={setDateTo}
         onSortChange={setSortBy}

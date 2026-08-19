@@ -128,6 +128,7 @@ interface Props {
   applicantTypeFilter: string;
   channelFilter: string;
   caseTypeFilter: string;
+  missedCallFilter: string;
   dateFrom: string;
   dateTo: string;
   sortBy: SortBy;
@@ -145,6 +146,7 @@ interface Props {
   onApplicantTypeFilterChange: (value: string) => void;
   onChannelFilterChange: (value: string) => void;
   onCaseTypeFilterChange: (value: string) => void;
+  onMissedCallFilterChange: (value: string) => void;
   onDateFromChange: (value: string) => void;
   onDateToChange: (value: string) => void;
   onSortChange: (value: SortBy) => void;
@@ -706,6 +708,19 @@ export default function FranchiseReceiptSurface(props: Props) {
                     value: c,
                     label: FRANCHISE_CASE_TYPE_LABEL[c],
                   })),
+                ]}
+              />
+            </div>
+            <div className="w-32">
+              <AppSelect
+                aria-label="통화 부재 횟수"
+                value={props.missedCallFilter}
+                onValueChange={props.onMissedCallFilterChange}
+                options={[
+                  { value: "", label: "통화부재 전체" },
+                  { value: "1", label: "통화부재 1회" },
+                  { value: "2", label: "통화부재 2회" },
+                  { value: "3", label: "통화부재 3회" },
                 ]}
               />
             </div>
