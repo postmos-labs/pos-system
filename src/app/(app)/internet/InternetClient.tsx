@@ -35,6 +35,8 @@ import FormModal from "@/components/ui/FormModal";
 import HistoryButton from "@/components/ui/HistoryButton";
 import MemoHistoryPanel from "@/components/ui/MemoHistoryPanel";
 import KpiCard from "@/components/ui/KpiCard";
+import { AppSelect } from "@/components/ui/AppSelect";
+import { DatePickerField } from "@/components/ui/DatePickerField";
 
 interface Props {
   rows: InternetManagement[];
@@ -181,23 +183,19 @@ const SelectField = memo(function SelectField({
             : "bg-slate-100 text-slate-700 border border-slate-200"
       : "bg-slate-100 text-slate-700 border border-slate-200";
   return (
-    <select
-      value={(row[field] as string) ?? ""}
-      onChange={(e) => onSave(row, field, e.target.value)}
-      onClick={(e) => e.stopPropagation()}
-      className={
-        pill
-          ? `text-xs font-medium rounded-full pl-2.5 pr-1.5 py-1 border-0 focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer ${statusColor}`
-          : "w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1 -mx-1 text-sm"
-      }
-    >
-      <option value="">-</option>
-      {options.map((o) => (
-        <option key={o} value={o}>
-          {o}
-        </option>
-      ))}
-    </select>
+    <span onClick={(e) => e.stopPropagation()} className={pill ? "" : "block w-full"}>
+      <AppSelect
+        value={(row[field] as string) ?? ""}
+        onValueChange={(value) => onSave(row, field, value)}
+        aria-label={field}
+        className={
+          pill
+            ? `h-auto rounded-full border-0 pl-2.5 pr-1.5 py-1 text-xs font-medium ${statusColor}`
+            : "h-auto w-full border-0 bg-transparent px-1 -mx-1 text-sm"
+        }
+        options={[{ value: "", label: "-" }, ...options.map((o) => ({ value: o, label: o }))]}
+      />
+    </span>
   );
 });
 
@@ -234,20 +232,19 @@ const SpeedField = memo(function SpeedField({ row, onSave }: SpeedFieldProps) {
   }
 
   return (
-    <select
-      value={SPEEDS.includes(row.speed ?? "") ? row.speed! : ""}
-      onChange={(e) => handleSelect(e.target.value)}
-      onClick={(e) => e.stopPropagation()}
-      className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1 -mx-1 text-sm"
-    >
-      <option value="">-</option>
-      {SPEEDS.map((s) => (
-        <option key={s} value={s}>
-          {s}
-        </option>
-      ))}
-      <option value={CUSTOM_SPEED}>직접입력</option>
-    </select>
+    <span onClick={(e) => e.stopPropagation()} className="block w-full">
+      <AppSelect
+        value={SPEEDS.includes(row.speed ?? "") ? row.speed! : ""}
+        onValueChange={handleSelect}
+        aria-label="속도"
+        className="h-auto w-full border-0 bg-transparent px-1 -mx-1 text-sm"
+        options={[
+          { value: "", label: "-" },
+          ...SPEEDS.map((s) => ({ value: s, label: s })),
+          { value: CUSTOM_SPEED, label: "직접입력" },
+        ]}
+      />
+    </span>
   );
 });
 
@@ -281,19 +278,17 @@ const SpeedFormField = memo(function SpeedFormField({ value, onChange }: SpeedFo
   }
 
   return (
-    <select
+    <AppSelect
       value={SPEEDS.includes(value) ? value : ""}
-      onChange={(e) => handleSelect(e.target.value)}
-      className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-28 focus:outline-none focus:ring-2 focus:ring-blue-500"
-    >
-      <option value="">선택 안함</option>
-      {SPEEDS.map((s) => (
-        <option key={s} value={s}>
-          {s}
-        </option>
-      ))}
-      <option value={CUSTOM_SPEED}>직접입력</option>
-    </select>
+      onValueChange={handleSelect}
+      aria-label="속도"
+      className="w-28"
+      options={[
+        { value: "", label: "선택 안함" },
+        ...SPEEDS.map((s) => ({ value: s, label: s })),
+        { value: CUSTOM_SPEED, label: "직접입력" },
+      ]}
+    />
   );
 });
 
@@ -325,18 +320,16 @@ const CreateForm = memo(function CreateForm({ onSubmit, submitting, onClose }: C
                   onChange={(v) => setForm({ ...form, speed: v })}
                 />
               ) : options ? (
-                <select
+                <AppSelect
                   value={form[col.key as keyof typeof form]}
-                  onChange={(e) => setForm({ ...form, [col.key]: e.target.value })}
-                  className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-28 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">선택 안함</option>
-                  {options.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={(value) => setForm({ ...form, [col.key]: value })}
+                  aria-label={col.label}
+                  className="w-28"
+                  options={[
+                    { value: "", label: "선택 안함" },
+                    ...options.map((o) => ({ value: o, label: o })),
+                  ]}
+                />
               ) : (
                 <input
                   value={form[col.key as keyof typeof form]}
@@ -749,51 +742,36 @@ export default function InternetClient({ rows }: Props) {
             className="pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg w-56 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <select
+        <AppSelect
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">상태 전체</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-        <select
+          onValueChange={setStatusFilter}
+          aria-label="상태 필터"
+          options={[
+            { value: "", label: "상태 전체" },
+            ...STATUSES.map((s) => ({ value: s, label: s })),
+          ]}
+        />
+        <AppSelect
           value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">구분 전체</option>
-          {CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        <select
+          onValueChange={setCategoryFilter}
+          aria-label="구분 필터"
+          options={[
+            { value: "", label: "구분 전체" },
+            ...CATEGORIES.map((c) => ({ value: c, label: c })),
+          ]}
+        />
+        <AppSelect
           value={dateField}
-          onChange={(e) => setDateField(e.target.value as "apply_date" | "open_date")}
-          className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="apply_date">접수일 기준</option>
-          <option value="open_date">개통일 기준</option>
-        </select>
-        <input
-          type="date"
-          value={dateFrom}
-          onChange={(e) => setDateFrom(e.target.value)}
-          className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onValueChange={(value) => setDateField(value as "apply_date" | "open_date")}
+          aria-label="날짜 기준"
+          options={[
+            { value: "apply_date", label: "접수일 기준" },
+            { value: "open_date", label: "개통일 기준" },
+          ]}
         />
+        <DatePickerField value={dateFrom} onChange={setDateFrom} ariaLabel="시작일" />
         <span className="text-slate-400 text-sm">~</span>
-        <input
-          type="date"
-          value={dateTo}
-          onChange={(e) => setDateTo(e.target.value)}
-          className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+        <DatePickerField value={dateTo} onChange={setDateTo} ariaLabel="종료일" />
         {(search || statusFilter || categoryFilter || dateFrom || dateTo) && (
           <button
             onClick={() => {
