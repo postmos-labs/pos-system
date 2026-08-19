@@ -31,6 +31,8 @@ import RateBadge from "@/components/ui/RateBadge";
 import InstallationActivityHistory from "@/components/ui/InstallationActivityHistory";
 import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
 import { appendApprovalNote, type ApprovalNote } from "@/lib/approvalNotes";
+import { AppSelect } from "@/components/ui/AppSelect";
+import { DatePickerField, CalendarPopoverButton } from "@/components/ui/DatePickerField";
 import {
   approveInstallationCompletion,
   approveInstallationStatusByTeamLead,
@@ -394,18 +396,16 @@ const CreateForm = memo(function CreateForm({
           {techUsers.length > 0 && (
             <div>
               <label className="block text-xs text-slate-500 mb-1">담당 기사</label>
-              <select
+              <AppSelect
                 value={form.assignedTo}
-                onChange={(e) => setForm((f) => ({ ...f, assignedTo: e.target.value }))}
-                className={INPUT}
-              >
-                <option value="">미배정</option>
-                {techUsers.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+                onValueChange={(value) => setForm((f) => ({ ...f, assignedTo: value }))}
+                aria-label="담당 기사"
+                className="w-full"
+                options={[
+                  { value: "", label: "미배정" },
+                  ...techUsers.map((t) => ({ value: t.id, label: t.name })),
+                ]}
+              />
             </div>
           )}
           <div className="col-span-2">
@@ -418,11 +418,11 @@ const CreateForm = memo(function CreateForm({
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">설치 예정일</label>
-            <input
-              type="date"
+            <DatePickerField
               value={form.scheduledDate}
-              onChange={(e) => setForm((f) => ({ ...f, scheduledDate: e.target.value }))}
-              className={INPUT}
+              onChange={(value) => setForm((f) => ({ ...f, scheduledDate: value }))}
+              ariaLabel="설치 예정일"
+              className="w-full"
             />
           </div>
           <div>
@@ -445,20 +445,16 @@ const CreateForm = memo(function CreateForm({
           <div className="col-span-2">
             <label className="block text-xs text-slate-500 mb-1">제품 추가</label>
             <div className="flex gap-2">
-              <select
+              <AppSelect
                 value={cartProduct}
-                onChange={(e) => {
-                  setCartProduct(e.target.value);
+                onValueChange={(value) => {
+                  setCartProduct(value);
                   setCartCustomName("");
                 }}
-                className={INPUT}
-              >
-                {PRODUCT_CATALOG.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
+                aria-label="제품 선택"
+                className="w-full"
+                options={PRODUCT_CATALOG.map((p) => ({ value: p, label: p }))}
+              />
               <QtyStepper value={cartQty} onChange={setCartQty} />
               <button
                 type="button"
@@ -600,20 +596,16 @@ const InstallItemsEditor = memo(function InstallItemsEditor({
         </ul>
       )}
       <div className="flex flex-wrap gap-1.5">
-        <select
+        <AppSelect
           value={product}
-          onChange={(e) => {
-            setProduct(e.target.value);
+          onValueChange={(value) => {
+            setProduct(value);
             setCustomName("");
           }}
-          className="flex-1 min-w-0 border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none"
-        >
-          {PRODUCT_CATALOG.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
+          aria-label="제품 선택"
+          className="flex-1 min-w-0"
+          options={PRODUCT_CATALOG.map((p) => ({ value: p, label: p }))}
+        />
         <QtyStepper size="sm" value={qty} onChange={setQty} />
         <button
           type="button"
@@ -2146,13 +2138,13 @@ export default function InstallsClient({
             </p>
             <div>
               <label className="block text-xs text-slate-500 mb-1">설치 예정일</label>
-              <input
-                type="date"
+              <DatePickerField
                 value={scheduleModal.date}
-                onChange={(e) =>
-                  setScheduleModal((prev) => (prev ? { ...prev, date: e.target.value } : prev))
+                onChange={(next) =>
+                  setScheduleModal((prev) => (prev ? { ...prev, date: next } : prev))
                 }
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                ariaLabel="설치 예정일"
+                className="w-full"
               />
             </div>
             <div>
@@ -2414,40 +2406,38 @@ export default function InstallsClient({
             className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <select
+        <AppSelect
           value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value);
+          onValueChange={(value) => {
+            setStatusFilter(value);
             setPage(1);
           }}
-          className="text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-        >
-          <option value="">상태 전체</option>
-          {(Object.entries(STATUS_LABELS) as [string, string][]).map(([s, l]) => (
-            <option key={s} value={s}>
-              {l}
-            </option>
-          ))}
-        </select>
-        <input
-          type="date"
-          value={dateFrom}
-          onChange={(e) => {
-            setDateFrom(e.target.value);
-            setPage(1);
-          }}
-          className="text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          title="시작일"
+          aria-label="상태 필터"
+          options={[
+            { value: "", label: "상태 전체" },
+            ...(Object.entries(STATUS_LABELS) as [string, string][]).map(([s, l]) => ({
+              value: s,
+              label: l,
+            })),
+          ]}
         />
-        <input
-          type="date"
-          value={dateTo}
-          onChange={(e) => {
-            setDateTo(e.target.value);
+        <DatePickerField
+          value={dateFrom}
+          onChange={(next) => {
+            setDateFrom(next);
             setPage(1);
           }}
-          className="text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          title="종료일"
+          ariaLabel="시작일"
+          placeholder="시작일"
+        />
+        <DatePickerField
+          value={dateTo}
+          onChange={(next) => {
+            setDateTo(next);
+            setPage(1);
+          }}
+          ariaLabel="종료일"
+          placeholder="종료일"
         />
         {[
           {
@@ -2495,21 +2485,18 @@ export default function InstallsClient({
           </button>
         ))}
         {!mineOnly && (
-          <select
+          <AppSelect
             value={techFilter}
-            onChange={(e) => {
-              setTechFilter(e.target.value);
+            onValueChange={(value) => {
+              setTechFilter(value);
               setPage(1);
             }}
-            className="text-sm border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          >
-            <option value="">기사 전체</option>
-            {techProfiles.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
+            aria-label="기사 필터"
+            options={[
+              { value: "", label: "기사 전체" },
+              ...techProfiles.map((t) => ({ value: t.id, label: t.name })),
+            ]}
+          />
         )}
         {(statusFilter || (!mineOnly && techFilter) || search || dateFrom || dateTo) && (
           <button
@@ -2656,30 +2643,30 @@ export default function InstallsClient({
                       {canEdit && (
                         <div className="mt-3 space-y-2">
                           <label className="text-xs text-slate-500">담당기사</label>
-                          <select
+                          <AppSelect
                             value={inst.assigned_to || ""}
-                            onChange={(e) => handleAssign(inst.id, e.target.value)}
-                            className="w-full text-sm border border-slate-200 rounded-lg px-2 py-2 text-slate-700 focus:outline-none"
-                          >
-                            <option value="">미배정</option>
-                            {techUsers.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.name}
-                              </option>
-                            ))}
-                          </select>
-                          <select
+                            onValueChange={(value) => handleAssign(inst.id, value)}
+                            aria-label="담당기사"
+                            className="w-full"
+                            options={[
+                              { value: "", label: "미배정" },
+                              ...techUsers.map((t) => ({ value: t.id, label: t.name })),
+                            ]}
+                          />
+                          <AppSelect
                             value={inst.status}
                             disabled={!!completionApprovals[inst.id]}
-                            onChange={(e) => handleStatusChange(inst.id, e.target.value)}
-                            className={`w-full text-sm font-medium rounded-lg border px-2 py-2 focus:outline-none cursor-pointer ${STATUS_COLORS[inst.status]}`}
-                          >
-                            {statusOrderFor(inst.delivery_type).map((s) => (
-                              <option key={s} value={s}>
-                                {statusLabel(s, inst.delivery_type)}
-                              </option>
-                            ))}
-                          </select>
+                            onValueChange={(value) => handleStatusChange(inst.id, value)}
+                            aria-label="상태 변경"
+                            className={`w-full font-medium ${STATUS_COLORS[inst.status]
+                              .split(" ")
+                              .map((c) => `!${c}`)
+                              .join(" ")}`}
+                            options={statusOrderFor(inst.delivery_type).map((s) => ({
+                              value: s,
+                              label: statusLabel(s, inst.delivery_type),
+                            }))}
+                          />
                           {!!approvalNoteHistory[inst.id]?.length && (
                             <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3">
                               <p className="mb-2 text-xs font-semibold text-blue-700">
@@ -2875,21 +2862,22 @@ export default function InstallsClient({
                         onClick={(e) => e.stopPropagation()}
                       >
                         {canEdit ? (
-                          <select
+                          <AppSelect
                             value={deliveryTypeOf(inst.delivery_type)}
-                            onChange={(e) =>
-                              saveInstallField(inst.id, "delivery_type", e.target.value)
+                            onValueChange={(value) =>
+                              saveInstallField(inst.id, "delivery_type", value)
                             }
-                            className={`text-xs font-medium rounded-lg border px-2 py-1 focus:outline-none cursor-pointer ${DELIVERY_TYPE_BADGE_COLORS[deliveryTypeOf(inst.delivery_type)]}`}
-                          >
-                            {(
+                            aria-label="구분"
+                            className={`h-auto text-xs font-medium py-1 ${DELIVERY_TYPE_BADGE_COLORS[
+                              deliveryTypeOf(inst.delivery_type)
+                            ]
+                              .split(" ")
+                              .map((c) => `!${c}`)
+                              .join(" ")}`}
+                            options={(
                               ["install", "delivery", "name_change", "transfer", "as"] as const
-                            ).map((t) => (
-                              <option key={t} value={t}>
-                                {DELIVERY_TYPE_LABELS[t]}
-                              </option>
-                            ))}
-                          </select>
+                            ).map((t) => ({ value: t, label: DELIVERY_TYPE_LABELS[t] }))}
+                          />
                         ) : (
                           <span
                             className={`text-xs font-medium rounded-lg border px-2 py-1 ${DELIVERY_TYPE_BADGE_COLORS[deliveryTypeOf(inst.delivery_type)]}`}
@@ -2945,17 +2933,19 @@ export default function InstallsClient({
                         onClick={(e) => e.stopPropagation()}
                       >
                         {canEdit ? (
-                          <select
+                          <AppSelect
                             value={inst.status}
-                            onChange={(e) => handleStatusChange(inst.id, e.target.value)}
-                            className={`text-xs font-medium rounded-lg border px-2 py-1 focus:outline-none cursor-pointer ${STATUS_COLORS[inst.status]}`}
-                          >
-                            {statusOrderFor(inst.delivery_type).map((s) => (
-                              <option key={s} value={s}>
-                                {statusLabel(s, inst.delivery_type)}
-                              </option>
-                            ))}
-                          </select>
+                            onValueChange={(value) => handleStatusChange(inst.id, value)}
+                            aria-label="상태"
+                            className={`h-auto text-xs font-medium py-1 ${STATUS_COLORS[inst.status]
+                              .split(" ")
+                              .map((c) => `!${c}`)
+                              .join(" ")}`}
+                            options={statusOrderFor(inst.delivery_type).map((s) => ({
+                              value: s,
+                              label: statusLabel(s, inst.delivery_type),
+                            }))}
+                          />
                         ) : (
                           <span
                             className={`text-xs font-medium rounded-lg border px-2 py-1 ${STATUS_COLORS[inst.status]}`}
@@ -2969,18 +2959,16 @@ export default function InstallsClient({
                         onClick={(e) => e.stopPropagation()}
                       >
                         {canEdit ? (
-                          <select
+                          <AppSelect
                             value={inst.assigned_to || ""}
-                            onChange={(e) => handleAssign(inst.id, e.target.value)}
-                            className="text-xs border border-slate-200 rounded-lg px-2 py-1 text-slate-600 focus:outline-none"
-                          >
-                            <option value="">미배정</option>
-                            {techUsers.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.name}
-                              </option>
-                            ))}
-                          </select>
+                            onValueChange={(value) => handleAssign(inst.id, value)}
+                            aria-label="담당기사"
+                            className="h-auto text-xs py-1"
+                            options={[
+                              { value: "", label: "미배정" },
+                              ...techUsers.map((t) => ({ value: t.id, label: t.name })),
+                            ]}
+                          />
                         ) : (
                           <span className="text-xs text-slate-700">
                             {inst.assignee?.name ?? "미배정"}
@@ -3238,16 +3226,13 @@ export default function InstallsClient({
                                 설치 예정일
                               </p>
                               {canEdit ? (
-                                <input
-                                  type="date"
+                                <DatePickerField
                                   value={detailDraft?.scheduled_date ?? inst.scheduled_date ?? ""}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) =>
-                                    setDetailDraft((d) =>
-                                      d ? { ...d, scheduled_date: e.target.value } : d,
-                                    )
+                                  onChange={(next) =>
+                                    setDetailDraft((d) => (d ? { ...d, scheduled_date: next } : d))
                                   }
-                                  className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                  ariaLabel="설치 예정일"
+                                  className="w-full"
                                 />
                               ) : (
                                 <p className="text-slate-800">{inst.scheduled_date || "-"}</p>
