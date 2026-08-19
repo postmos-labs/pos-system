@@ -1900,11 +1900,21 @@ export default function FranchiseClient({
     status: FranchiseStatus,
     sendNotify: boolean,
     docCase?: DocCase,
+    cancelMemo?: string,
   ) {
     setBusyId(row.id);
     const supabase = createClient();
     const patch: Record<string, unknown> = { status };
     if (status === "doc_waiting") patch.doc_template = APPLICANT_TYPE_LABEL[row.applicant_type];
+    const memo =
+      status === "canceled" && cancelMemo
+        ? (() => {
+            const stamped = stampMemo(currentUserName, `취소 사유: ${cancelMemo}`);
+            const previous = (row.memo ?? "").trim();
+            return previous ? `${previous}\n${stamped}` : stamped;
+          })()
+        : undefined;
+    if (memo) patch.memo = memo;
     const { error } = await supabase.from("franchise_applications").update(patch).eq("id", row.id);
     if (error) {
       setBusyId(null);
@@ -1939,6 +1949,7 @@ export default function FranchiseClient({
                 status === "doc_waiting"
                   ? APPLICANT_TYPE_LABEL[row.applicant_type]
                   : r.doc_template,
+              memo: memo ?? r.memo,
               updated_at: new Date().toISOString(),
             }
           : r,
@@ -3345,7 +3356,7 @@ export default function FranchiseClient({
               onClose={() => setCallOpenId(null)}
               onRecordMissed={recordMissedCall}
               onRecordCompleted={recordCompletedCall}
-              onCancel={(row) => updateStatus(row, "canceled", false)}
+              onCancel={(row, reason) => updateStatus(row, "canceled", false, undefined, reason)}
             />
           );
         })()}

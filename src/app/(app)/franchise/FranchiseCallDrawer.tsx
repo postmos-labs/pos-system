@@ -24,7 +24,7 @@ interface Props {
     cancelReason?: string,
   ) => void | Promise<void>;
   onRecordCompleted: (row: FranchiseApplication, note?: string) => void | Promise<void>;
-  onCancel: (row: FranchiseApplication) => void | Promise<void>;
+  onCancel: (row: FranchiseApplication, reason: string) => void | Promise<void>;
 }
 
 function formatEntryDate(value: string) {
@@ -138,10 +138,16 @@ export default function FranchiseCallDrawer({
   }
 
   async function handleCancel() {
+    const trimmedNote = note.trim();
+    if (!trimmedNote) {
+      alert("취소 사유를 통화 메모에 입력해주세요.");
+      return;
+    }
     if (!confirm("이 접수를 취소 처리하시겠습니까?")) return;
     setSubmitting(true);
     try {
-      await onCancel(row);
+      await onCancel(row, trimmedNote);
+      setNote("");
     } finally {
       setSubmitting(false);
     }
@@ -185,7 +191,7 @@ export default function FranchiseCallDrawer({
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="통화 메모 (선택) — 부재/완료 기록에 함께 저장됩니다"
+          placeholder="통화 메모 (선택) — 부재/완료 기록에 저장되며, 취소처리 시 비고 메모에 저장됩니다"
           rows={2}
           disabled={row.status === "canceled"}
           className="w-full bg-slate-800 border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-2 py-1.5 text-sm resize-y text-white placeholder:text-slate-500 disabled:opacity-40"
