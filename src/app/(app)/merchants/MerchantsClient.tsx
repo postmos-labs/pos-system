@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
-import { ExternalLink, MapPin, Phone, Search } from "lucide-react";
+import { ExternalLink, Search } from "lucide-react";
 import {
   addMerchantEquipment,
   addMerchantMemo,
@@ -785,7 +785,7 @@ export default function MerchantsClient({
               message={search.trim() ? "검색 결과가 없습니다" : "등록된 가맹점이 없습니다"}
             />
           ) : (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1">
               {filteredMerchants.map((merchant) => {
                 const active = merchant.id === selectedId;
                 return (
@@ -798,35 +798,23 @@ export default function MerchantsClient({
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") selectMerchant(merchant.id);
                     }}
-                    className={`relative cursor-pointer rounded-xl border p-3.5 text-left transition-colors ${active ? "border-blue-300 bg-blue-50/70" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"}`}
+                    className={`relative flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${active ? "border-blue-300 bg-blue-50/70" : "border-transparent hover:bg-slate-50"}`}
                   >
                     <input
                       type="checkbox"
                       checked={selected.has(merchant.id)}
                       onChange={() => toggleOne(merchant.id)}
                       onClick={(event) => event.stopPropagation()}
-                      className="absolute right-3.5 top-3.5 h-4 w-4 cursor-pointer accent-blue-600"
+                      className="h-4 w-4 shrink-0 cursor-pointer accent-blue-600"
                     />
-                    <div className="pr-7">
+                    <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-slate-900">
                         {merchant.business_name}
                       </p>
-                      <p className="mt-0.5 text-xs text-slate-500">{merchant.owner_name || "-"}</p>
                     </div>
-                    <div className="mt-3 flex flex-col gap-1 text-xs text-slate-600">
-                      <span className="flex items-center gap-1.5 truncate">
-                        <Phone size={12} /> {merchant.phone || "-"}
-                      </span>
-                      <span
-                        className="flex items-center gap-1.5 truncate"
-                        title={merchant.address ?? ""}
-                      >
-                        <MapPin size={12} /> {merchant.address || "주소 미입력"}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-[11px] text-slate-400">
-                      등록 {format(new Date(merchant.created_at), "yyyy.M.d", { locale: ko })}
-                    </p>
+                    <span className="shrink-0 truncate text-xs text-slate-400">
+                      {merchant.owner_name || "-"}
+                    </span>
                   </div>
                 );
               })}
