@@ -13,6 +13,8 @@ import type {
 import { APPLICANT_TYPE_LABEL, FRANCHISE_CHANNEL_LABEL, FRANCHISE_CASE_TYPE_LABEL } from "@/types";
 import { formatBusinessNumber, formatPhone } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
+import { AppSelect } from "@/components/ui/AppSelect";
+import { DatePickerField } from "@/components/ui/DatePickerField";
 
 const EQUIPMENT_CATALOG = [
   "토스프론트",
@@ -118,8 +120,6 @@ function initialForm(mode: "new" | "existing"): FranchiseCreateInput {
 
 const inputClass =
   "border-border bg-card text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/30 h-9 w-full rounded-lg border px-3 text-sm outline-none focus-visible:ring-2";
-const selectClass =
-  "border-border bg-card text-foreground focus-visible:ring-primary/30 h-9 w-full rounded-lg border px-3 text-sm outline-none focus-visible:ring-2";
 const secondaryButton =
   "focus-visible:ring-primary/30 border-border bg-card text-foreground hover:bg-muted inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold transition-colors outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50";
 const primaryButton =
@@ -435,22 +435,19 @@ export default function FranchiseCreateDialog({
                     </div>
                     <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
                       <Field label="사업자 유형">
-                        <select
+                        <AppSelect
                           value={form.applicant_type}
-                          onChange={(event) =>
-                            setForm({
-                              ...form,
-                              applicant_type: event.target.value as ApplicantType,
-                            })
+                          onValueChange={(value) =>
+                            setForm({ ...form, applicant_type: value as ApplicantType })
                           }
-                          className={selectClass}
-                        >
-                          {(Object.keys(APPLICANT_TYPE_LABEL) as ApplicantType[]).map((type) => (
-                            <option key={type} value={type}>
-                              {APPLICANT_TYPE_LABEL[type]}
-                            </option>
-                          ))}
-                        </select>
+                          aria-label="사업자 유형"
+                          options={(Object.keys(APPLICANT_TYPE_LABEL) as ApplicantType[]).map(
+                            (type) => ({
+                              value: type,
+                              label: APPLICANT_TYPE_LABEL[type],
+                            }),
+                          )}
+                        />
                       </Field>
                       <Field label="사업자번호">
                         <input
@@ -474,30 +471,36 @@ export default function FranchiseCreateDialog({
                   <div className="flex flex-col gap-3.5">
                     <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
                       <Field label="채널">
-                        <select
+                        <AppSelect
                           value={form.channel}
-                          onChange={(event) =>
-                            setForm({
-                              ...form,
-                              channel: event.target.value as FranchiseChannel | "",
-                            })
+                          onValueChange={(value) =>
+                            setForm({ ...form, channel: value as FranchiseChannel | "" })
                           }
-                          className={selectClass}
-                        >
-                          <option value="">선택 안함</option>
-                          {(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map((c) => (
-                            <option key={c} value={c}>
-                              {FRANCHISE_CHANNEL_LABEL[c]}
-                            </option>
-                          ))}
-                        </select>
+                          aria-label="채널"
+                          options={[
+                            { value: "", label: "선택 안함" },
+                            ...(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map(
+                              (c) => ({
+                                value: c,
+                                label: FRANCHISE_CHANNEL_LABEL[c],
+                              }),
+                            ),
+                          ]}
+                        />
                       </Field>
                       <Field label="구분">
-                        <select value={form.case_type} disabled className={selectClass}>
-                          <option value={form.case_type}>
-                            {FRANCHISE_CASE_TYPE_LABEL[form.case_type]}
-                          </option>
-                        </select>
+                        <AppSelect
+                          value={form.case_type}
+                          onValueChange={() => {}}
+                          disabled
+                          aria-label="구분"
+                          options={[
+                            {
+                              value: form.case_type,
+                              label: FRANCHISE_CASE_TYPE_LABEL[form.case_type],
+                            },
+                          ]}
+                        />
                       </Field>
                       <Field label="옵션">
                         <div className="flex h-9 items-center gap-3">
@@ -528,50 +531,48 @@ export default function FranchiseCreateDialog({
                     </div>
                     <div className="grid grid-cols-1 gap-3.5 md:grid-cols-4">
                       <Field label="접수날짜">
-                        <input
-                          type="date"
+                        <DatePickerField
                           value={form.reception_date}
-                          onChange={(event) =>
-                            setForm({ ...form, reception_date: event.target.value })
-                          }
-                          className={inputClass}
+                          onChange={(value) => setForm({ ...form, reception_date: value })}
+                          ariaLabel="접수날짜"
+                          className="w-full"
                         />
                       </Field>
                       <Field label="카드가맹접수일">
-                        <input
-                          type="date"
+                        <DatePickerField
                           value={form.card_apply_date}
-                          onChange={(event) =>
-                            setForm({ ...form, card_apply_date: event.target.value })
-                          }
-                          className={inputClass}
+                          onChange={(value) => setForm({ ...form, card_apply_date: value })}
+                          ariaLabel="카드가맹접수일"
+                          className="w-full"
                         />
                       </Field>
                       <Field label="인터넷">
-                        <select
+                        <AppSelect
                           value={form.internet}
-                          onChange={(event) => setForm({ ...form, internet: event.target.value })}
-                          className={selectClass}
-                        >
-                          <option value="">미설정</option>
-                          {INTERNET_PROVIDERS.map((provider) => (
-                            <option key={provider}>{provider}</option>
-                          ))}
-                        </select>
+                          onValueChange={(value) => setForm({ ...form, internet: value })}
+                          aria-label="인터넷"
+                          options={[
+                            { value: "", label: "미설정" },
+                            ...INTERNET_PROVIDERS.map((provider) => ({
+                              value: provider,
+                              label: provider,
+                            })),
+                          ]}
+                        />
                       </Field>
                       <Field label="담당자">
-                        <select
+                        <AppSelect
                           value={form.cs_id}
-                          onChange={(event) => setForm({ ...form, cs_id: event.target.value })}
-                          className={selectClass}
-                        >
-                          <option value="">미배정</option>
-                          {csProfiles.map((profile) => (
-                            <option key={profile.id} value={profile.id}>
-                              {profile.name}
-                            </option>
-                          ))}
-                        </select>
+                          onValueChange={(value) => setForm({ ...form, cs_id: value })}
+                          aria-label="담당자"
+                          options={[
+                            { value: "", label: "미배정" },
+                            ...csProfiles.map((profile) => ({
+                              value: profile.id,
+                              label: profile.name,
+                            })),
+                          ]}
+                        />
                       </Field>
                     </div>
                   </div>
@@ -581,15 +582,15 @@ export default function FranchiseCreateDialog({
                   <div className="text-foreground mb-2.5 text-[13px] font-bold">상품</div>
                   <div className="flex gap-2">
                     <div className="flex-1">
-                      <select
+                      <AppSelect
                         value={productSelect}
-                        onChange={(event) => setProductSelect(event.target.value)}
-                        className={selectClass}
-                      >
-                        {EQUIPMENT_CATALOG.map((product) => (
-                          <option key={product}>{product}</option>
-                        ))}
-                      </select>
+                        onValueChange={setProductSelect}
+                        aria-label="상품 선택"
+                        options={EQUIPMENT_CATALOG.map((product) => ({
+                          value: product,
+                          label: product,
+                        }))}
+                      />
                     </div>
                     <div className="w-12 shrink-0">
                       <input
@@ -656,19 +657,19 @@ export default function FranchiseCreateDialog({
 
                 <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
                   <Field label="오픈예정일">
-                    <input
-                      type="date"
+                    <DatePickerField
                       value={form.open_date}
-                      onChange={(event) => setForm({ ...form, open_date: event.target.value })}
-                      className={inputClass}
+                      onChange={(value) => setForm({ ...form, open_date: value })}
+                      ariaLabel="오픈예정일"
+                      className="w-full"
                     />
                   </Field>
                   <Field label="설치 및 발송일">
-                    <input
-                      type="date"
+                    <DatePickerField
                       value={form.install_date}
-                      onChange={(event) => setForm({ ...form, install_date: event.target.value })}
-                      className={inputClass}
+                      onChange={(value) => setForm({ ...form, install_date: value })}
+                      ariaLabel="설치 및 발송일"
+                      className="w-full"
                     />
                   </Field>
                 </div>
