@@ -13,6 +13,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { createInstallation } from "../installs/actions";
+import { AppSelect } from "@/components/ui/AppSelect";
 
 interface CalendarTicket {
   id: string;
@@ -729,18 +730,15 @@ export default function CalendarClient({
                     className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
                   />
                   {(newCategory === "설치" || newCategory === "택배발송") && (
-                    <select
+                    <AppSelect
                       value={newAssignedTo}
-                      onChange={(e) => setNewAssignedTo(e.target.value)}
-                      className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
-                    >
-                      <option value="">담당자 미배정</option>
-                      {techProfiles.map((tech) => (
-                        <option key={tech.id} value={tech.id}>
-                          {tech.name}
-                        </option>
-                      ))}
-                    </select>
+                      onValueChange={setNewAssignedTo}
+                      aria-label="담당자"
+                      options={[
+                        { value: "", label: "담당자 미배정" },
+                        ...techProfiles.map((tech) => ({ value: tech.id, label: tech.name })),
+                      ]}
+                    />
                   )}
                   <div className="flex justify-end gap-2">
                     <button

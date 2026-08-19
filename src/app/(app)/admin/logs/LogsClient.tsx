@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { ArrowRight, Search, X } from "lucide-react";
+import { DatePickerField } from "@/components/ui/DatePickerField";
 import {
   FRANCHISE_STATUS_LABEL,
   STATUS_LABEL,
@@ -147,13 +148,10 @@ export default function LogsClient({
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <input
-          type="date"
+        <DatePickerField
           value={selectedDate ?? ""}
-          onChange={(event) =>
-            event.target.value && router.push(`/admin/logs?date=${event.target.value}`)
-          }
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onChange={(value) => value && router.push(`/admin/logs?date=${value}`)}
+          ariaLabel="조회 날짜"
         />
         <button
           onClick={() => router.push(`/admin/logs?date=${todayStr()}`)}

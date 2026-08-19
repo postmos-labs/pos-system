@@ -45,6 +45,8 @@ export function DatePickerField({
   placeholder = "날짜 선택",
   disabled = false,
   className = "",
+  minDate,
+  maxDate,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -52,8 +54,15 @@ export function DatePickerField({
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  minDate?: string;
+  maxDate?: string;
 }) {
   const selected = parseDate(value);
+  const min = minDate ? parseDate(minDate) : undefined;
+  const max = maxDate ? parseDate(maxDate) : undefined;
+  const dayDisabled = [min ? { before: min } : null, max ? { after: max } : null].filter(
+    (matcher): matcher is { before: Date } | { after: Date } => matcher !== null,
+  );
 
   return (
     <Popover.Root>
@@ -84,6 +93,7 @@ export function DatePickerField({
             onSelect={(date) => {
               if (date) onChange(formatDate(date));
             }}
+            disabled={dayDisabled.length ? dayDisabled : undefined}
             classNames={CALENDAR_CLASSNAMES}
           />
           {value && (

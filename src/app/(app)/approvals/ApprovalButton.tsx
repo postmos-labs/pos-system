@@ -20,6 +20,7 @@ import {
 } from "@/lib/installationDeliveryType";
 import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
 import type { ApprovalNote } from "@/lib/approvalNotes";
+import { AppSelect } from "@/components/ui/AppSelect";
 
 export default function ApprovalButton({
   type,
@@ -195,20 +196,19 @@ export default function ApprovalButton({
                 <label className="mt-4 block text-sm font-semibold text-slate-700">
                   이관 구분 <span className="text-red-500">*</span>
                 </label>
-                <select
+                <AppSelect
                   value={deliveryType}
-                  onChange={(event) =>
-                    setDeliveryType(event.target.value as InstallationDeliveryType | "")
-                  }
-                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                >
-                  <option value="">구분을 선택해주세요</option>
-                  {INSTALLATION_DELIVERY_TYPE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={(value) => setDeliveryType(value as InstallationDeliveryType | "")}
+                  aria-label="이관 구분"
+                  className="mt-1.5 h-10 w-full"
+                  options={[
+                    { value: "", label: "구분을 선택해주세요" },
+                    ...INSTALLATION_DELIVERY_TYPE_OPTIONS.map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                    })),
+                  ]}
+                />
               </>
             )}
             <label className="mt-4 block text-sm font-semibold text-slate-700">전달 비고</label>

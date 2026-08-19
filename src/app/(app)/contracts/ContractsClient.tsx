@@ -9,6 +9,7 @@ import { Plus, Copy, ExternalLink, Trash2, FileText, PenLine, Search } from "luc
 import type { Profile } from "@/types";
 import { useToast } from "@/components/ui/Toast";
 import FormModal from "@/components/ui/FormModal";
+import { AppSelect } from "@/components/ui/AppSelect";
 
 const PAGE_SIZE = 50;
 
@@ -259,18 +260,15 @@ export default function ContractsClient({ profile, initialContracts }: Props) {
             className="w-full border border-slate-200 rounded-lg pl-8 pr-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           />
         </div>
-        <select
+        <AppSelect
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-        >
-          <option value="">전체 상태</option>
-          {Object.entries(STATUS_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
+          onValueChange={setStatusFilter}
+          aria-label="상태 필터"
+          options={[
+            { value: "", label: "전체 상태" },
+            ...Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })),
+          ]}
+        />
       </div>
 
       {}

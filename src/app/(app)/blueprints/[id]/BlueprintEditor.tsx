@@ -21,6 +21,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import type { Profile } from "@/types";
+import { AppSelect } from "@/components/ui/AppSelect";
 
 type Tool = "select" | "rect" | "circle" | "text" | "line" | "group" | "point";
 
@@ -518,18 +519,16 @@ export default function BlueprintEditor({
           className="text-sm font-medium text-slate-800 border-none focus:outline-none focus:ring-1 focus:ring-orange-300 rounded px-1.5 py-1 min-w-0 flex-1 max-w-xs"
           placeholder="설계도 제목"
         />
-        <select
+        <AppSelect
           value={merchantId}
-          onChange={(e) => setMerchantId(e.target.value)}
-          className="text-xs text-slate-500 border border-slate-200 rounded-md px-2 py-1.5 max-w-[160px]"
-        >
-          <option value="">가맹점 연결 안함</option>
-          {merchants.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.business_name}
-            </option>
-          ))}
-        </select>
+          onValueChange={setMerchantId}
+          aria-label="연결할 가맹점"
+          className="h-auto max-w-[160px] px-2 py-1.5 text-xs text-slate-500"
+          options={[
+            { value: "", label: "가맹점 연결 안함" },
+            ...merchants.map((m) => ({ value: m.id, label: m.business_name })),
+          ]}
+        />
         <div className="flex-1" />
         <button
           onClick={insertTemplate}

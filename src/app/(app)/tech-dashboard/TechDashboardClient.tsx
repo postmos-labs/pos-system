@@ -16,6 +16,8 @@ import {
 import CalendarClient from "../calendar/CalendarClient";
 import { createClient } from "@/lib/supabase/client";
 import { fetchTechStats, monthRange, type TechStats } from "./stats";
+import { AppSelect } from "@/components/ui/AppSelect";
+import { DatePickerField } from "@/components/ui/DatePickerField";
 
 type InstallRow = {
   id: string;
@@ -337,19 +339,19 @@ export default function TechDashboardClient({
           >
             지난달
           </button>
-          <input
-            type="date"
+          <DatePickerField
             value={dateFrom}
-            max={todayYMD()}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            onChange={setDateFrom}
+            maxDate={todayYMD()}
+            ariaLabel="시작일"
+            className="h-auto px-2 py-1.5 text-xs"
           />
           <span className="text-slate-400 text-xs">~</span>
-          <input
-            type="date"
+          <DatePickerField
             value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            onChange={setDateTo}
+            ariaLabel="종료일"
+            className="h-auto px-2 py-1.5 text-xs"
           />
           <button
             onClick={() => applyRange(dateFrom, dateTo)}
@@ -373,18 +375,16 @@ export default function TechDashboardClient({
             className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <select
+        <AppSelect
           value={techFilter}
-          onChange={(e) => setTechFilter(e.target.value)}
-          className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-slate-700"
-        >
-          <option value="">담당 기사 전체</option>
-          {techProfiles.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
+          onValueChange={setTechFilter}
+          aria-label="담당 기사 필터"
+          className="h-auto px-2.5 py-1.5 text-xs"
+          options={[
+            { value: "", label: "담당 기사 전체" },
+            ...techProfiles.map((t) => ({ value: t.id, label: t.name })),
+          ]}
+        />
         {results.length > 0 && (
           <div className="absolute left-3 top-[calc(100%-2px)] w-full max-w-md bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden z-20">
             {results.map((r) => (
