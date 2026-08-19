@@ -20,6 +20,8 @@ export interface MerchantMemoEntry {
   created_by: string | null;
   author_name: string | null;
   stage: MerchantMemoStage;
+  entry_type: "as" | "claim" | "general" | "etc";
+  checklist: Record<string, boolean> | null;
 }
 
 export interface Merchant360Merchant {

@@ -17,6 +17,12 @@ import type {
 import EmptyState from "@/components/ui/EmptyState";
 import BulkDeleteActions from "@/components/ui/BulkDeleteActions";
 import BulkConfirmDialog from "@/components/ui/BulkConfirmDialog";
+import {
+  AS_CHECKLIST_SECTIONS,
+  MERCHANT_MEMO_ENTRY_TYPE_LABEL,
+  isAsChecklistComplete,
+  type MerchantMemoEntryType,
+} from "@/lib/asChecklist";
 
 interface Props {
   merchants: Merchant360Merchant[];
@@ -87,6 +93,8 @@ function MerchantDetailPanel({
   const [tab, setTab] = useState<"all" | WorkHistoryCategory>("all");
   const [memoContent, setMemoContent] = useState("");
   const [memoSubmitting, setMemoSubmitting] = useState(false);
+  const [memoEntryType, setMemoEntryType] = useState<MerchantMemoEntryType>("general");
+  const [memoChecklist, setMemoChecklist] = useState<Record<string, boolean>>({});
 
   const filteredHistory = useMemo(
     () => (tab === "all" ? history : history.filter((item) => item.category === tab)),
@@ -103,12 +111,25 @@ function MerchantDetailPanel({
 
   const merchantId = merchant.id;
 
+  const isAsEntry = memoEntryType === "as";
+  const asChecklistComplete = isAsChecklistComplete(memoChecklist);
+  const canSubmitMemo = memoContent.trim().length > 0 && (!isAsEntry || asChecklistComplete);
+
+  function toggleChecklistItem(id: string) {
+    setMemoChecklist((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
   async function submitMemo(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!memoContent.trim()) return;
+    if (!canSubmitMemo) return;
 
     setMemoSubmitting(true);
-    const result = await addMerchantMemo(merchantId, memoContent);
+    const result = await addMerchantMemo(
+      merchantId,
+      memoContent,
+      memoEntryType,
+      isAsEntry ? memoChecklist : null,
+    );
     setMemoSubmitting(false);
     if (result.error) {
       alert("메모 등록 실패: " + result.error);
@@ -119,6 +140,8 @@ function MerchantDetailPanel({
       return;
     }
     setMemoContent("");
+    setMemoEntryType("general");
+    setMemoChecklist({});
     router.refresh();
   }
 
@@ -144,7 +167,25 @@ function MerchantDetailPanel({
           onSubmit={submitMemo}
           className="mt-3 rounded-xl border border-blue-100 bg-blue-50/40 p-3"
         >
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="flex flex-wrap gap-1.5">
+            {(Object.keys(MERCHANT_MEMO_ENTRY_TYPE_LABEL) as MerchantMemoEntryType[]).map(
+              (type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setMemoEntryType(type)}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                    memoEntryType === type
+                      ? "bg-blue-600 text-white"
+                      : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  {MERCHANT_MEMO_ENTRY_TYPE_LABEL[type]}
+                </button>
+              ),
+            )}
+          </div>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
             <textarea
               value={memoContent}
               onChange={(event) => setMemoContent(event.target.value)}
@@ -155,12 +196,44 @@ function MerchantDetailPanel({
             />
             <button
               type="submit"
-              disabled={memoSubmitting || !memoContent.trim()}
+              disabled={memoSubmitting || !canSubmitMemo}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {memoSubmitting ? "등록 중..." : "새 히스토리 추가"}
             </button>
           </div>
+          {isAsEntry && (
+            <div className="mt-3 space-y-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+              <p className="text-xs font-semibold text-amber-700">
+                AS 응대 원칙 체크리스트 — 전 항목을 확인해야 저장할 수 있습니다.
+              </p>
+              {AS_CHECKLIST_SECTIONS.map((section) => (
+                <div key={section.id}>
+                  <p className="mb-1 text-xs font-bold text-slate-700">{section.title}</p>
+                  <ul className="space-y-1">
+                    {section.items.map((item) => (
+                      <li key={item.id}>
+                        <label className="flex cursor-pointer items-start gap-2 text-xs text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={memoChecklist[item.id] === true}
+                            onChange={() => toggleChecklistItem(item.id)}
+                            className="mt-0.5 size-3.5 shrink-0"
+                          />
+                          <span>{item.label}</span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+              {!asChecklistComplete && (
+                <p className="text-[11px] font-semibold text-red-500">
+                  체크되지 않은 항목이 있습니다. 모두 확인해야 저장됩니다.
+                </p>
+              )}
+            </div>
+          )}
         </form>
         {memos.length === 0 ? (
           <p className="py-4 text-center text-xs text-slate-400">등록된 메모가 없습니다.</p>
@@ -174,6 +247,9 @@ function MerchantDetailPanel({
                       className={`rounded-full px-2 py-1 font-semibold ${MEMO_STAGE_CLASS[memo.stage]}`}
                     >
                       {MEMO_STAGE_LABEL[memo.stage]}
+                    </span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-600">
+                      {MERCHANT_MEMO_ENTRY_TYPE_LABEL[memo.entry_type]}
                     </span>
                     <time dateTime={memo.created_at}>{formatMemoDate(memo.created_at)}</time>
                     <span>·</span>

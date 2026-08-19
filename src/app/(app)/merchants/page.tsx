@@ -55,6 +55,8 @@ type MerchantMemoEntryRow = {
   created_at: string;
   created_by: string | null;
   author: { name: string }[];
+  entry_type: "as" | "claim" | "general" | "etc" | null;
+  checklist: Record<string, boolean> | null;
 };
 
 function firstTimestamp(values: string[]) {
@@ -176,7 +178,7 @@ async function loadMerchant360(
       .order("created_at", { ascending: false }),
     supabase
       .from("merchant_memo_entries")
-      .select("id,content,created_at,created_by,author:profiles(name)")
+      .select("id,content,created_at,created_by,entry_type,checklist,author:profiles(name)")
       .eq("merchant_id", merchantId)
       .order("created_at", { ascending: false }),
   ]);
@@ -227,6 +229,8 @@ async function loadMerchant360(
     created_by: memo.created_by,
     author_name: memo.author[0]?.name ?? null,
     stage: classifyMemo(memo.created_at, installations, firstCompletionAt),
+    entry_type: memo.entry_type ?? "general",
+    checklist: memo.checklist,
   }));
 
   const history: WorkHistoryItem[] = [];

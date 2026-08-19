@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireDeletePermission } from "@/lib/auth/require-admin";
 import { createClient } from "@/lib/supabase/server";
+import { isAsChecklistComplete, type MerchantMemoEntryType } from "@/lib/asChecklist";
 
 const CHUNK_SIZE = 100;
 
@@ -16,7 +17,12 @@ function isMissingMerchantMemoEntriesTable(error: { code?: string; message?: str
   );
 }
 
-export async function addMerchantMemo(merchantId: string, content: string) {
+export async function addMerchantMemo(
+  merchantId: string,
+  content: string,
+  entryType: MerchantMemoEntryType = "general",
+  checklist: Record<string, boolean> | null = null,
+) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -30,11 +36,19 @@ export async function addMerchantMemo(merchantId: string, content: string) {
   if (trimmedContent.length > 2000) {
     return { error: "메모는 2,000자 이하로 입력해주세요.", skipped: false };
   }
+  if (!["as", "claim", "general", "etc"].includes(entryType)) {
+    return { error: "잘못된 메모 유형입니다.", skipped: false };
+  }
+  if (entryType === "as" && !isAsChecklistComplete(checklist)) {
+    return { error: "AS 체크리스트를 모두 확인해야 저장할 수 있습니다.", skipped: false };
+  }
 
   const admin = createAdminClient();
   const { error } = await admin.from("merchant_memo_entries").insert({
     merchant_id: merchantId,
     content: trimmedContent,
+    entry_type: entryType,
+    checklist: entryType === "as" ? checklist : null,
     created_by: user.id,
   });
   if (error) {
