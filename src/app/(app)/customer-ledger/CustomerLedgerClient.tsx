@@ -7,6 +7,7 @@ import { formatPhone } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 import FormModal from "@/components/ui/FormModal";
 import type { CustomerLedger, Profile } from "@/types";
+import { DatePickerField } from "@/components/ui/DatePickerField";
 
 function today() {
   return new Date().toLocaleDateString("sv-SE");
@@ -34,11 +35,10 @@ function CreateForm({ onSubmit, submitting, onClose }: CreateFormProps) {
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">날짜</label>
-          <input
-            type="date"
+          <DatePickerField
             value={form.record_date}
-            onChange={(e) => setForm({ ...form, record_date: e.target.value })}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onChange={(value) => setForm({ ...form, record_date: value })}
+            ariaLabel="날짜"
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -124,6 +124,20 @@ const EditableField = memo(function EditableField({
         onBlur={commit}
         rows={3}
         className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-white"
+      />
+    );
+  }
+
+  if (type === "date") {
+    return (
+      <DatePickerField
+        value={value}
+        onChange={(next) => {
+          setValue(next);
+          if (next !== initial) onSave(row, field, next);
+        }}
+        ariaLabel="날짜"
+        className="w-full"
       />
     );
   }

@@ -2,6 +2,7 @@
 
 import * as Popover from "@radix-ui/react-popover";
 import { CalendarDays } from "lucide-react";
+import { useState } from "react";
 import { DayPicker } from "react-day-picker";
 import { ko } from "react-day-picker/locale";
 
@@ -93,6 +94,8 @@ export function CalendarPopoverButton({
 export function DatePickerField({
   value,
   onChange,
+  defaultValue,
+  name,
   ariaLabel,
   placeholder = "날짜 선택",
   disabled = false,
@@ -100,8 +103,11 @@ export function DatePickerField({
   minDate,
   maxDate,
 }: {
-  value: string;
-  onChange: (value: string) => void;
+  value?: string;
+  onChange?: (value: string) => void;
+  /** value/onChange 없이 name과 함께 쓰면 native <form>의 GET/POST 제출에 hidden input으로 참여한다. */
+  defaultValue?: string;
+  name?: string;
   ariaLabel: string;
   placeholder?: string;
   disabled?: boolean;
@@ -109,7 +115,14 @@ export function DatePickerField({
   minDate?: string;
   maxDate?: string;
 }) {
-  const selected = parseDate(value);
+  const isControlled = value !== undefined;
+  const [internalValue, setInternalValue] = useState(defaultValue ?? "");
+  const currentValue = isControlled ? value : internalValue;
+  const handleChange = (next: string) => {
+    if (!isControlled) setInternalValue(next);
+    onChange?.(next);
+  };
+  const selected = parseDate(currentValue);
   const min = minDate ? parseDate(minDate) : undefined;
   const max = maxDate ? parseDate(maxDate) : undefined;
   const dayDisabled = [min ? { before: min } : null, max ? { after: max } : null].filter(
@@ -118,6 +131,7 @@ export function DatePickerField({
 
   return (
     <Popover.Root>
+      {name && <input type="hidden" name={name} value={currentValue} />}
       <Popover.Trigger asChild>
         <button
           type="button"
@@ -126,8 +140,8 @@ export function DatePickerField({
           className={`inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition hover:border-slate-300 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
         >
           <CalendarDays size={14} className="shrink-0 text-slate-400" aria-hidden="true" />
-          <span className={value ? "text-slate-700" : "text-slate-400"}>
-            {value || placeholder}
+          <span className={currentValue ? "text-slate-700" : "text-slate-400"}>
+            {currentValue || placeholder}
           </span>
         </button>
       </Popover.Trigger>
@@ -143,15 +157,15 @@ export function DatePickerField({
             selected={selected}
             defaultMonth={selected}
             onSelect={(date) => {
-              if (date) onChange(formatDate(date));
+              if (date) handleChange(formatDate(date));
             }}
             disabled={dayDisabled.length ? dayDisabled : undefined}
             classNames={CALENDAR_CLASSNAMES}
           />
-          {value && (
+          {currentValue && (
             <button
               type="button"
-              onClick={() => onChange("")}
+              onClick={() => handleChange("")}
               className="mt-1 w-full rounded-md py-1 text-center text-xs text-slate-400 hover:bg-slate-50 hover:text-slate-600"
             >
               날짜 지우기

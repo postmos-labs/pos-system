@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
 import { createPromotion, deletePromotion, updatePromotion, type PromotionInput } from "./actions";
 import { formatNumber } from "./formatters";
+import { DatePickerField } from "@/components/ui/DatePickerField";
 
 type Promotion = {
   id: string;
@@ -79,6 +80,10 @@ export default function PromotionManager({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!form.name.trim() || !form.startDate || !form.endDate) {
+      toast.error("프로모션 이름, 시작일, 종료일을 입력해주세요.");
+      return;
+    }
     const input: PromotionInput = {
       name: form.name,
       startDate: form.startDate,
@@ -244,23 +249,21 @@ export default function PromotionManager({
             </label>
             <label>
               <span className="mb-1.5 block text-xs font-semibold text-slate-600">시작일</span>
-              <input
-                required
-                type="date"
+              <DatePickerField
                 value={form.startDate}
-                onChange={(event) => updateField("startDate", event.target.value)}
-                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                onChange={(value) => updateField("startDate", value)}
+                ariaLabel="시작일"
+                className="h-10 w-full"
               />
             </label>
             <label>
               <span className="mb-1.5 block text-xs font-semibold text-slate-600">종료일</span>
-              <input
-                required
-                type="date"
-                min={form.startDate || undefined}
+              <DatePickerField
                 value={form.endDate}
-                onChange={(event) => updateField("endDate", event.target.value)}
-                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                onChange={(value) => updateField("endDate", value)}
+                minDate={form.startDate || undefined}
+                ariaLabel="종료일"
+                className="h-10 w-full"
               />
             </label>
             <label>

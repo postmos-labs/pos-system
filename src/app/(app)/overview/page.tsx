@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { CalendarDays, CircleDollarSign, Gift, PackageCheck, Search } from "lucide-react";
+import { CircleDollarSign, Gift, PackageCheck, Search } from "lucide-react";
 import PromotionManager from "./PromotionManager";
+import { DatePickerField } from "@/components/ui/DatePickerField";
 import { formatNumber } from "./formatters";
 
 const FRONT_UNIT_PRICE = 220000; // 프론트 1대당 부가서비스 수수료
@@ -156,28 +157,22 @@ export default async function OverviewPage({ searchParams }: { searchParams: Sea
       >
         <label className="flex min-w-[170px] flex-1 flex-col gap-1.5 text-sm font-medium text-slate-700">
           시작일
-          <span className="relative">
-            <CalendarDays className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="date"
-              name="from"
-              defaultValue={rangeFrom}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-            />
-          </span>
+          <DatePickerField
+            name="from"
+            defaultValue={rangeFrom}
+            ariaLabel="시작일"
+            className="h-10 w-full"
+          />
         </label>
         <span className="pb-2 text-slate-400">~</span>
         <label className="flex min-w-[170px] flex-1 flex-col gap-1.5 text-sm font-medium text-slate-700">
           종료일
-          <span className="relative">
-            <CalendarDays className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="date"
-              name="to"
-              defaultValue={rangeTo}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-            />
-          </span>
+          <DatePickerField
+            name="to"
+            defaultValue={rangeTo}
+            ariaLabel="종료일"
+            className="h-10 w-full"
+          />
         </label>
         <button
           type="submit"
