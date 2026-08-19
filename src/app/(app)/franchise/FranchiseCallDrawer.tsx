@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PhoneCall, PhoneMissed, X } from "lucide-react";
+import { Ban, PhoneCall, PhoneMissed, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { FranchiseApplication } from "@/types";
 import { APPLICANT_TYPE_LABEL } from "@/types";
@@ -24,6 +24,7 @@ interface Props {
     cancelReason?: string,
   ) => void | Promise<void>;
   onRecordCompleted: (row: FranchiseApplication, note?: string) => void | Promise<void>;
+  onCancel: (row: FranchiseApplication) => void | Promise<void>;
 }
 
 function formatEntryDate(value: string) {
@@ -37,6 +38,7 @@ export default function FranchiseCallDrawer({
   onClose,
   onRecordMissed,
   onRecordCompleted,
+  onCancel,
 }: Props) {
   const [logs, setLogs] = useState<CallLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,6 +137,16 @@ export default function FranchiseCallDrawer({
     }
   }
 
+  async function handleCancel() {
+    if (!confirm("이 접수를 취소 처리하시겠습니까?")) return;
+    setSubmitting(true);
+    try {
+      await onCancel(row);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div className="fixed bottom-6 right-6 z-50 w-[32rem] max-w-[calc(100vw-3rem)] h-[75vh] max-h-[75vh] flex flex-col bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-700">
       <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700">
@@ -192,6 +204,13 @@ export default function FranchiseCallDrawer({
             className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-green-500/10 border border-green-400/30 text-green-300 hover:bg-green-500/20 px-3 py-2 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <PhoneCall size={14} /> 통화완료
+          </button>
+          <button
+            onClick={handleCancel}
+            disabled={submitting || row.status === "canceled"}
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-slate-500/10 border border-slate-400/30 text-slate-200 hover:bg-slate-500/20 px-3 py-2 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Ban size={14} /> 취소처리
           </button>
         </div>
       </div>

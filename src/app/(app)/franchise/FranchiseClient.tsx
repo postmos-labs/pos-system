@@ -3345,6 +3345,7 @@ export default function FranchiseClient({
               onClose={() => setCallOpenId(null)}
               onRecordMissed={recordMissedCall}
               onRecordCompleted={recordCompletedCall}
+              onCancel={(row) => updateStatus(row, "canceled", false)}
             />
           );
         })()}
