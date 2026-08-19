@@ -6,6 +6,7 @@ import { requireDeletePermission } from "@/lib/auth/require-admin";
 import { createClient } from "@/lib/supabase/server";
 import { sendApprovedInstallNotification } from "@/lib/installNotifications";
 import { appendApprovalNote, parseApprovalNotes, validateApprovalNote } from "@/lib/approvalNotes";
+import { recordDeletions } from "@/lib/deletionLog";
 
 const INSTALL_STATUSES = new Set([
   "received",
@@ -1075,12 +1076,13 @@ export async function deleteInstallations(ids: string[]) {
     return { error: "가맹접수에서 이관된 설치건은 삭제할 수 없습니다." };
   }
 
+  // 설치건을 지우면 installation_activity_logs도 CASCADE로 함께 사라지므로 삭제된 행을 그대로 스냅샷으로 남긴다
   const { data: deleted, error: deleteError } = await admin
     .from("installations")
     .delete()
     .in("id", uniqueIds)
     .is("franchise_application_id", null)
-    .select("id");
+    .select("*");
 
   if (deleteError) return { error: deleteError.message };
   if ((deleted?.length ?? 0) !== uniqueIds.length) {
@@ -1088,6 +1090,8 @@ export async function deleteInstallations(ids: string[]) {
       error: "일부 설치건이 가맹접수와 연결되어 삭제되지 않았습니다. 목록을 새로고침해 주세요.",
     };
   }
+
+  await recordDeletions("installation", (deleted ?? []) as Record<string, unknown>[]);
 
   revalidatePath("/installs");
   revalidatePath("/installs/mine");

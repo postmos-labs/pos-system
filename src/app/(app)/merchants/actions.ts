@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireDeletePermission } from "@/lib/auth/require-admin";
 import { createClient } from "@/lib/supabase/server";
 import { isAsChecklistComplete, type MerchantMemoEntryType } from "@/lib/asChecklist";
+import { fetchRowsForDeletion, recordDeletions } from "@/lib/deletionLog";
 
 const CHUNK_SIZE = 100;
 
@@ -178,8 +179,11 @@ export async function deleteMerchants(ids: string[]) {
   const supabase = createAdminClient();
   for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
     const chunk = ids.slice(i, i + CHUNK_SIZE);
+    // 가맹점을 지우면 메모·장비 등 연결 데이터도 CASCADE로 사라지므로 삭제 전에 스냅샷을 남긴다
+    const snapshots = await fetchRowsForDeletion("merchants", chunk);
     const { error } = await supabase.from("merchants").delete().in("id", chunk);
     if (error) return { error: error.message };
+    await recordDeletions("merchant", snapshots);
   }
   return { error: null };
 }

@@ -17,9 +17,20 @@ import {
   isInstallationDeliveryType,
 } from "@/lib/installationDeliveryType";
 
+export type ActivitySource =
+  | "franchise"
+  | "call"
+  | "installation"
+  | "ticket"
+  | "change"
+  | "memo"
+  | "alimtalk"
+  | "inventory"
+  | "deletion";
+
 export interface EmployeeActivityLog {
   id: string;
-  source: "franchise" | "installation" | "ticket" | "inventory";
+  source: ActivitySource;
   sourceLabel: string;
   actorName: string;
   subject: string;
@@ -38,6 +49,12 @@ const INSTALLATION_STATUS_LABEL: Record<string, string> = {
   delivery_sent: "택배발송",
   completed: "설치완료",
   rejected: "반려",
+};
+
+const CHANGE_STATUS_LABEL_LOCAL: Record<string, string> = {
+  pending: "접수",
+  processing: "처리중",
+  done: "완료",
 };
 
 const FRANCHISE_ACTIVITY_LABEL: Record<string, string> = {
@@ -60,6 +77,13 @@ const ALIMTALK_LABEL: Record<string, string> = {
   internet_done: "인터넷개통완료",
   toss_review_apply_done: "토스심사접수완료",
   toss_review_done: "토스심사완료",
+  preparing: "제품준비 안내",
+  scheduled: "일정확정 안내",
+  in_transit: "이동중 안내",
+  delivery_sent: "택배발송 안내",
+  completed: "설치완료 안내",
+  sign_request: "서명 요청",
+  sign_complete: "서명 완료",
 };
 
 const INSTALLATION_ACTION_LABEL: Record<string, string> = {
@@ -75,18 +99,35 @@ const INSTALLATION_ACTION_LABEL: Record<string, string> = {
   step_approval_rejected: "단계 승인 반려",
 };
 
-const SOURCE_TONE: Record<EmployeeActivityLog["source"], string> = {
+const SOURCE_TONE: Record<ActivitySource, string> = {
   franchise: "bg-blue-50 text-blue-700",
+  call: "bg-cyan-50 text-cyan-700",
   installation: "bg-orange-50 text-orange-700",
   ticket: "bg-purple-50 text-purple-700",
+  change: "bg-indigo-50 text-indigo-700",
+  memo: "bg-slate-100 text-slate-700",
+  alimtalk: "bg-teal-50 text-teal-700",
   inventory: "bg-emerald-50 text-emerald-700",
+  deletion: "bg-red-50 text-red-700",
 };
+
+const SOURCE_FILTERS: { key: ActivitySource; label: string }[] = [
+  { key: "franchise", label: "가맹접수" },
+  { key: "call", label: "통화" },
+  { key: "installation", label: "설치" },
+  { key: "ticket", label: "작업" },
+  { key: "change", label: "변경접수" },
+  { key: "memo", label: "메모" },
+  { key: "alimtalk", label: "알림톡" },
+  { key: "inventory", label: "재고" },
+  { key: "deletion", label: "삭제" },
+];
 
 function todayStr() {
   return format(new Date(), "yyyy-MM-dd");
 }
 
-function statusLabel(source: EmployeeActivityLog["source"], status: string | null) {
+function statusLabel(source: ActivitySource, status: string | null) {
   if (!status) return "-";
   if (source === "franchise") {
     if (status.startsWith("alimtalk:")) {
@@ -96,33 +137,53 @@ function statusLabel(source: EmployeeActivityLog["source"], status: string | nul
     return (
       FRANCHISE_ACTIVITY_LABEL[status] ??
       FRANCHISE_STATUS_LABEL[status as FranchiseStatus] ??
-      status
+      "기타"
     );
   }
-  if (source === "installation") return INSTALLATION_STATUS_LABEL[status] ?? status;
-  if (source === "ticket") return STATUS_LABEL[status as TicketStatus] ?? status;
+  if (source === "installation") return INSTALLATION_STATUS_LABEL[status] ?? "기타";
+  if (source === "ticket") return STATUS_LABEL[status as TicketStatus] ?? "기타";
+  if (source === "change") return CHANGE_STATUS_LABEL_LOCAL[status] ?? "기타";
   return status;
+}
+
+/** 알림톡 소스의 description은 `template_key` 또는 `template_key · 발송실패: ...` 형태다. */
+function alimtalkDescription(description: string) {
+  const [key, ...rest] = description.split(" · ");
+  const label = ALIMTALK_LABEL[key] ?? key;
+  return [label, ...rest].join(" · ");
 }
 
 export default function LogsClient({
   logs,
-  selectedDate,
+  fromDate,
+  toDate,
   nextCursor,
   isOlderPage,
 }: {
   logs: EmployeeActivityLog[];
-  selectedDate: string | null;
+  fromDate: string | null;
+  toDate: string | null;
   nextCursor: string | null;
   isOlderPage: boolean;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [source, setSource] = useState<EmployeeActivityLog["source"] | "all">("all");
+  const [source, setSource] = useState<ActivitySource | "all">("all");
+  const [actor, setActor] = useState<string | null>(null);
+
+  function applyRange(nextFrom: string | null, nextTo: string | null) {
+    const search = new URLSearchParams();
+    if (nextFrom) search.set("from", nextFrom);
+    if (nextTo) search.set("to", nextTo);
+    const qs = search.toString();
+    router.push(qs ? `/admin/logs?${qs}` : "/admin/logs");
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return logs.filter((log) => {
       if (source !== "all" && log.source !== source) return false;
+      if (actor && log.actorName !== actor) return false;
       if (!q) return true;
       return (
         log.actorName.toLowerCase().includes(q) ||
@@ -131,37 +192,71 @@ export default function LogsClient({
         log.sourceLabel.toLowerCase().includes(q)
       );
     });
-  }, [logs, query, source]);
+  }, [logs, query, source, actor]);
 
+  // 담당자별 건수는 소스 필터까지만 반영한다 (담당자를 골라도 다른 사람 건수가 사라지지 않도록)
   const userCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const log of logs) counts.set(log.actorName, (counts.get(log.actorName) ?? 0) + 1);
+    for (const log of logs) {
+      if (source !== "all" && log.source !== source) continue;
+      counts.set(log.actorName, (counts.get(log.actorName) ?? 0) + 1);
+    }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  }, [logs]);
+  }, [logs, source]);
 
   const sourceCounts = useMemo(() => {
-    const counts = new Map<EmployeeActivityLog["source"], number>();
+    const counts = new Map<ActivitySource, number>();
     for (const log of logs) counts.set(log.source, (counts.get(log.source) ?? 0) + 1);
     return counts;
   }, [logs]);
+
+  const hasDateFilter = Boolean(fromDate || toDate);
 
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <DatePickerField
-          value={selectedDate ?? ""}
-          onChange={(value) => value && router.push(`/admin/logs?date=${value}`)}
-          ariaLabel="조회 날짜"
+          value={fromDate ?? ""}
+          onChange={(value) => applyRange(value || null, toDate)}
+          ariaLabel="조회 시작일"
+          placeholder="시작일"
+        />
+        <span className="text-xs text-slate-400">~</span>
+        <DatePickerField
+          value={toDate ?? ""}
+          onChange={(value) => applyRange(fromDate, value || null)}
+          ariaLabel="조회 종료일"
+          placeholder="종료일"
         />
         <button
-          onClick={() => router.push(`/admin/logs?date=${todayStr()}`)}
+          onClick={() => applyRange(todayStr(), todayStr())}
           className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
         >
           오늘
         </button>
-        {selectedDate && (
+        <button
+          onClick={() => {
+            const to = new Date();
+            const from = new Date(to.getTime() - 6 * 24 * 60 * 60 * 1000);
+            applyRange(format(from, "yyyy-MM-dd"), format(to, "yyyy-MM-dd"));
+          }}
+          className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+        >
+          최근 7일
+        </button>
+        <button
+          onClick={() => {
+            const now = new Date();
+            const first = new Date(now.getFullYear(), now.getMonth(), 1);
+            applyRange(format(first, "yyyy-MM-dd"), format(now, "yyyy-MM-dd"));
+          }}
+          className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+        >
+          이번 달
+        </button>
+        {hasDateFilter && (
           <button
-            onClick={() => router.push("/admin/logs")}
+            onClick={() => applyRange(null, null)}
             className="flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
           >
             <X size={13} /> 초기화
@@ -184,34 +279,47 @@ export default function LogsClient({
           active={source === "all"}
           onClick={() => setSource("all")}
         />
-        {(["franchise", "installation", "ticket", "inventory"] as const).map((item) => (
+        {SOURCE_FILTERS.map((item) => (
           <SourceButton
-            key={item}
-            label={
-              { franchise: "가맹접수", installation: "설치", ticket: "작업", inventory: "재고" }[
-                item
-              ]
-            }
-            count={sourceCounts.get(item) ?? 0}
-            active={source === item}
-            onClick={() => setSource(item)}
+            key={item.key}
+            label={item.label}
+            count={sourceCounts.get(item.key) ?? 0}
+            active={source === item.key}
+            onClick={() => setSource(item.key)}
           />
         ))}
       </div>
 
       {userCounts.length > 0 && (
         <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="mb-2 text-xs font-semibold text-slate-500">
-            {selectedDate ? `${selectedDate} 담당자별 처리 건수` : "담당자별 처리 건수"}
-          </p>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-slate-500">담당자별 처리 건수</p>
+            {actor && (
+              <button
+                onClick={() => setActor(null)}
+                className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+              >
+                <X size={12} /> {actor} 필터 해제
+              </button>
+            )}
+          </div>
           <div className="flex flex-wrap gap-2">
             {userCounts.map(([name, count]) => (
-              <span
+              <button
                 key={name}
-                className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700"
+                type="button"
+                onClick={() => setActor(actor === name ? null : name)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  actor === name
+                    ? "bg-blue-600 text-white"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                }`}
               >
-                {name} <span className="font-semibold text-blue-600">{count}건</span>
-              </span>
+                {name}{" "}
+                <span className={actor === name ? "font-semibold" : "font-semibold text-blue-600"}>
+                  {count}건
+                </span>
+              </button>
             ))}
           </div>
         </div>
@@ -259,10 +367,16 @@ export default function LogsClient({
                   </div>
                 )}
                 {log.description && (
-                  <p className="mt-1 text-xs text-slate-600">
+                  <p
+                    className={`mt-1 whitespace-pre-wrap break-words text-xs ${
+                      log.source === "deletion" ? "font-semibold text-red-600" : "text-slate-600"
+                    }`}
+                  >
                     {log.source === "installation"
                       ? (INSTALLATION_ACTION_LABEL[log.description] ?? log.description)
-                      : log.description}
+                      : log.source === "alimtalk"
+                        ? alimtalkDescription(log.description)
+                        : log.description}
                   </p>
                 )}
                 <p className="mt-1 text-xs text-slate-400">

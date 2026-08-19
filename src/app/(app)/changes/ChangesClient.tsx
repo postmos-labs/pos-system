@@ -311,11 +311,19 @@ export default function ChangesClient({
   }
 
   async function updateStatus(row: ChangeRequest, status: ChangeRequestStatus) {
+    if (status === row.status) return;
     const { error } = await supabase.from("change_requests").update({ status }).eq("id", row.id);
     if (error) {
       toast.error("상태 변경 실패: " + error.message);
       return;
     }
+    // 누가 처리/완료했는지 남긴다 (직원 활동 로그에 집계됨)
+    await supabase.from("change_request_logs").insert({
+      change_request_id: row.id,
+      user_id: currentUserId,
+      from_status: row.status,
+      to_status: status,
+    });
     setLocalRows((prev) =>
       prev.map((r) =>
         r.id === row.id ? { ...r, status, updated_at: new Date().toISOString() } : r,
