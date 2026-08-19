@@ -6,6 +6,7 @@ import { Plus, Trash2, Search, Phone } from "lucide-react";
 import { formatPhone } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 import FormModal from "@/components/ui/FormModal";
+import { AppSelect } from "@/components/ui/AppSelect";
 
 const SPECIALTIES = ["포스기", "키오스크", "네트워크", "카드단말기", "인터넷", "전기", "기타"];
 
@@ -272,31 +273,25 @@ export default function ExternalTechsClient({
             className="pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg w-48 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <select
+        <AppSelect
           value={specialtyFilter}
-          onChange={(e) => setSpecialtyFilter(e.target.value)}
-          className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">전문분야 전체</option>
-          {SPECIALTIES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+          onValueChange={setSpecialtyFilter}
+          aria-label="전문분야 필터"
+          options={[
+            { value: "", label: "전문분야 전체" },
+            ...SPECIALTIES.map((s) => ({ value: s, label: s })),
+          ]}
+        />
         {areas.length > 0 && (
-          <select
+          <AppSelect
             value={areaFilter}
-            onChange={(e) => setAreaFilter(e.target.value)}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">지역 전체</option>
-            {areas.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
+            onValueChange={setAreaFilter}
+            aria-label="지역 필터"
+            options={[
+              { value: "", label: "지역 전체" },
+              ...areas.map((a) => ({ value: a, label: a })),
+            ]}
+          />
         )}
         <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
           <input

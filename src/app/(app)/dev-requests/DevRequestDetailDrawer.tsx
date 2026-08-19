@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import type { DevRequest, DevRequestStatus } from "./DevRequestsClient";
+import { AppSelect } from "@/components/ui/AppSelect";
 
 const STATUS_STYLE: Record<DevRequestStatus, string> = {
   확인중: "bg-amber-100 text-amber-700",
@@ -63,18 +64,13 @@ export default function DevRequestDetailDrawer({ row, onClose, onStatusChange }:
             </button>
           </div>
           <div className="mt-3.5 flex items-center gap-2.5">
-            <select
+            <AppSelect
               aria-label="상태"
               value={row.status}
-              onChange={(e) => onStatusChange(e.target.value as DevRequestStatus)}
-              className={`h-auto rounded-md border-none px-2.5 py-1 text-xs font-semibold outline-none cursor-pointer ${STATUS_STYLE[row.status]}`}
-            >
-              {STATUS_OPTIONS.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
+              onValueChange={(value) => onStatusChange(value as DevRequestStatus)}
+              className={`h-auto rounded-md border-none px-2.5 py-1 text-xs font-semibold ${STATUS_STYLE[row.status]}`}
+              options={STATUS_OPTIONS.map((status) => ({ value: status, label: status }))}
+            />
             <span className="text-sm text-slate-500">
               요청일시 {formatDateTime(row.created_at)}
             </span>

@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import BulkDeleteActions from "@/components/ui/BulkDeleteActions";
 import FormModal from "@/components/ui/FormModal";
 import DevRequestDetailDrawer from "./DevRequestDetailDrawer";
+import { AppSelect } from "@/components/ui/AppSelect";
 import type { Profile } from "@/types";
 
 export type DevRequestStatus = "확인중" | "미승인" | "승인" | "처리완료";
@@ -216,18 +217,15 @@ export default function DevRequestsClient({ rows, profile }: Props) {
             className="pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg w-56 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <select
+        <AppSelect
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as any)}
-          className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">전체</option>
-          {STATUS_OPTIONS.map((status) => (
-            <option key={status} value={status}>
-              {status}
-            </option>
-          ))}
-        </select>
+          onValueChange={(value) => setStatusFilter(value as "all" | DevRequestStatus)}
+          aria-label="상태 필터"
+          options={[
+            { value: "all", label: "전체" },
+            ...STATUS_OPTIONS.map((status) => ({ value: status, label: status })),
+          ]}
+        />
         {(search || statusFilter !== "all") && (
           <button
             onClick={() => {
@@ -327,17 +325,13 @@ export default function DevRequestsClient({ rows, profile }: Props) {
                 </td>
                 <td className="px-3 py-3 text-slate-700 whitespace-nowrap">{row.requester_name}</td>
                 <td className="px-3 py-3 whitespace-nowrap">
-                  <select
+                  <AppSelect
                     value={row.status}
-                    onChange={(e) => changeStatus(row, e.target.value as DevRequestStatus)}
-                    className={`text-xs font-semibold rounded-full px-2 py-1 border-0 cursor-pointer ${STATUS_STYLE[row.status]}`}
-                  >
-                    {STATUS_OPTIONS.map((status) => (
-                      <option key={status} value={status}>
-                        {status}
-                      </option>
-                    ))}
-                  </select>
+                    onValueChange={(value) => changeStatus(row, value as DevRequestStatus)}
+                    aria-label="개발요청 상태"
+                    className={`h-auto rounded-full border-0 px-2 py-1 ${STATUS_STYLE[row.status]}`}
+                    options={STATUS_OPTIONS.map((status) => ({ value: status, label: status }))}
+                  />
                 </td>
                 <td className="px-3 py-3 text-slate-700 whitespace-nowrap">
                   {row.approver_name ?? "-"}
