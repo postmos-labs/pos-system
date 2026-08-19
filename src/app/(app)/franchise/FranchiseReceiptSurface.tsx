@@ -1006,7 +1006,7 @@ export default function FranchiseReceiptSurface(props: Props) {
                             ariaLabel="확인일"
                             value={row.next_check_date ?? ""}
                             onChange={(value) => props.onSaveNextCheckDate(row, value)}
-                            className={`h-auto border-none bg-transparent px-0 text-[12.5px] ${color} ${severity > 0 ? "animate-pulse font-semibold" : ""}`}
+                            className={`h-auto !border-none !bg-transparent px-0 text-[12.5px] ${color ? `!${color}` : ""} ${severity > 0 ? "animate-pulse font-semibold" : ""}`}
                           />
                         );
                       })()}
