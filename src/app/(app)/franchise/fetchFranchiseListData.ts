@@ -100,37 +100,49 @@ export async function fetchFranchiseListData(
   > = {};
   if (rows && rows.length > 0) {
     const phones = [...new Set(rows.map((r) => r.phone).filter((p): p is string => !!p))];
-    const [{ data: installs }, { data: internetsById }, { data: internetsByPhone }] =
-      await Promise.all([
-        supabase
-          .from("installations")
-          .select("id, status, franchise_application_id")
-          .in(
-            "franchise_application_id",
-            rows.map((r) => r.id),
-          ),
-        supabase
-          .from("internet_management")
-          .select("id, status, category, franchise_application_id")
-          .in(
-            "franchise_application_id",
-            rows.map((r) => r.id),
-          ),
-        phones.length > 0
-          ? supabase
-              .from("internet_management")
-              .select("id, status, category, phone")
-              .is("franchise_application_id", null)
-              .in("phone", phones)
-          : Promise.resolve({
-              data: [] as {
-                id: string;
-                status: string | null;
-                category: string | null;
-                phone: string | null;
-              }[],
-            }),
-      ]);
+    const [
+      { data: installs },
+      { data: internetsById },
+      { data: internetsByPhone },
+      { data: callLogs },
+    ] = await Promise.all([
+      supabase
+        .from("installations")
+        .select("id, status, franchise_application_id")
+        .in(
+          "franchise_application_id",
+          rows.map((r) => r.id),
+        ),
+      supabase
+        .from("internet_management")
+        .select("id, status, category, franchise_application_id")
+        .in(
+          "franchise_application_id",
+          rows.map((r) => r.id),
+        ),
+      phones.length > 0
+        ? supabase
+            .from("internet_management")
+            .select("id, status, category, phone")
+            .is("franchise_application_id", null)
+            .in("phone", phones)
+        : Promise.resolve({
+            data: [] as {
+              id: string;
+              status: string | null;
+              category: string | null;
+              phone: string | null;
+            }[],
+          }),
+      supabase
+        .from("franchise_application_call_logs")
+        .select("franchise_application_id, call_type, created_at")
+        .in(
+          "franchise_application_id",
+          rows.map((row) => row.id),
+        )
+        .order("created_at", { ascending: false }),
+    ]);
     for (const inst of installs ?? []) {
       if (inst.franchise_application_id)
         linkedInstalls[inst.franchise_application_id] = {
@@ -158,6 +170,24 @@ export async function fetchFranchiseListData(
           status: net.status,
           category: net.category,
         };
+    }
+    const lastCallByApplicationId: Record<
+      string,
+      { last_call_type: "missed" | "completed"; last_call_at: string }
+    > = {};
+    for (const callLog of callLogs ?? []) {
+      if (
+        !lastCallByApplicationId[callLog.franchise_application_id] &&
+        (callLog.call_type === "missed" || callLog.call_type === "completed")
+      ) {
+        lastCallByApplicationId[callLog.franchise_application_id] = {
+          last_call_type: callLog.call_type,
+          last_call_at: callLog.created_at,
+        };
+      }
+    }
+    for (const row of flatRows) {
+      Object.assign(row, lastCallByApplicationId[row.id]);
     }
   }
 

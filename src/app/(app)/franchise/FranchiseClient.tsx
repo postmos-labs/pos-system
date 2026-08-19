@@ -2638,6 +2638,8 @@ export default function FranchiseClient({
           ? {
               ...r,
               missed_call_count: updated.missed_call_count,
+              last_call_type: "missed",
+              last_call_at: new Date().toISOString(),
               status: updated.status,
               cancel_reason: updated.cancel_reason,
             }
@@ -2660,7 +2662,14 @@ export default function FranchiseClient({
     const updated = (Array.isArray(data) ? data[0] : data) as FranchiseApplication;
     setLocalRows((prev) =>
       prev.map((r) =>
-        r.id === row.id ? { ...r, completed_call_count: updated.completed_call_count } : r,
+        r.id === row.id
+          ? {
+              ...r,
+              completed_call_count: updated.completed_call_count,
+              last_call_type: "completed",
+              last_call_at: new Date().toISOString(),
+            }
+          : r,
       ),
     );
   }

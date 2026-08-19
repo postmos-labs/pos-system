@@ -182,6 +182,8 @@ export interface FranchiseApplication {
   created_by?: string;
   missed_call_count?: number;
   completed_call_count?: number;
+  last_call_type?: "missed" | "completed";
+  last_call_at?: string;
   cancel_reason?: string | null;
   status: FranchiseStatus;
   applicant_type: ApplicantType;

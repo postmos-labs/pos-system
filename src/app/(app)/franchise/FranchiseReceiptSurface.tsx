@@ -105,6 +105,18 @@ const SORTABLE_HEADERS: { label: string; key: ColumnSortKey }[] = [
   { label: "확인일", key: "next_check_date" },
 ];
 
+function formatLastCallAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("ko-KR", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
 interface Props {
   rows: FranchiseApplication[];
   allRows: FranchiseApplication[];
@@ -956,26 +968,35 @@ export default function FranchiseReceiptSurface(props: Props) {
                       {row.owner_name || "-"}
                     </td>
                     <td className="text-foreground px-2.5 py-2.5 whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1.5">
-                        <span
-                          className="cursor-pointer"
-                          onClick={() => row.phone && navigator.clipboard?.writeText(row.phone)}
-                          title="클릭하여 복사"
-                        >
-                          {row.phone || "-"}
-                        </span>
-                        {row.phone && (
-                          <button
-                            type="button"
-                            onClick={() => props.onOpenCall(row.id)}
-                            aria-label={`${row.business_name || row.owner_name || "접수"} 통화기록`}
-                            title={`통화기록 · 부재 ${row.missed_call_count ?? 0}/3 · 완료 ${row.completed_call_count ?? 0}회`}
-                            className={`shrink-0 rounded p-0.5 hover:bg-slate-100 ${(row.missed_call_count ?? 0) > 0 ? "text-red-500" : "text-muted-foreground"}`}
+                      <div className="flex flex-col items-start gap-0.5">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span
+                            className="cursor-pointer"
+                            onClick={() => row.phone && navigator.clipboard?.writeText(row.phone)}
+                            title="클릭하여 복사"
                           >
-                            <PhoneCallIcon size={13} />
-                          </button>
+                            {row.phone || "-"}
+                          </span>
+                          {row.phone && (
+                            <button
+                              type="button"
+                              onClick={() => props.onOpenCall(row.id)}
+                              aria-label={`${row.business_name || row.owner_name || "접수"} 통화기록`}
+                              title={`통화기록 · 부재 ${row.missed_call_count ?? 0}/3 · 완료 ${row.completed_call_count ?? 0}회`}
+                              className={`shrink-0 rounded p-0.5 hover:bg-slate-100 ${(row.missed_call_count ?? 0) > 0 ? "text-red-500" : "text-muted-foreground"}`}
+                            >
+                              <PhoneCallIcon size={13} />
+                            </button>
+                          )}
+                        </span>
+                        {row.last_call_at && row.last_call_type && (
+                          <span
+                            className={`text-[11px] font-medium ${row.last_call_type === "completed" ? "text-green-600" : "text-red-500"}`}
+                          >
+                            최근 통화: {formatLastCallAt(row.last_call_at)}
+                          </span>
                         )}
-                      </span>
+                      </div>
                     </td>
                     <td className="px-2.5 py-2.5 whitespace-nowrap">
                       <AppSelect
