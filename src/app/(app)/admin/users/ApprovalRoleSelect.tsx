@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { setUserApprovalRole } from "./actions";
 import { APPROVAL_ROLE_LABEL_KR } from "./constants";
 import { useToast } from "@/components/ui/Toast";
+import { AppSelect } from "@/components/ui/AppSelect";
 
 const APPROVAL_ROLES = [
   "cs_manager",
@@ -26,11 +27,12 @@ export default function ApprovalRoleSelect({
   const [isPending, startTransition] = useTransition();
   const toast = useToast();
   return (
-    <select
+    <AppSelect
       value={role}
       disabled={isPending}
-      onChange={(event) => {
-        const next = event.target.value;
+      aria-label="승인 직책"
+      className="h-auto px-2 py-1 text-xs font-semibold"
+      onValueChange={(next) => {
         const previous = role;
         setRole(next);
         startTransition(async () => {
@@ -45,14 +47,10 @@ export default function ApprovalRoleSelect({
           }
         });
       }}
-      className="text-xs font-semibold px-2 py-1 rounded-lg border border-slate-200 bg-white disabled:opacity-50"
-    >
-      <option value="">승인 직책 미지정</option>
-      {APPROVAL_ROLES.map((item) => (
-        <option key={item} value={item}>
-          {APPROVAL_ROLE_LABEL_KR[item]}
-        </option>
-      ))}
-    </select>
+      options={[
+        { value: "", label: "승인 직책 미지정" },
+        ...APPROVAL_ROLES.map((item) => ({ value: item, label: APPROVAL_ROLE_LABEL_KR[item] })),
+      ]}
+    />
   );
 }

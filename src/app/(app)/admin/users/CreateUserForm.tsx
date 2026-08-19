@@ -6,6 +6,7 @@ import { Plus, UserPlus } from "lucide-react";
 import { createUserAccount } from "./actions";
 import { ROLE_LABEL_KR, TEAM_LABEL_KR, TEAMS } from "./constants";
 import { useToast } from "@/components/ui/Toast";
+import { AppSelect } from "@/components/ui/AppSelect";
 
 const ROLES = ["sales", "cs", "tech", "developer", "admin", "master"];
 
@@ -80,31 +81,23 @@ export default function CreateUserForm() {
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-slate-500">권한</label>
-            <select
+            <AppSelect
               value={form.role}
-              onChange={(e) => setForm({ ...form, role: e.target.value })}
-              className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-28 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {ROLE_LABEL_KR[r]}
-                </option>
-              ))}
-            </select>
+              onValueChange={(value) => setForm({ ...form, role: value })}
+              aria-label="권한"
+              className="w-28"
+              options={ROLES.map((r) => ({ value: r, label: ROLE_LABEL_KR[r] }))}
+            />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-slate-500">소속 팀</label>
-            <select
+            <AppSelect
               value={form.team}
-              onChange={(e) => setForm({ ...form, team: e.target.value })}
-              className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {TEAMS.map((team) => (
-                <option key={team} value={team}>
-                  {TEAM_LABEL_KR[team]}
-                </option>
-              ))}
-            </select>
+              onValueChange={(value) => setForm({ ...form, team: value })}
+              aria-label="소속 팀"
+              className="w-32"
+              options={TEAMS.map((team) => ({ value: team, label: TEAM_LABEL_KR[team] }))}
+            />
           </div>
           <button
             type="submit"

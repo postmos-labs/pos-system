@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { setUserTeam } from "./actions";
 import { TEAM_LABEL_KR, TEAMS } from "./constants";
 import { useToast } from "@/components/ui/Toast";
+import { AppSelect } from "@/components/ui/AppSelect";
 
 interface Props {
   userId: string;
@@ -15,8 +16,7 @@ export default function TeamSelect({ userId, initialTeam }: Props) {
   const [isPending, startTransition] = useTransition();
   const toast = useToast();
 
-  function handleChange(event: React.ChangeEvent<HTMLSelectElement>) {
-    const next = event.target.value;
+  function handleChange(next: string) {
     const previous = team;
     setTeam(next);
     startTransition(async () => {
@@ -29,18 +29,13 @@ export default function TeamSelect({ userId, initialTeam }: Props) {
   }
 
   return (
-    <select
+    <AppSelect
       value={team}
-      onChange={handleChange}
+      onValueChange={handleChange}
       disabled={isPending}
       aria-label="소속 팀"
-      className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold disabled:opacity-50"
-    >
-      {TEAMS.map((item) => (
-        <option key={item} value={item}>
-          {TEAM_LABEL_KR[item]}
-        </option>
-      ))}
-    </select>
+      className="h-auto px-2 py-1 text-xs font-semibold"
+      options={TEAMS.map((item) => ({ value: item, label: TEAM_LABEL_KR[item] }))}
+    />
   );
 }
