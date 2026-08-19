@@ -11,6 +11,7 @@ import {
   Fragment,
 } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import {
   Plus,
   Trash2,
@@ -62,8 +63,8 @@ import BulkConfirmDialog from "@/components/ui/BulkConfirmDialog";
 import FormModal from "@/components/ui/FormModal";
 import HistoryButton from "@/components/ui/HistoryButton";
 import HistoryIcon from "@/components/ui/HistoryIcon";
-import FranchiseCreateDialog from "./FranchiseCreateDialog";
-import FranchiseDetailDrawer from "./FranchiseDetailDrawer";
+const FranchiseCreateDialog = dynamic(() => import("./FranchiseCreateDialog"));
+const FranchiseDetailDrawer = dynamic(() => import("./FranchiseDetailDrawer"));
 import FranchiseMemoDrawer from "./FranchiseMemoDrawer";
 import FranchiseCallDrawer from "./FranchiseCallDrawer";
 import FranchiseReceiptSurface, {
