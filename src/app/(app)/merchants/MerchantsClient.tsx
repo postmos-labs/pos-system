@@ -26,6 +26,8 @@ import {
 import EmptyState from "@/components/ui/EmptyState";
 import BulkDeleteActions from "@/components/ui/BulkDeleteActions";
 import BulkConfirmDialog from "@/components/ui/BulkConfirmDialog";
+import { AppSelect } from "@/components/ui/AppSelect";
+import { DatePickerField } from "@/components/ui/DatePickerField";
 import {
   AS_CHECKLIST_SECTIONS,
   MERCHANT_MEMO_ENTRY_TYPE_LABEL,
@@ -447,13 +449,11 @@ function MerchantDetailPanel({
             placeholder="시리얼번호"
             className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
           />
-          <input
-            type="date"
+          <DatePickerField
             value={equipmentDraft.installedDate}
-            onChange={(event) =>
-              setEquipmentDraft((prev) => ({ ...prev, installedDate: event.target.value }))
-            }
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            onChange={(value) => setEquipmentDraft((prev) => ({ ...prev, installedDate: value }))}
+            ariaLabel="설치일 선택"
+            placeholder="설치일"
           />
           <button
             type="submit"
@@ -480,23 +480,21 @@ function MerchantDetailPanel({
                       {item.installed_date ? `설치일 ${item.installed_date}` : "설치일 미상"}
                     </p>
                   </div>
-                  <select
+                  <AppSelect
                     value={item.status}
                     disabled={equipmentStatusUpdating === item.id}
-                    onChange={(event) =>
-                      changeEquipmentStatus(
-                        item.id,
-                        event.target.value as MerchantEquipmentStatusInput,
-                      )
+                    onValueChange={(value) =>
+                      changeEquipmentStatus(item.id, value as MerchantEquipmentStatusInput)
                     }
-                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs outline-none focus:border-blue-400"
-                  >
-                    {Object.entries(MERCHANT_EQUIPMENT_STATUS_LABEL).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
+                    options={Object.entries(MERCHANT_EQUIPMENT_STATUS_LABEL).map(
+                      ([value, label]) => ({
+                        value,
+                        label,
+                      }),
+                    )}
+                    className="h-8 text-xs"
+                    aria-label="장비 상태"
+                  />
                 </div>
               ))}
             </div>
