@@ -2,19 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
-  CHANGE_STATUS_COLOR,
-  CHANGE_STATUS_LABEL,
-  CHANGE_TYPE_LABEL,
   FRANCHISE_CHANNEL_LABEL,
   FRANCHISE_STATUS_COLOR,
   FRANCHISE_STATUS_LABEL,
-  STATUS_COLOR,
-  STATUS_LABEL,
-  type ChangeRequestStatus,
-  type ChangeType,
   type FranchiseChannel,
   type FranchiseStatus,
-  type TicketStatus,
 } from "@/types";
 import MerchantsClient from "./MerchantsClient";
 import type {
@@ -40,15 +32,9 @@ type InstallationRow = {
   created_at: string;
 };
 
-type TicketRow = {
-  id: string;
-  title: string;
-  status: string;
-  created_at: string;
-};
-
 type InstallationActivityLogRow = {
   installation_id: string;
+  user_name: string | null;
   to_status: string | null;
   created_at: string;
 };
@@ -148,9 +134,7 @@ async function loadMerchant360(
   const [
     applicationResult,
     installationsResult,
-    ticketsResult,
-    changesResult,
-    postHistoryResult,
+    franchiseLogResult,
     memoEntriesResult,
     equipmentResult,
   ] = await Promise.all([
@@ -170,22 +154,15 @@ async function loadMerchant360(
           .eq("franchise_application_id", franchiseApplicationId)
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [] as InstallationRow[], error: null }),
-    supabase
-      .from("tickets")
-      .select("id,title,status,created_at")
-      .eq("merchant_id", merchantId)
-      .eq("type", "as")
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("change_requests")
-      .select("id,business_name,change_type,status,before_value,after_value,created_at")
-      .eq("merchant_id", merchantId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("installation_post_history")
-      .select("id,installation_id,content,created_at")
-      .eq("merchant_id", merchantId)
-      .order("created_at", { ascending: false }),
+    franchiseApplicationId
+      ? supabase
+          .from("franchise_application_logs")
+          .select("user_name,created_at")
+          .eq("franchise_application_id", franchiseApplicationId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
     supabase
       .from("merchant_memo_entries")
       .select("id,content,created_at,created_by,entry_type,checklist,author:profiles(name)")
@@ -210,24 +187,8 @@ async function loadMerchant360(
     tech: { name: string | null }[] | { name: string | null } | null;
   } | null;
   const installations = (installationsResult.data ?? []) as InstallationRow[];
-  const tickets = (ticketsResult.data ?? []) as TicketRow[];
-  const changes = (changesResult.data ?? []) as Array<{
-    id: string;
-    business_name: string;
-    change_type: string;
-    status: string;
-    before_value: string | null;
-    after_value: string | null;
-    created_at: string;
-  }>;
-  const postHistory = postHistoryResult.error
-    ? []
-    : ((postHistoryResult.data ?? []) as Array<{
-        id: string;
-        installation_id: string;
-        content: string;
-        created_at: string;
-      }>);
+  const franchiseLatestActor = (franchiseLogResult.data as { user_name: string | null } | null)
+    ?.user_name;
   const memoEntries = memoEntriesResult.error
     ? []
     : ((memoEntriesResult.data ?? []) as MerchantMemoEntryRow[]);
@@ -235,13 +196,20 @@ async function loadMerchant360(
   const activityLogsResult = installationIds.length
     ? await supabase
         .from("installation_activity_logs")
-        .select("installation_id,to_status,created_at")
+        .select("installation_id,user_name,to_status,created_at")
         .in("installation_id", installationIds)
-        .in("to_status", ["completed", "delivery_sent"])
         .order("created_at", { ascending: true })
     : { data: [] as InstallationActivityLogRow[], error: null };
   const activityLogs = (activityLogsResult.data ?? []) as InstallationActivityLogRow[];
-  const firstCompletionAt = firstTimestamp(activityLogs.map((log) => log.created_at));
+  const firstCompletionAt = firstTimestamp(
+    activityLogs
+      .filter((log) => log.to_status === "completed" || log.to_status === "delivery_sent")
+      .map((log) => log.created_at),
+  );
+  const latestActorByInstallation = new Map<string, string>();
+  for (const log of activityLogs) {
+    if (log.user_name) latestActorByInstallation.set(log.installation_id, log.user_name);
+  }
   const memos: MerchantMemoEntry[] = memoEntries.map((memo) => ({
     id: memo.id,
     content: memo.content,
@@ -265,66 +233,24 @@ async function loadMerchant360(
       status: FRANCHISE_STATUS_LABEL[status] ?? application.status,
       statusClass: FRANCHISE_STATUS_COLOR[status] ?? "bg-slate-100 text-slate-600",
       href: `/franchise?id=${application.id}`,
+      actorName: franchiseLatestActor,
     });
   }
 
   for (const installation of installations.filter((item) =>
-    ["install", "transfer", "as"].includes(item.delivery_type ?? ""),
+    ["install", "transfer"].includes(item.delivery_type ?? ""),
   )) {
-    const isAs = installation.delivery_type === "as";
     const status = installationStatusLabel(installation.status, installation.delivery_type);
     history.push({
       id: installation.id,
       date: installation.created_at,
-      title: isAs ? "AS 작업" : "설치 작업",
+      title: "설치 작업",
       summary: installation.customer_name || merchant.business_name,
-      category: isAs ? "as" : "install",
+      category: "install",
       status,
       statusClass: installationStatusClass(installation.status),
       href: `/installs?id=${installation.id}`,
-    });
-  }
-
-  for (const ticket of tickets) {
-    const status = ticket.status as TicketStatus;
-    history.push({
-      id: ticket.id,
-      date: ticket.created_at,
-      title: ticket.title,
-      summary: "티켓 AS",
-      category: "as",
-      status: STATUS_LABEL[status] ?? ticket.status,
-      statusClass: STATUS_COLOR[status] ?? "bg-slate-100 text-slate-600",
-      href: `/tickets/${ticket.id}`,
-    });
-  }
-
-  for (const change of changes) {
-    const changeType = change.change_type as ChangeType;
-    const changeStatus = change.status as ChangeRequestStatus;
-    const beforeAfter = [change.before_value, change.after_value].filter(Boolean).join(" → ");
-    history.push({
-      id: change.id,
-      date: change.created_at,
-      title: `변경 · ${CHANGE_TYPE_LABEL[changeType] ?? change.change_type}`,
-      summary: beforeAfter || change.business_name,
-      category: "change",
-      status: CHANGE_STATUS_LABEL[changeStatus] ?? change.status,
-      statusClass: CHANGE_STATUS_COLOR[changeStatus] ?? "bg-slate-100 text-slate-600",
-      href: `/changes?id=${change.id}`,
-    });
-  }
-
-  for (const item of postHistory) {
-    history.push({
-      id: item.id,
-      date: item.created_at,
-      title: "설치·배송 이후 메모",
-      summary: item.content,
-      category: "post",
-      status: "기록",
-      statusClass: "bg-violet-50 text-violet-600",
-      href: `/installs?id=${item.installation_id}`,
+      actorName: latestActorByInstallation.get(installation.id),
     });
   }
 

@@ -52,9 +52,6 @@ const HISTORY_TABS: Array<{ key: "all" | WorkHistoryCategory; label: string }> =
   { key: "all", label: "전체" },
   { key: "reception", label: "접수" },
   { key: "install", label: "설치" },
-  { key: "as", label: "AS" },
-  { key: "change", label: "변경" },
-  { key: "post", label: "설치·배송 이후 히스토리" },
 ];
 
 const HISTORY_CATEGORY_LABEL: Record<WorkHistoryCategory, string> = {
@@ -658,6 +655,9 @@ function MerchantDetailPanel({
                           {HISTORY_CATEGORY_LABEL[item.category]}
                         </span>
                         <time dateTime={item.date}>{formatDate(item.date)}</time>
+                        {item.actorName && (
+                          <span className="font-semibold text-blue-500">{item.actorName}</span>
+                        )}
                       </span>
                       <Link
                         href={item.href}
@@ -785,9 +785,10 @@ export default function MerchantsClient({
               message={search.trim() ? "검색 결과가 없습니다" : "등록된 가맹점이 없습니다"}
             />
           ) : (
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
               {filteredMerchants.map((merchant) => {
                 const active = merchant.id === selectedId;
+                const checked = selected.has(merchant.id);
                 return (
                   <div
                     key={merchant.id}
@@ -798,23 +799,29 @@ export default function MerchantsClient({
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") selectMerchant(merchant.id);
                     }}
-                    className={`relative flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${active ? "border-blue-300 bg-blue-50/70" : "border-transparent hover:bg-slate-50"}`}
+                    className={`group relative flex cursor-pointer items-center gap-3 px-3 py-2.5 text-left transition-colors ${active ? "bg-blue-50" : "hover:bg-slate-50"}`}
                   >
+                    {active && <span className="absolute inset-y-0 left-0 w-1 bg-blue-500" />}
                     <input
                       type="checkbox"
-                      checked={selected.has(merchant.id)}
+                      checked={checked}
                       onChange={() => toggleOne(merchant.id)}
                       onClick={(event) => event.stopPropagation()}
-                      className="h-4 w-4 shrink-0 cursor-pointer accent-blue-600"
+                      className={`h-4 w-4 shrink-0 cursor-pointer accent-blue-600 transition-opacity ${checked ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
                     />
+                    <div
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${active ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500"}`}
+                    >
+                      {merchant.business_name.slice(0, 1)}
+                    </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-slate-900">
                         {merchant.business_name}
                       </p>
+                      <p className="truncate text-xs text-slate-400">
+                        {merchant.owner_name || "-"}
+                      </p>
                     </div>
-                    <span className="shrink-0 truncate text-xs text-slate-400">
-                      {merchant.owner_name || "-"}
-                    </span>
                   </div>
                 );
               })}

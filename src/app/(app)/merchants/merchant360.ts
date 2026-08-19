@@ -11,6 +11,7 @@ export interface WorkHistoryItem {
   status: string;
   statusClass: string;
   href: string;
+  actorName?: string | null;
 }
 
 export interface MerchantMemoEntry {
