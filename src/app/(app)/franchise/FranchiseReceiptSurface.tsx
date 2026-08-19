@@ -269,10 +269,10 @@ export function nextCheckSeverity(
   return 0;
 }
 
-function nextCheckTextColor(severity: ReturnType<typeof nextCheckSeverity>): string {
-  if (severity === 3) return "text-red-500";
-  if (severity === 2) return "text-yellow-500";
-  if (severity === 1) return "text-green-500";
+function nextCheckBadgeClass(severity: ReturnType<typeof nextCheckSeverity>): string {
+  if (severity === 3) return "!border-red-300 !bg-red-100 !text-red-700 font-bold animate-pulse";
+  if (severity === 2) return "!border-amber-300 !bg-amber-100 !text-amber-700 font-semibold";
+  if (severity === 1) return "!border-green-300 !bg-green-100 !text-green-700 font-semibold";
   return "";
 }
 
@@ -1000,13 +1000,13 @@ export default function FranchiseReceiptSurface(props: Props) {
                     <td className="px-2.5 py-2.5 whitespace-nowrap">
                       {(() => {
                         const severity = nextCheckSeverity(row.next_check_date, props.todayDate);
-                        const color = nextCheckTextColor(severity);
+                        const badgeClass = nextCheckBadgeClass(severity);
                         return (
                           <DatePickerField
                             ariaLabel="확인일"
                             value={row.next_check_date ?? ""}
                             onChange={(value) => props.onSaveNextCheckDate(row, value)}
-                            className={`h-auto !border-none !bg-transparent px-0 text-[12.5px] ${color ? `!${color}` : ""} ${severity > 0 ? "animate-pulse font-semibold" : ""}`}
+                            className={`h-auto rounded-full px-2.5 py-1 text-[11.5px] ${badgeClass}`}
                           />
                         );
                       })()}
