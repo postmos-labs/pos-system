@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { AppSelect } from "@/components/ui/AppSelect";
+import { DatePickerField } from "@/components/ui/DatePickerField";
 
 interface Props {
   salesId: string;
@@ -186,58 +188,58 @@ export default function NewTicketForm({ salesId, role }: Props) {
 
           <div>
             <Label>사업자 구분</Label>
-            <select
+            <AppSelect
               value={form.business_type}
-              onChange={(e) => set("business_type", e.target.value)}
-              className={INPUT}
-            >
-              <option value="개인">개인사업자</option>
-              <option value="법인">법인사업자</option>
-            </select>
+              onValueChange={(value) => set("business_type", value)}
+              aria-label="사업자 구분"
+              options={[
+                { value: "개인", label: "개인사업자" },
+                { value: "법인", label: "법인사업자" },
+              ]}
+            />
           </div>
 
           <div>
             <Label>접수 채널</Label>
-            <select
+            <AppSelect
               value={form.reception_channel}
-              onChange={(e) => set("reception_channel", e.target.value)}
-              className={INPUT}
-            >
-              <option value="">선택</option>
-              {RECEPTION_CHANNELS.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+              onValueChange={(value) => set("reception_channel", value)}
+              aria-label="접수 채널"
+              options={[
+                { value: "", label: "선택" },
+                ...RECEPTION_CHANNELS.map((c) => ({ value: c, label: c })),
+              ]}
+            />
           </div>
 
           <div>
             <Label>작업 유형</Label>
-            <select
+            <AppSelect
               value={form.type}
-              onChange={(e) => set("type", e.target.value)}
-              className={INPUT}
-            >
-              <option value="install">신규 설치</option>
-              <option value="as">A/S</option>
-              <option value="consult">상담</option>
-              <option value="other">기타</option>
-            </select>
+              onValueChange={(value) => set("type", value)}
+              aria-label="작업 유형"
+              options={[
+                { value: "install", label: "신규 설치" },
+                { value: "as", label: "A/S" },
+                { value: "consult", label: "상담" },
+                { value: "other", label: "기타" },
+              ]}
+            />
           </div>
 
           <div>
             <Label>우선순위</Label>
-            <select
+            <AppSelect
               value={form.priority}
-              onChange={(e) => set("priority", e.target.value)}
-              className={INPUT}
-            >
-              <option value="low">낮음</option>
-              <option value="normal">보통</option>
-              <option value="high">높음</option>
-              <option value="urgent">긴급</option>
-            </select>
+              onValueChange={(value) => set("priority", value)}
+              aria-label="우선순위"
+              options={[
+                { value: "low", label: "낮음" },
+                { value: "normal", label: "보통" },
+                { value: "high", label: "높음" },
+                { value: "urgent", label: "긴급" },
+              ]}
+            />
           </div>
         </div>
       </Section>
@@ -247,17 +249,12 @@ export default function NewTicketForm({ salesId, role }: Props) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label>서류 접수 상태</Label>
-            <select
+            <AppSelect
               value={form.document_status}
-              onChange={(e) => set("document_status", e.target.value)}
-              className={INPUT}
-            >
-              {DOCUMENT_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
+              onValueChange={(value) => set("document_status", value)}
+              aria-label="서류 접수 상태"
+              options={DOCUMENT_STATUSES.map((s) => ({ value: s, label: s }))}
+            />
           </div>
 
           <div>
@@ -272,18 +269,15 @@ export default function NewTicketForm({ salesId, role }: Props) {
 
           <div>
             <Label>VAN사</Label>
-            <select
+            <AppSelect
               value={form.van_company}
-              onChange={(e) => set("van_company", e.target.value)}
-              className={INPUT}
-            >
-              <option value="">선택</option>
-              {VAN_COMPANIES.map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-            </select>
+              onValueChange={(value) => set("van_company", value)}
+              aria-label="VAN사"
+              options={[
+                { value: "", label: "선택" },
+                ...VAN_COMPANIES.map((v) => ({ value: v, label: v })),
+              ]}
+            />
           </div>
 
           <div>
@@ -298,28 +292,24 @@ export default function NewTicketForm({ salesId, role }: Props) {
 
           <div>
             <Label>카드가맹 접수일</Label>
-            <input
-              type="date"
+            <DatePickerField
               value={form.card_apply_date}
-              onChange={(e) => set("card_apply_date", e.target.value)}
-              className={INPUT}
+              onChange={(value) => set("card_apply_date", value)}
+              ariaLabel="카드가맹 접수일"
             />
           </div>
 
           <div>
             <Label>간편결제</Label>
-            <select
+            <AppSelect
               value={form.simple_payment}
-              onChange={(e) => set("simple_payment", e.target.value)}
-              className={INPUT}
-            >
-              <option value="">선택</option>
-              {SIMPLE_PAYMENTS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
+              onValueChange={(value) => set("simple_payment", value)}
+              aria-label="간편결제"
+              options={[
+                { value: "", label: "선택" },
+                ...SIMPLE_PAYMENTS.map((p) => ({ value: p, label: p })),
+              ]}
+            />
           </div>
 
           <div className="col-span-2 flex items-center gap-3 py-1">
