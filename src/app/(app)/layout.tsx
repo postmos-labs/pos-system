@@ -36,6 +36,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const todayStr = new Date().toISOString().slice(0, 10);
   const limitStr = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
   const oneHourAgoStr = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  // 정확한 경계 판정은 아래 JS 필터가 그대로 담당하므로, DB 조회는 하루 여유를 둔 넓은 범위로만 걸러
+  // 오래된/먼 미래 티켓·가맹접수를 테이블에서 미리 제외한다 (테이블이 커질수록 효과 큼).
+  const queryFromStr = new Date(Date.now() - 1 * 86400000).toISOString().slice(0, 10);
+  const queryToStr = new Date(Date.now() + 4 * 86400000).toISOString().slice(0, 10);
+  const ticketDateRangeOr = SCHEDULE_FIELDS.map(
+    (f) => `and(${f.key}.gte.${queryFromStr},${f.key}.lte.${queryToStr})`,
+  ).join(",");
 
   const [{ data: upcomingTickets }, { data: myRecentScheduleNotif }] = await Promise.all([
     supabase
@@ -44,9 +51,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         "id, title, scheduled_at, install_date, open_date, card_apply_date, sales_id, cs_id, tech_id, merchant:merchants(business_name)",
       )
       .not("status", "eq", "canceled")
-      .or(
-        "scheduled_at.not.is.null,install_date.not.is.null,open_date.not.is.null,card_apply_date.not.is.null",
-      ),
+      .or(ticketDateRangeOr),
 
     supabase
       .from("notifications")
@@ -77,11 +82,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const iAmOnCooldown = (myRecentScheduleNotif ?? []).length > 0;
 
   if (!iAmOnCooldown) {
+    const franchiseDateRangeOr = FRANCHISE_DATE_FIELDS.map(
+      (f) => `and(${f.key}.gte.${queryFromStr},${f.key}.lte.${queryToStr})`,
+    ).join(",");
     const { data: upcomingFranchise } = await supabase
       .from("franchise_applications")
       .select("id, business_name, open_date, install_date")
       .neq("status", "toss_review_done")
-      .or("open_date.not.is.null,install_date.not.is.null");
+      .or(franchiseDateRangeOr);
 
     const { data: allProfiles } = await supabase.from("profiles").select("id");
     const allUserIds = (allProfiles ?? []).map((p) => p.id);
