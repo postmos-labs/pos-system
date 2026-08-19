@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/Toast";
 import FormModal from "@/components/ui/FormModal";
 import HistoryButton from "@/components/ui/HistoryButton";
 import MemoHistoryPanel from "@/components/ui/MemoHistoryPanel";
+import { AppSelect } from "@/components/ui/AppSelect";
 
 const CATEGORY_TREE: Record<string, Record<string, string[]>> = {
   포스장비: {
@@ -396,54 +397,46 @@ export default function InventoryClient({
           <form onSubmit={handleCreate} className="flex flex-wrap gap-3 items-end">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-slate-500">대분류</label>
-              <select
+              <AppSelect
                 value={form.major_category}
-                onChange={(e) => {
-                  const major = e.target.value;
+                onValueChange={(major) => {
                   const mid = Object.keys(CATEGORY_TREE[major])[0];
                   const minor = CATEGORY_TREE[major][mid][0];
                   setForm({ ...form, major_category: major, mid_category: mid, category: minor });
                 }}
-                className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-28 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {MAJOR_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+                aria-label="대분류"
+                className="w-28"
+                options={MAJOR_CATEGORIES.map((c) => ({ value: c, label: c }))}
+              />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-slate-500">중분류</label>
-              <select
+              <AppSelect
                 value={form.mid_category}
-                onChange={(e) => {
-                  const mid = e.target.value;
+                onValueChange={(mid) => {
                   const minor = CATEGORY_TREE[form.major_category][mid][0];
                   setForm({ ...form, mid_category: mid, category: minor });
                 }}
-                className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {Object.keys(CATEGORY_TREE[form.major_category]).map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+                aria-label="중분류"
+                className="w-32"
+                options={Object.keys(CATEGORY_TREE[form.major_category]).map((c) => ({
+                  value: c,
+                  label: c,
+                }))}
+              />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-slate-500">소분류</label>
-              <select
+              <AppSelect
                 value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
-                className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-36 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {CATEGORY_TREE[form.major_category][form.mid_category].map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+                onValueChange={(value) => setForm({ ...form, category: value })}
+                aria-label="소분류"
+                className="w-36"
+                options={CATEGORY_TREE[form.major_category][form.mid_category].map((c) => ({
+                  value: c,
+                  label: c,
+                }))}
+              />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-slate-500">현재 수량</label>
@@ -545,18 +538,15 @@ export default function InventoryClient({
                 className="pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg w-48 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <select
+            <AppSelect
               value={majorFilter}
-              onChange={(e) => setMajorFilter(e.target.value)}
-              className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">분류 전체</option>
-              {MAJOR_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+              onValueChange={setMajorFilter}
+              aria-label="분류 필터"
+              options={[
+                { value: "", label: "분류 전체" },
+                ...MAJOR_CATEGORIES.map((c) => ({ value: c, label: c })),
+              ]}
+            />
             <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
               <input
                 type="checkbox"
