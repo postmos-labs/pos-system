@@ -20,6 +20,15 @@ import type {
 
 const PAGE_SIZE = 50;
 
+// franchise_application_logs.to_status는 실제 접수 상태(FranchiseStatus) 외에도
+// 이관승인 반려, 설치이관 생성 같은 내부 이벤트 문자열이 함께 저장된다. 이력에 노출할 것만 한글로 매핑.
+const NON_STATUS_LOG_LABEL: Record<string, string> = {
+  transfer_cs_responsible_rejected: "1차반려",
+  transfer_team_lead_rejected: "최종반려",
+  install_transfer: "설치 이관",
+  install_retransfer: "설치 재이관",
+};
+
 interface Props {
   searchParams: Promise<{ page?: string; id?: string }>;
 }
@@ -215,14 +224,24 @@ async function loadMerchant360(
     if (creatorName) parts.push(`등록 ${creatorName}`);
     const seen = new Set<string>();
     for (const log of franchiseLogs) {
-      if (!log.user_name) continue;
-      const key = `${log.to_status ?? ""}:${log.user_name}`;
+      if (!log.user_name || !log.to_status) continue;
+      // 알림톡 발송 기록, 이관승인 단계 기록은 아래에서 franchise_transfer_approvals로 별도 표시하므로 건너뜀
+      if (log.to_status.startsWith("alimtalk:")) continue;
+      if (
+        log.to_status === "transfer_approval_requested" ||
+        log.to_status === "transfer_cs_responsible_approved" ||
+        log.to_status === "transfer_team_lead_approved"
+      )
+        continue;
+      const key = `${log.to_status}:${log.user_name}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      const statusLabel = log.to_status
-        ? (FRANCHISE_STATUS_LABEL[log.to_status as FranchiseStatus] ?? log.to_status)
-        : null;
-      parts.push(statusLabel ? `${statusLabel} ${log.user_name}` : log.user_name);
+      const statusLabel =
+        FRANCHISE_STATUS_LABEL[log.to_status as FranchiseStatus] ??
+        NON_STATUS_LOG_LABEL[log.to_status] ??
+        null;
+      if (!statusLabel) continue;
+      parts.push(`${statusLabel} ${log.user_name}`);
     }
     if (transferApproval) {
       if (transferApproval.requested_by_name)
