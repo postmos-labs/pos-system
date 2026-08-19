@@ -137,10 +137,21 @@ const CHANGE_TYPE_LABEL_LOCAL: Record<string, string> = {
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * PostgREST의 or() 필터는 원문 문자열로 조합되므로 문법을 깨는 문자를 제거한다.
+ * ilike 와일드카드(%,*)도 사용자가 직접 넣지 못하게 막는다.
+ */
+function sanitizeSearch(value: string) {
+  return value
+    .replace(/[,()%*\\"']/g, "")
+    .trim()
+    .slice(0, 60);
+}
+
 export default async function AdminLogsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; from?: string; to?: string; before?: string }>;
+  searchParams: Promise<{ date?: string; from?: string; to?: string; before?: string; q?: string }>;
 }) {
   const authError = await requireMaster();
   if (authError) redirect("/dashboard");
@@ -153,6 +164,10 @@ export default async function AdminLogsPage({
   const toDate = rawTo && DATE_PATTERN.test(rawTo) ? rawTo : null;
   const hasDateFilter = Boolean(fromDate || toDate);
 
+  const merchantQuery = sanitizeSearch(params.q ?? "");
+  const hasMerchantQuery = merchantQuery.length > 0;
+  const like = `%${merchantQuery}%`;
+
   const beforeDate = params.before ? new Date(params.before) : null;
   const beforeCursor =
     !hasDateFilter && beforeDate && !Number.isNaN(beforeDate.getTime())
@@ -160,6 +175,19 @@ export default async function AdminLogsPage({
       : null;
   const range = kstDateRange(fromDate, toDate);
   const supabase = await createClient();
+
+  // 가맹점 검색 시 알림톡 로그는 entity_type이 다형적이라 대상 설치건 id를 먼저 좁힌다
+  let searchedInstallIds: string[] = [];
+  if (hasMerchantQuery) {
+    const { data } = await supabase
+      .from("installations")
+      .select("id")
+      .ilike("customer_name", like)
+      .limit(500);
+    searchedInstallIds = (data ?? []).map((row) => row.id as string);
+  }
+
+  const emptyResult = Promise.resolve({ data: [] as unknown[], error: null });
 
   // 소스별 쿼리를 동일한 날짜 조건/페이지 크기로 맞춘다.
   // 각 테이블마다 select 결과 타입이 달라 공통 시그니처만 좁혀서 다룬다.
@@ -192,82 +220,125 @@ export default async function AdminLogsPage({
     deletionResult,
   ] = await Promise.all([
     scoped(
-      supabase
-        .from("franchise_application_logs")
-        .select(
-          "id,from_status,to_status,details,created_at,user_name,user:profiles(name),franchise_application:franchise_applications(business_name,owner_name)",
-        )
-        .order("created_at", { ascending: false }),
+      (() => {
+        const base = supabase
+          .from("franchise_application_logs")
+          .select(
+            `id,from_status,to_status,details,created_at,user_name,user:profiles(name),franchise_application:franchise_applications${hasMerchantQuery ? "!inner" : ""}(business_name,owner_name)`,
+          )
+          .order("created_at", { ascending: false });
+        return hasMerchantQuery
+          ? base.or(`business_name.ilike.${like},owner_name.ilike.${like}`, {
+              referencedTable: "franchise_application",
+            })
+          : base;
+      })(),
     ),
     scoped(
-      supabase
-        .from("installation_activity_logs")
-        .select(
-          "id,action,from_status,to_status,details,created_at,user_name,user:profiles!installation_activity_logs_user_id_fkey(name),installation:installations(customer_name)",
-        )
-        .order("created_at", { ascending: false }),
+      (() => {
+        const base = supabase
+          .from("installation_activity_logs")
+          .select(
+            `id,action,from_status,to_status,details,created_at,user_name,user:profiles!installation_activity_logs_user_id_fkey(name),installation:installations${hasMerchantQuery ? "!inner" : ""}(customer_name)`,
+          )
+          .order("created_at", { ascending: false });
+        return hasMerchantQuery ? base.ilike("installation.customer_name", like) : base;
+      })(),
     ),
     scoped(
-      supabase
-        .from("ticket_logs")
-        .select(
-          "id,from_status,to_status,message,created_at,user:profiles(name),ticket:tickets(title,merchant:merchants(business_name))",
-        )
-        .order("created_at", { ascending: false }),
+      (() => {
+        const base = supabase
+          .from("ticket_logs")
+          .select(
+            `id,from_status,to_status,message,created_at,user:profiles(name),ticket:tickets${hasMerchantQuery ? "!inner" : ""}(title,merchant:merchants${hasMerchantQuery ? "!inner" : ""}(business_name))`,
+          )
+          .order("created_at", { ascending: false });
+        return hasMerchantQuery ? base.ilike("ticket.merchant.business_name", like) : base;
+      })(),
+    ),
+    // 재고는 가맹점 개념이 없으므로 가맹점 검색 시 제외한다
+    hasMerchantQuery
+      ? emptyResult
+      : scoped(
+          supabase
+            .from("inventory_logs")
+            .select(
+              "id,item_name,change,reason,created_at,user:profiles!inventory_logs_user_id_fkey(name)",
+            )
+            .order("created_at", { ascending: false }),
+        ),
+    scoped(
+      (() => {
+        const base = supabase
+          .from("franchise_application_call_logs")
+          .select(
+            `id,call_type,note,created_at,user:profiles(name),franchise_application:franchise_applications${hasMerchantQuery ? "!inner" : ""}(business_name,owner_name)`,
+          )
+          .order("created_at", { ascending: false });
+        return hasMerchantQuery
+          ? base.or(`business_name.ilike.${like},owner_name.ilike.${like}`, {
+              referencedTable: "franchise_application",
+            })
+          : base;
+      })(),
+    ),
+    hasMerchantQuery && searchedInstallIds.length === 0
+      ? emptyResult
+      : scoped(
+          (() => {
+            const base = supabase
+              .from("notification_logs")
+              .select(
+                "id,entity_type,entity_id,template_key,status,error,created_at,user_name,user:profiles(name)",
+              )
+              .order("created_at", { ascending: false });
+            return hasMerchantQuery
+              ? base.eq("entity_type", "install").in("entity_id", searchedInstallIds)
+              : base;
+          })(),
+        ),
+    scoped(
+      (() => {
+        const base = supabase
+          .from("merchant_memo_entries")
+          .select(
+            `id,content,entry_type,created_at,author:profiles(name),merchant:merchants${hasMerchantQuery ? "!inner" : ""}(business_name)`,
+          )
+          .order("created_at", { ascending: false });
+        return hasMerchantQuery ? base.ilike("merchant.business_name", like) : base;
+      })(),
     ),
     scoped(
-      supabase
-        .from("inventory_logs")
-        .select(
-          "id,item_name,change,reason,created_at,user:profiles!inventory_logs_user_id_fkey(name)",
-        )
-        .order("created_at", { ascending: false }),
+      (() => {
+        const base = supabase
+          .from("installation_post_history")
+          .select(
+            `id,content,created_at,author:profiles(name),installation:installations${hasMerchantQuery ? "!inner" : ""}(customer_name)`,
+          )
+          .order("created_at", { ascending: false });
+        return hasMerchantQuery ? base.ilike("installation.customer_name", like) : base;
+      })(),
     ),
     scoped(
-      supabase
-        .from("franchise_application_call_logs")
-        .select(
-          "id,call_type,note,created_at,user:profiles(name),franchise_application:franchise_applications(business_name,owner_name)",
-        )
-        .order("created_at", { ascending: false }),
+      (() => {
+        const base = supabase
+          .from("change_request_logs")
+          .select(
+            `id,from_status,to_status,created_at,user_name,user:profiles(name),change_request:change_requests${hasMerchantQuery ? "!inner" : ""}(business_name,change_type)`,
+          )
+          .order("created_at", { ascending: false });
+        return hasMerchantQuery ? base.ilike("change_request.business_name", like) : base;
+      })(),
     ),
     scoped(
-      supabase
-        .from("notification_logs")
-        .select(
-          "id,entity_type,entity_id,template_key,status,error,created_at,user_name,user:profiles(name)",
-        )
-        .order("created_at", { ascending: false }),
-    ),
-    scoped(
-      supabase
-        .from("merchant_memo_entries")
-        .select(
-          "id,content,entry_type,created_at,author:profiles(name),merchant:merchants(business_name)",
-        )
-        .order("created_at", { ascending: false }),
-    ),
-    scoped(
-      supabase
-        .from("installation_post_history")
-        .select(
-          "id,content,created_at,author:profiles(name),installation:installations(customer_name)",
-        )
-        .order("created_at", { ascending: false }),
-    ),
-    scoped(
-      supabase
-        .from("change_request_logs")
-        .select(
-          "id,from_status,to_status,created_at,user_name,user:profiles(name),change_request:change_requests(business_name,change_type)",
-        )
-        .order("created_at", { ascending: false }),
-    ),
-    scoped(
-      supabase
-        .from("deletion_logs")
-        .select("id,entity_type,subject,created_at,user_name")
-        .order("created_at", { ascending: false }),
+      (() => {
+        // 삭제 로그는 상호명을 subject 컬럼에 그대로 담아두므로 조인 없이 바로 거른다
+        const base = supabase
+          .from("deletion_logs")
+          .select("id,entity_type,subject,created_at,user_name")
+          .order("created_at", { ascending: false });
+        return hasMerchantQuery ? base.ilike("subject", like) : base;
+      })(),
     ),
   ]);
 
@@ -455,8 +526,13 @@ export default async function AdminLogsPage({
   const logs = hasDateFilter ? combinedLogs : combinedLogs.slice(0, 300);
   const nextCursor = hasOlderLogs ? (logs.at(-1)?.createdAt ?? null) : null;
 
-  const periodText =
-    fromDate && toDate && fromDate !== toDate
+  const periodText = hasMerchantQuery
+    ? `'${merchantQuery}' 가맹점 검색 결과${
+        fromDate || toDate
+          ? ` · ${fromDate ?? toDate}${toDate && fromDate !== toDate ? ` ~ ${toDate}` : ""}`
+          : " (전체 기간)"
+      }`
+    : fromDate && toDate && fromDate !== toDate
       ? `${fromDate} ~ ${toDate} 업무 처리 이력`
       : fromDate || toDate
         ? `${fromDate ?? toDate} 업무 처리 이력`
@@ -475,6 +551,7 @@ export default async function AdminLogsPage({
         logs={logs}
         fromDate={fromDate}
         toDate={toDate}
+        merchantQuery={merchantQuery}
         nextCursor={nextCursor}
         isOlderPage={beforeCursor !== null}
       />

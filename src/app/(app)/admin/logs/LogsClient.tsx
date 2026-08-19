@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
-import { ArrowRight, Search, X } from "lucide-react";
+import { ArrowRight, Search, Store, X } from "lucide-react";
 import { DatePickerField } from "@/components/ui/DatePickerField";
 import {
   FRANCHISE_STATUS_LABEL,
@@ -157,12 +157,14 @@ export default function LogsClient({
   logs,
   fromDate,
   toDate,
+  merchantQuery,
   nextCursor,
   isOlderPage,
 }: {
   logs: EmployeeActivityLog[];
   fromDate: string | null;
   toDate: string | null;
+  merchantQuery: string;
   nextCursor: string | null;
   isOlderPage: boolean;
 }) {
@@ -170,13 +172,27 @@ export default function LogsClient({
   const [query, setQuery] = useState("");
   const [source, setSource] = useState<ActivitySource | "all">("all");
   const [actor, setActor] = useState<string | null>(null);
+  const [merchantInput, setMerchantInput] = useState(merchantQuery);
 
-  function applyRange(nextFrom: string | null, nextTo: string | null) {
+  function navigate(
+    nextFrom: string | null,
+    nextTo: string | null,
+    nextMerchant: string = merchantQuery,
+  ) {
     const search = new URLSearchParams();
     if (nextFrom) search.set("from", nextFrom);
     if (nextTo) search.set("to", nextTo);
+    if (nextMerchant.trim()) search.set("q", nextMerchant.trim());
     const qs = search.toString();
     router.push(qs ? `/admin/logs?${qs}` : "/admin/logs");
+  }
+
+  function applyRange(nextFrom: string | null, nextTo: string | null) {
+    navigate(nextFrom, nextTo);
+  }
+
+  function applyMerchantSearch(value: string) {
+    navigate(fromDate, toDate, value);
   }
 
   const filtered = useMemo(() => {
@@ -214,6 +230,46 @@ export default function LogsClient({
 
   return (
     <>
+      <div className="mb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[240px] flex-1">
+            <Store size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              value={merchantInput}
+              onChange={(event) => setMerchantInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") applyMerchantSearch(merchantInput);
+              }}
+              placeholder="가맹점 상호명으로 전체 기간 검색 (Enter)"
+              className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <button
+            onClick={() => applyMerchantSearch(merchantInput)}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            검색
+          </button>
+          {merchantQuery && (
+            <button
+              onClick={() => {
+                setMerchantInput("");
+                applyMerchantSearch("");
+              }}
+              className="flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+            >
+              <X size={13} /> 검색 해제
+            </button>
+          )}
+        </div>
+        {merchantQuery && (
+          <p className="mt-2 text-xs text-slate-500">
+            <span className="font-semibold text-blue-600">{merchantQuery}</span> 가맹점의 전체 기간
+            이력입니다. 재고는 가맹점 개념이 없어 제외됩니다.
+          </p>
+        )}
+      </div>
+
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <DatePickerField
           value={fromDate ?? ""}
@@ -330,7 +386,7 @@ export default function LogsClient({
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="담당자, 상호명, 고객명 또는 처리 내용 검색"
+          placeholder="현재 목록에서 빠른 검색 (담당자·상호명·처리 내용)"
           className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
