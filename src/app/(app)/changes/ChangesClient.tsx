@@ -40,6 +40,8 @@ import FormModal from "@/components/ui/FormModal";
 import HistoryButton from "@/components/ui/HistoryButton";
 import MemoHistoryPanel from "@/components/ui/MemoHistoryPanel";
 import KpiCard from "@/components/ui/KpiCard";
+import { AppSelect } from "@/components/ui/AppSelect";
+import { DatePickerField } from "@/components/ui/DatePickerField";
 
 const PAGE_SIZE = 50;
 
@@ -497,66 +499,49 @@ export default function ChangesClient({
             className="pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg w-56 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <select
+        <AppSelect
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as ChangeRequestStatus | "")}
-          className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">상태 전체</option>
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>
-              {CHANGE_STATUS_LABEL[s]}
-            </option>
-          ))}
-        </select>
-        <select
+          onValueChange={(value) => setStatusFilter(value as ChangeRequestStatus | "")}
+          aria-label="상태 필터"
+          options={[
+            { value: "", label: "상태 전체" },
+            ...STATUS_OPTIONS.map((s) => ({ value: s, label: CHANGE_STATUS_LABEL[s] })),
+          ]}
+        />
+        <AppSelect
           value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value as ChangeType | "")}
-          className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">변경유형 전체</option>
-          {TYPE_OPTIONS.map((t) => (
-            <option key={t} value={t}>
-              {CHANGE_TYPE_LABEL[t]}
-            </option>
-          ))}
-        </select>
-        <select
+          onValueChange={(value) => setTypeFilter(value as ChangeType | "")}
+          aria-label="변경유형 필터"
+          options={[
+            { value: "", label: "변경유형 전체" },
+            ...TYPE_OPTIONS.map((t) => ({ value: t, label: CHANGE_TYPE_LABEL[t] })),
+          ]}
+        />
+        <AppSelect
           value={applicantTypeFilter}
-          onChange={(e) => setApplicantTypeFilter(e.target.value as ChangeApplicantType | "")}
-          className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">사업자유형 전체</option>
-          {APPLICANT_TYPE_OPTIONS.map((t) => (
-            <option key={t} value={t}>
-              {CHANGE_APPLICANT_TYPE_LABEL[t]}
-            </option>
-          ))}
-        </select>
-        <input
-          type="date"
-          value={dateFrom}
-          onChange={(e) => setDateFrom(e.target.value)}
-          title="접수일 시작"
-          className="text-sm border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onValueChange={(value) => setApplicantTypeFilter(value as ChangeApplicantType | "")}
+          aria-label="사업자유형 필터"
+          options={[
+            { value: "", label: "사업자유형 전체" },
+            ...APPLICANT_TYPE_OPTIONS.map((t) => ({
+              value: t,
+              label: CHANGE_APPLICANT_TYPE_LABEL[t],
+            })),
+          ]}
         />
+        <DatePickerField value={dateFrom} onChange={setDateFrom} ariaLabel="접수일 시작" />
         <span className="text-slate-400 text-xs">~</span>
-        <input
-          type="date"
-          value={dateTo}
-          onChange={(e) => setDateTo(e.target.value)}
-          title="접수일 종료"
-          className="text-sm border border-slate-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <select
+        <DatePickerField value={dateTo} onChange={setDateTo} ariaLabel="접수일 종료" />
+        <AppSelect
           value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-          className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="created_at">등록일순</option>
-          <option value="reception_date">접수일순</option>
-          <option value="status">상태순</option>
-        </select>
+          onValueChange={(value) => setSortBy(value as typeof sortBy)}
+          aria-label="정렬"
+          options={[
+            { value: "created_at", label: "등록일순" },
+            { value: "reception_date", label: "접수일순" },
+            { value: "status", label: "상태순" },
+          ]}
+        />
         {(search || statusFilter || typeFilter || applicantTypeFilter || dateFrom || dateTo) && (
           <button
             onClick={() => {
@@ -636,30 +621,23 @@ export default function ChangesClient({
         <FormModal title="변경 요청 등록" onClose={() => setShowForm(false)}>
           <div className="flex flex-col gap-3">
             <div className="grid grid-cols-2 gap-3">
-              <select
+              <AppSelect
                 value={form.change_type}
-                onChange={(e) => setForm({ ...form, change_type: e.target.value as ChangeType })}
-                className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
-              >
-                {TYPE_OPTIONS.map((t) => (
-                  <option key={t} value={t}>
-                    {CHANGE_TYPE_LABEL[t]}
-                  </option>
-                ))}
-              </select>
-              <select
+                onValueChange={(value) => setForm({ ...form, change_type: value as ChangeType })}
+                aria-label="변경유형"
+                options={TYPE_OPTIONS.map((t) => ({ value: t, label: CHANGE_TYPE_LABEL[t] }))}
+              />
+              <AppSelect
                 value={form.applicant_type}
-                onChange={(e) =>
-                  setForm({ ...form, applicant_type: e.target.value as ChangeApplicantType })
+                onValueChange={(value) =>
+                  setForm({ ...form, applicant_type: value as ChangeApplicantType })
                 }
-                className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
-              >
-                {APPLICANT_TYPE_OPTIONS.map((t) => (
-                  <option key={t} value={t}>
-                    {CHANGE_APPLICANT_TYPE_LABEL[t]}
-                  </option>
-                ))}
-              </select>
+                aria-label="사업자유형"
+                options={APPLICANT_TYPE_OPTIONS.map((t) => ({
+                  value: t,
+                  label: CHANGE_APPLICANT_TYPE_LABEL[t],
+                }))}
+              />
             </div>
             <input
               placeholder="상호명"
@@ -688,33 +666,30 @@ export default function ChangesClient({
               className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
             />
             <div className="grid grid-cols-2 gap-3 items-center">
-              <input
-                type="date"
+              <DatePickerField
                 value={form.reception_date}
-                onChange={(e) => setForm({ ...form, reception_date: e.target.value })}
-                className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                onChange={(value) => setForm({ ...form, reception_date: value })}
+                ariaLabel="접수일"
               />
-              <select
+              <AppSelect
                 value={form.payment_received ? "Y" : "N"}
-                onChange={(e) => setForm({ ...form, payment_received: e.target.value === "Y" })}
-                className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
-              >
-                <option value="N">입금여부: N</option>
-                <option value="Y">입금여부: Y</option>
-              </select>
+                onValueChange={(value) => setForm({ ...form, payment_received: value === "Y" })}
+                aria-label="입금여부"
+                options={[
+                  { value: "N", label: "입금여부: N" },
+                  { value: "Y", label: "입금여부: Y" },
+                ]}
+              />
             </div>
-            <select
+            <AppSelect
               value={form.cs_id}
-              onChange={(e) => setForm({ ...form, cs_id: e.target.value })}
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm"
-            >
-              <option value="">담당자 선택</option>
-              {csProfiles.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+              onValueChange={(value) => setForm({ ...form, cs_id: value })}
+              aria-label="담당자"
+              options={[
+                { value: "", label: "담당자 선택" },
+                ...csProfiles.map((p) => ({ value: p.id, label: p.name })),
+              ]}
+            />
             <textarea
               placeholder="메모"
               value={form.memo}
@@ -793,35 +768,33 @@ export default function ChangesClient({
                       className="px-3 py-3 whitespace-nowrap"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <select
+                      <AppSelect
                         value={row.change_type}
-                        onChange={(e) => updateChangeType(row, e.target.value as ChangeType)}
-                        className="text-xs font-semibold rounded-full pl-2.5 pr-1.5 py-1 border border-slate-200 bg-slate-100 text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer"
-                      >
-                        {TYPE_OPTIONS.map((t) => (
-                          <option key={t} value={t}>
-                            {CHANGE_TYPE_LABEL[t]}
-                          </option>
-                        ))}
-                      </select>
+                        onValueChange={(value) => updateChangeType(row, value as ChangeType)}
+                        aria-label="변경유형"
+                        className="h-auto rounded-full border-slate-200 bg-slate-100 pl-2.5 pr-1.5 py-1 text-xs font-semibold"
+                        options={TYPE_OPTIONS.map((t) => ({
+                          value: t,
+                          label: CHANGE_TYPE_LABEL[t],
+                        }))}
+                      />
                     </td>
                     <td
                       className="px-3 py-3 whitespace-nowrap"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <select
+                      <AppSelect
                         value={row.applicant_type}
-                        onChange={(e) =>
-                          updateApplicantType(row, e.target.value as ChangeApplicantType)
+                        onValueChange={(value) =>
+                          updateApplicantType(row, value as ChangeApplicantType)
                         }
-                        className="text-xs font-semibold rounded-full pl-2.5 pr-1.5 py-1 border border-slate-200 bg-slate-100 text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer"
-                      >
-                        {APPLICANT_TYPE_OPTIONS.map((t) => (
-                          <option key={t} value={t}>
-                            {CHANGE_APPLICANT_TYPE_LABEL[t]}
-                          </option>
-                        ))}
-                      </select>
+                        aria-label="사업자유형"
+                        className="h-auto rounded-full border-slate-200 bg-slate-100 pl-2.5 pr-1.5 py-1 text-xs font-semibold"
+                        options={APPLICANT_TYPE_OPTIONS.map((t) => ({
+                          value: t,
+                          label: CHANGE_APPLICANT_TYPE_LABEL[t],
+                        }))}
+                      />
                     </td>
                     <td
                       className="px-3 py-3 font-semibold text-slate-900 whitespace-nowrap max-w-[160px] overflow-hidden text-ellipsis"
@@ -842,44 +815,43 @@ export default function ChangesClient({
                       className="px-3 py-3 whitespace-nowrap"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <select
+                      <AppSelect
                         value={row.cs_id ?? ""}
-                        onChange={(e) => updateCs(row, e.target.value)}
-                        className="text-sm font-medium text-slate-700 border-0 bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-400 rounded cursor-pointer"
-                      >
-                        <option value="">미배정</option>
-                        {csProfiles.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
+                        onValueChange={(value) => updateCs(row, value)}
+                        aria-label="담당자"
+                        className="h-auto rounded border-0 bg-transparent text-sm font-medium"
+                        options={[
+                          { value: "", label: "미배정" },
+                          ...csProfiles.map((p) => ({ value: p.id, label: p.name })),
+                        ]}
+                      />
                     </td>
                     <td
                       className="px-3 py-3 whitespace-nowrap"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <select
+                      <AppSelect
                         value={row.payment_received ? "Y" : "N"}
-                        onChange={(e) => updatePaymentReceived(row, e.target.value === "Y")}
-                        className={`text-xs px-2 py-1 rounded-md font-semibold border-0 focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer ${row.payment_received ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}
-                      >
-                        <option value="N">N</option>
-                        <option value="Y">Y</option>
-                      </select>
+                        onValueChange={(value) => updatePaymentReceived(row, value === "Y")}
+                        aria-label="입금여부"
+                        className={`h-auto rounded-md border-0 px-2 py-1 text-xs font-semibold ${row.payment_received ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}
+                        options={[
+                          { value: "N", label: "N" },
+                          { value: "Y", label: "Y" },
+                        ]}
+                      />
                     </td>
                     <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                      <select
+                      <AppSelect
                         value={row.status}
-                        onChange={(e) => updateStatus(row, e.target.value as ChangeRequestStatus)}
-                        className={`text-xs px-2 py-1 rounded-md font-medium border-0 focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer ${CHANGE_STATUS_COLOR[row.status]}`}
-                      >
-                        {STATUS_OPTIONS.map((s) => (
-                          <option key={s} value={s}>
-                            {CHANGE_STATUS_LABEL[s]}
-                          </option>
-                        ))}
-                      </select>
+                        onValueChange={(value) => updateStatus(row, value as ChangeRequestStatus)}
+                        aria-label="상태"
+                        className={`h-auto rounded-md border-0 px-2 py-1 text-xs font-medium ${CHANGE_STATUS_COLOR[row.status]}`}
+                        options={STATUS_OPTIONS.map((s) => ({
+                          value: s,
+                          label: CHANGE_STATUS_LABEL[s],
+                        }))}
+                      />
                     </td>
                     <td
                       className="px-3 py-3 text-slate-600 max-w-[200px] truncate"
@@ -932,17 +904,16 @@ export default function ChangesClient({
                           </div>
                           <div>
                             <label className="text-xs font-semibold text-slate-400">변경유형</label>
-                            <select
+                            <AppSelect
                               value={row.change_type}
-                              onChange={(e) => updateChangeType(row, e.target.value as ChangeType)}
-                              className="w-full bg-white border border-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-2 py-1.5 text-sm"
-                            >
-                              {TYPE_OPTIONS.map((t) => (
-                                <option key={t} value={t}>
-                                  {CHANGE_TYPE_LABEL[t]}
-                                </option>
-                              ))}
-                            </select>
+                              onValueChange={(value) => updateChangeType(row, value as ChangeType)}
+                              aria-label="변경유형"
+                              className="w-full"
+                              options={TYPE_OPTIONS.map((t) => ({
+                                value: t,
+                                label: CHANGE_TYPE_LABEL[t],
+                              }))}
+                            />
                           </div>
                           <div>
                             <label className="text-xs font-semibold text-slate-400">접수일</label>
@@ -950,14 +921,16 @@ export default function ChangesClient({
                           </div>
                           <div>
                             <label className="text-xs font-semibold text-slate-400">입금여부</label>
-                            <select
+                            <AppSelect
                               value={row.payment_received ? "Y" : "N"}
-                              onChange={(e) => updatePaymentReceived(row, e.target.value === "Y")}
-                              className="w-full bg-white border border-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-2 py-1.5 text-sm"
-                            >
-                              <option value="N">N</option>
-                              <option value="Y">Y</option>
-                            </select>
+                              onValueChange={(value) => updatePaymentReceived(row, value === "Y")}
+                              aria-label="입금여부"
+                              className="w-full"
+                              options={[
+                                { value: "N", label: "N" },
+                                { value: "Y", label: "Y" },
+                              ]}
+                            />
                           </div>
                           <div className="col-span-4">
                             <label className="text-xs font-semibold text-slate-400">메모</label>
