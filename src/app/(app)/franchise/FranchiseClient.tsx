@@ -65,6 +65,7 @@ import HistoryIcon from "@/components/ui/HistoryIcon";
 import FranchiseCreateDialog from "./FranchiseCreateDialog";
 import FranchiseDetailDrawer from "./FranchiseDetailDrawer";
 import FranchiseMemoDrawer from "./FranchiseMemoDrawer";
+import FranchiseCallDrawer from "./FranchiseCallDrawer";
 import FranchiseReceiptSurface, {
   nextCheckSeverity,
   type ColumnSortKey,
@@ -1060,6 +1061,7 @@ export default function FranchiseClient({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [logsByRow, setLogsByRow] = useState<Record<string, FranchiseApplicationLog[]>>({});
   const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
+  const [callOpenId, setCallOpenId] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
@@ -2600,6 +2602,50 @@ export default function FranchiseClient({
     });
   }
 
+  async function recordMissedCall(row: FranchiseApplication, cancelReason?: string) {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("record_franchise_missed_call", {
+      p_application_id: row.id,
+      p_user_id: currentUserId,
+      p_cancel_reason: cancelReason ?? null,
+    });
+    if (error) {
+      toast.error("통화 기록 실패: " + error.message);
+      return;
+    }
+    const updated = (Array.isArray(data) ? data[0] : data) as FranchiseApplication;
+    setLocalRows((prev) =>
+      prev.map((r) =>
+        r.id === row.id
+          ? {
+              ...r,
+              missed_call_count: updated.missed_call_count,
+              status: updated.status,
+              cancel_reason: updated.cancel_reason,
+            }
+          : r,
+      ),
+    );
+  }
+
+  async function recordCompletedCall(row: FranchiseApplication) {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("record_franchise_completed_call", {
+      p_application_id: row.id,
+      p_user_id: currentUserId,
+    });
+    if (error) {
+      toast.error("통화 기록 실패: " + error.message);
+      return;
+    }
+    const updated = (Array.isArray(data) ? data[0] : data) as FranchiseApplication;
+    setLocalRows((prev) =>
+      prev.map((r) =>
+        r.id === row.id ? { ...r, completed_call_count: updated.completed_call_count } : r,
+      ),
+    );
+  }
+
   async function toggleExpand(row: FranchiseApplication) {
     const next = expandedId === row.id ? null : row.id;
     setExpandedId(next);
@@ -3158,6 +3204,7 @@ export default function FranchiseClient({
         onStatusChange={handleStatusChange}
         onOpenDetail={toggleExpand}
         onOpenMemo={setHistoryOpenId}
+        onOpenCall={setCallOpenId}
         onPageChange={setPage}
         onSelectAllFiltered={selectAllFiltered}
         onBulkStatus={() => setBulkStatusModal(true)}
@@ -3274,6 +3321,19 @@ export default function FranchiseClient({
                 return saveMemoRaw(row, removeMemoEntry(row.memo, index));
               }}
               onTogglePin={(index) => saveMemoRaw(row, togglePinEntry(row.memo, index))}
+            />
+          );
+        })()}
+      {callOpenId &&
+        (() => {
+          const row = localRows.find((r) => r.id === callOpenId);
+          if (!row) return null;
+          return (
+            <FranchiseCallDrawer
+              row={row}
+              onClose={() => setCallOpenId(null)}
+              onRecordMissed={recordMissedCall}
+              onRecordCompleted={recordCompletedCall}
             />
           );
         })()}

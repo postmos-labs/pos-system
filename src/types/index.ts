@@ -180,6 +180,9 @@ export interface FranchiseApplication {
   cs_id?: string;
   tech_id?: string;
   created_by?: string;
+  missed_call_count?: number;
+  completed_call_count?: number;
+  cancel_reason?: string | null;
   status: FranchiseStatus;
   applicant_type: ApplicantType;
   change_type?: string;

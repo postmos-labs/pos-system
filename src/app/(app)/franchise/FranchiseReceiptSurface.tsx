@@ -13,6 +13,7 @@ import {
   FileWarningIcon,
   ListFilterIcon,
   PercentIcon,
+  PhoneCallIcon,
   PlusIcon,
   SearchIcon,
   Star,
@@ -165,6 +166,7 @@ interface Props {
   onStatusChange: (row: FranchiseApplication, value: FranchiseStatus) => void;
   onOpenDetail: (row: FranchiseApplication) => void;
   onOpenMemo: (id: string) => void;
+  onOpenCall: (id: string) => void;
   onPageChange: (page: number) => void;
   onSelectAllFiltered: () => void;
   onBulkStatus: () => void;
@@ -938,12 +940,27 @@ export default function FranchiseReceiptSurface(props: Props) {
                     <td className="text-foreground px-2.5 py-2.5 whitespace-nowrap">
                       {row.owner_name || "-"}
                     </td>
-                    <td
-                      className="text-foreground cursor-pointer px-2.5 py-2.5 whitespace-nowrap"
-                      onClick={() => row.phone && navigator.clipboard?.writeText(row.phone)}
-                      title="클릭하여 복사"
-                    >
-                      {row.phone || "-"}
+                    <td className="text-foreground px-2.5 py-2.5 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span
+                          className="cursor-pointer"
+                          onClick={() => row.phone && navigator.clipboard?.writeText(row.phone)}
+                          title="클릭하여 복사"
+                        >
+                          {row.phone || "-"}
+                        </span>
+                        {row.phone && (
+                          <button
+                            type="button"
+                            onClick={() => props.onOpenCall(row.id)}
+                            aria-label={`${row.business_name || row.owner_name || "접수"} 통화기록`}
+                            title={`통화기록 · 부재 ${row.missed_call_count ?? 0}/3 · 완료 ${row.completed_call_count ?? 0}회`}
+                            className={`shrink-0 rounded p-0.5 hover:bg-slate-100 ${(row.missed_call_count ?? 0) > 0 ? "text-red-500" : "text-muted-foreground"}`}
+                          >
+                            <PhoneCallIcon size={13} />
+                          </button>
+                        )}
+                      </span>
                     </td>
                     <td className="px-2.5 py-2.5 whitespace-nowrap">
                       <AppSelect
