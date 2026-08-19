@@ -5,12 +5,14 @@ import {
   CHANGE_STATUS_COLOR,
   CHANGE_STATUS_LABEL,
   CHANGE_TYPE_LABEL,
+  FRANCHISE_CHANNEL_LABEL,
   FRANCHISE_STATUS_COLOR,
   FRANCHISE_STATUS_LABEL,
   STATUS_COLOR,
   STATUS_LABEL,
   type ChangeRequestStatus,
   type ChangeType,
+  type FranchiseChannel,
   type FranchiseStatus,
   type TicketStatus,
 } from "@/types";
@@ -156,7 +158,7 @@ async function loadMerchant360(
       ? supabase
           .from("franchise_applications")
           .select(
-            "id,business_name,status,created_at,reception_channel,internet,van_company,cs:profiles!franchise_applications_cs_id_fkey(name),tech:profiles!franchise_applications_tech_id_fkey(name)",
+            "id,business_name,status,created_at,channel,internet,van_company,cs:profiles!franchise_applications_cs_id_fkey(name),tech:profiles!franchise_applications_tech_id_fkey(name)",
           )
           .eq("id", franchiseApplicationId)
           .maybeSingle()
@@ -201,7 +203,7 @@ async function loadMerchant360(
     business_name: string | null;
     status: string;
     created_at: string;
-    reception_channel: string | null;
+    channel: string | null;
     internet: string | null;
     van_company: string | null;
     cs: { name: string | null }[] | { name: string | null } | null;
@@ -339,7 +341,10 @@ async function loadMerchant360(
         status_class:
           FRANCHISE_STATUS_COLOR[application.status as FranchiseStatus] ??
           "bg-slate-100 text-slate-600",
-        reception_channel: application.reception_channel,
+        channel_label: application.channel
+          ? (FRANCHISE_CHANNEL_LABEL[application.channel as FranchiseChannel] ??
+            application.channel)
+          : null,
         cs_name: Array.isArray(application.cs)
           ? (application.cs[0]?.name ?? null)
           : (application.cs?.name ?? null),

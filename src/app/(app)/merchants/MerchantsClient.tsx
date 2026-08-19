@@ -87,9 +87,11 @@ const MEMO_STAGE_CLASS: Record<MerchantMemoStage, string> = {
 
 function DetailField({ label, value }: { label: string; value: string | null | undefined }) {
   return (
-    <div className="rounded-xl border border-slate-100 bg-slate-50/70 px-3.5 py-3">
-      <p className="mb-1 text-[11px] font-semibold text-slate-400">{label}</p>
-      <p className="whitespace-pre-wrap break-words text-sm text-slate-800">{value || "-"}</p>
+    <div className="rounded-lg border border-slate-100 bg-slate-50/70 px-2.5 py-1.5">
+      <p className="text-[10px] font-semibold text-slate-400">{label}</p>
+      <p className="truncate text-xs text-slate-800" title={value || "-"}>
+        {value || "-"}
+      </p>
     </div>
   );
 }
@@ -246,7 +248,7 @@ function MerchantDetailPanel({
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      <div className="shrink-0 border-b border-slate-100 px-5 py-5 md:px-6">
+      <div className="shrink-0 border-b border-slate-100 px-5 py-4 md:px-6">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <h2 className="truncate text-lg font-bold text-slate-900">{merchant.business_name}</h2>
@@ -283,383 +285,392 @@ function MerchantDetailPanel({
             )}
           </div>
         )}
-        <p className="mt-1 text-sm text-slate-500">가맹점 기본 정보</p>
-        {editingInfo ? (
-          <form onSubmit={submitInfo} className="mt-5 space-y-2.5">
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              <label className="block text-xs">
-                <span className="mb-1 block font-semibold text-slate-500">상호명</span>
-                <input
-                  required
-                  value={infoDraft.businessName}
-                  onChange={(event) =>
-                    setInfoDraft((prev) => ({ ...prev, businessName: event.target.value }))
-                  }
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                />
-              </label>
-              <label className="block text-xs">
-                <span className="mb-1 block font-semibold text-slate-500">대표자</span>
-                <input
-                  value={infoDraft.ownerName}
-                  onChange={(event) =>
-                    setInfoDraft((prev) => ({ ...prev, ownerName: event.target.value }))
-                  }
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                />
-              </label>
-              <label className="block text-xs">
-                <span className="mb-1 block font-semibold text-slate-500">연락처</span>
-                <input
-                  value={infoDraft.phone}
-                  onChange={(event) =>
-                    setInfoDraft((prev) => ({ ...prev, phone: event.target.value }))
-                  }
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                />
-              </label>
-              <label className="block text-xs">
-                <span className="mb-1 block font-semibold text-slate-500">주소</span>
-                <input
-                  value={infoDraft.address}
-                  onChange={(event) =>
-                    setInfoDraft((prev) => ({ ...prev, address: event.target.value }))
-                  }
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                />
-              </label>
-              <label className="block text-xs sm:col-span-2">
-                <span className="mb-1 block font-semibold text-slate-500">상세주소</span>
-                <input
-                  value={infoDraft.addressDetail}
-                  onChange={(event) =>
-                    setInfoDraft((prev) => ({ ...prev, addressDetail: event.target.value }))
-                  }
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                />
-              </label>
-              <label className="block text-xs">
-                <span className="mb-1 block font-semibold text-slate-500">사업자번호</span>
-                <input
-                  value={infoDraft.businessNumber}
-                  onChange={(event) =>
-                    setInfoDraft((prev) => ({ ...prev, businessNumber: event.target.value }))
-                  }
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                />
-              </label>
-              <label className="block text-xs">
-                <span className="mb-1 block font-semibold text-slate-500">토스 가맹점번호</span>
-                <input
-                  value={infoDraft.tossMerchantNo}
-                  onChange={(event) =>
-                    setInfoDraft((prev) => ({ ...prev, tossMerchantNo: event.target.value }))
-                  }
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                />
-              </label>
-              <label className="block text-xs">
-                <span className="mb-1 block font-semibold text-slate-500">계약 만료일</span>
-                <DatePickerField
-                  value={infoDraft.contractExpiresAt}
-                  onChange={(value) =>
-                    setInfoDraft((prev) => ({ ...prev, contractExpiresAt: value }))
-                  }
-                  ariaLabel="계약 만료일"
-                  className="w-full"
-                />
-              </label>
-              <label className="block text-xs">
-                <span className="mb-1 block font-semibold text-slate-500">소속 브랜드</span>
-                <input
-                  value={infoDraft.brand}
-                  onChange={(event) =>
-                    setInfoDraft((prev) => ({ ...prev, brand: event.target.value }))
-                  }
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                />
-              </label>
-            </div>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setEditingInfo(false)}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-              >
-                취소
-              </button>
-              <button
-                type="submit"
-                disabled={infoSubmitting || !infoDraft.businessName.trim()}
-                className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                {infoSubmitting ? "저장 중..." : "저장"}
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="mt-5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-            <DetailField label="인입경로" value={application?.reception_channel} />
-            <DetailField label="대표자" value={merchant.owner_name} />
-            <DetailField label="연락처" value={merchant.phone} />
-            <DetailField label="사업자번호" value={merchant.business_number} />
-            <DetailField label="주소" value={merchant.address} />
-            <DetailField label="상세주소" value={merchant.address_detail} />
-            <DetailField label="개업 예정일" value={merchant.open_date} />
-            <DetailField label="계약 만료일" value={merchant.contract_expires_at} />
-            <DetailField label="CS 담당" value={application?.cs_name} />
-            <DetailField label="기술 담당" value={application?.tech_name} />
-            <DetailField label="토스 가맹점번호" value={merchant.toss_merchant_no} />
-            <DetailField label="소속 브랜드" value={merchant.brand} />
-            <DetailField
-              label="인터넷·VAN사"
-              value={[application?.internet, application?.van_company].filter(Boolean).join(" · ")}
-            />
-          </div>
-        )}
       </div>
 
-      <section className="shrink-0 border-b border-slate-100 px-5 py-4 md:px-6">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-bold text-slate-900">메모 히스토리</h3>
-          <span className="text-xs text-slate-400">{memos.length}건</span>
-        </div>
-        <form
-          onSubmit={submitMemo}
-          className="mt-3 rounded-xl border border-blue-100 bg-blue-50/40 p-3"
-        >
-          <div className="flex flex-wrap gap-1.5">
-            {(Object.keys(MERCHANT_MEMO_ENTRY_TYPE_LABEL) as MerchantMemoEntryType[]).map(
-              (type) => (
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="border-b border-slate-100 px-5 py-4 md:px-6">
+          <p className="text-sm text-slate-500">가맹점 기본 정보</p>
+          {editingInfo ? (
+            <form onSubmit={submitInfo} className="mt-5 space-y-2.5">
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                <label className="block text-xs">
+                  <span className="mb-1 block font-semibold text-slate-500">상호명</span>
+                  <input
+                    required
+                    value={infoDraft.businessName}
+                    onChange={(event) =>
+                      setInfoDraft((prev) => ({ ...prev, businessName: event.target.value }))
+                    }
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+                <label className="block text-xs">
+                  <span className="mb-1 block font-semibold text-slate-500">대표자</span>
+                  <input
+                    value={infoDraft.ownerName}
+                    onChange={(event) =>
+                      setInfoDraft((prev) => ({ ...prev, ownerName: event.target.value }))
+                    }
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+                <label className="block text-xs">
+                  <span className="mb-1 block font-semibold text-slate-500">연락처</span>
+                  <input
+                    value={infoDraft.phone}
+                    onChange={(event) =>
+                      setInfoDraft((prev) => ({ ...prev, phone: event.target.value }))
+                    }
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+                <label className="block text-xs">
+                  <span className="mb-1 block font-semibold text-slate-500">주소</span>
+                  <input
+                    value={infoDraft.address}
+                    onChange={(event) =>
+                      setInfoDraft((prev) => ({ ...prev, address: event.target.value }))
+                    }
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+                <label className="block text-xs sm:col-span-2">
+                  <span className="mb-1 block font-semibold text-slate-500">상세주소</span>
+                  <input
+                    value={infoDraft.addressDetail}
+                    onChange={(event) =>
+                      setInfoDraft((prev) => ({ ...prev, addressDetail: event.target.value }))
+                    }
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+                <label className="block text-xs">
+                  <span className="mb-1 block font-semibold text-slate-500">사업자번호</span>
+                  <input
+                    value={infoDraft.businessNumber}
+                    onChange={(event) =>
+                      setInfoDraft((prev) => ({ ...prev, businessNumber: event.target.value }))
+                    }
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+                <label className="block text-xs">
+                  <span className="mb-1 block font-semibold text-slate-500">토스 가맹점번호</span>
+                  <input
+                    value={infoDraft.tossMerchantNo}
+                    onChange={(event) =>
+                      setInfoDraft((prev) => ({ ...prev, tossMerchantNo: event.target.value }))
+                    }
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+                <label className="block text-xs">
+                  <span className="mb-1 block font-semibold text-slate-500">계약 만료일</span>
+                  <DatePickerField
+                    value={infoDraft.contractExpiresAt}
+                    onChange={(value) =>
+                      setInfoDraft((prev) => ({ ...prev, contractExpiresAt: value }))
+                    }
+                    ariaLabel="계약 만료일"
+                    className="w-full"
+                  />
+                </label>
+                <label className="block text-xs">
+                  <span className="mb-1 block font-semibold text-slate-500">소속 브랜드</span>
+                  <input
+                    value={infoDraft.brand}
+                    onChange={(event) =>
+                      setInfoDraft((prev) => ({ ...prev, brand: event.target.value }))
+                    }
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+              </div>
+              <div className="flex justify-end gap-2">
                 <button
-                  key={type}
                   type="button"
-                  onClick={() => setMemoEntryType(type)}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-                    memoEntryType === type
-                      ? "bg-blue-600 text-white"
-                      : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-50"
-                  }`}
+                  onClick={() => setEditingInfo(false)}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
                 >
-                  {MERCHANT_MEMO_ENTRY_TYPE_LABEL[type]}
+                  취소
                 </button>
-              ),
-            )}
+                <button
+                  type="submit"
+                  disabled={infoSubmitting || !infoDraft.businessName.trim()}
+                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {infoSubmitting ? "저장 중..." : "저장"}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+              <DetailField label="인입경로" value={application?.channel_label} />
+              <DetailField label="대표자" value={merchant.owner_name} />
+              <DetailField label="연락처" value={merchant.phone} />
+              <DetailField label="사업자번호" value={merchant.business_number} />
+              <DetailField label="주소" value={merchant.address} />
+              <DetailField label="상세주소" value={merchant.address_detail} />
+              <DetailField label="개업 예정일" value={merchant.open_date} />
+              <DetailField label="계약 만료일" value={merchant.contract_expires_at} />
+              <DetailField label="CS 담당" value={application?.cs_name} />
+              <DetailField label="기술 담당" value={application?.tech_name} />
+              <DetailField label="토스 가맹점번호" value={merchant.toss_merchant_no} />
+              <DetailField label="소속 브랜드" value={merchant.brand} />
+              <DetailField
+                label="인터넷·VAN사"
+                value={[application?.internet, application?.van_company]
+                  .filter(Boolean)
+                  .join(" · ")}
+              />
+            </div>
+          )}
+        </div>
+
+        <section className="shrink-0 border-b border-slate-100 px-5 py-4 md:px-6">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-bold text-slate-900">메모 히스토리</h3>
+            <span className="text-xs text-slate-400">{memos.length}건</span>
           </div>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
-            <textarea
-              value={memoContent}
-              onChange={(event) => setMemoContent(event.target.value)}
-              placeholder="새 히스토리를 입력하세요"
-              rows={2}
-              maxLength={2000}
-              className="min-h-16 flex-1 resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          <form
+            onSubmit={submitMemo}
+            className="mt-3 rounded-xl border border-blue-100 bg-blue-50/40 p-3"
+          >
+            <div className="flex flex-wrap gap-1.5">
+              {(Object.keys(MERCHANT_MEMO_ENTRY_TYPE_LABEL) as MerchantMemoEntryType[]).map(
+                (type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setMemoEntryType(type)}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                      memoEntryType === type
+                        ? "bg-blue-600 text-white"
+                        : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    {MERCHANT_MEMO_ENTRY_TYPE_LABEL[type]}
+                  </button>
+                ),
+              )}
+            </div>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
+              <textarea
+                value={memoContent}
+                onChange={(event) => setMemoContent(event.target.value)}
+                placeholder="새 히스토리를 입력하세요"
+                rows={2}
+                maxLength={2000}
+                className="min-h-16 flex-1 resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              />
+              <button
+                type="submit"
+                disabled={memoSubmitting || !canSubmitMemo}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {memoSubmitting ? "등록 중..." : "새 히스토리 추가"}
+              </button>
+            </div>
+            {isAsEntry && (
+              <div className="mt-3 max-h-72 space-y-3 overflow-y-auto rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                <p className="text-xs font-semibold text-amber-700">
+                  AS 응대 원칙 체크리스트 — 전 항목을 확인해야 저장할 수 있습니다.
+                </p>
+                {AS_CHECKLIST_SECTIONS.map((section) => (
+                  <div key={section.id}>
+                    <p className="mb-1 text-xs font-bold text-slate-700">{section.title}</p>
+                    <ul className="space-y-1">
+                      {section.items.map((item) => (
+                        <li key={item.id}>
+                          <label className="flex cursor-pointer items-start gap-2 text-xs text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={memoChecklist[item.id] === true}
+                              onChange={() => toggleChecklistItem(item.id)}
+                              className="mt-0.5 size-3.5 shrink-0"
+                            />
+                            <span>{item.label}</span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+                {!asChecklistComplete && (
+                  <p className="text-[11px] font-semibold text-red-500">
+                    체크되지 않은 항목이 있습니다. 모두 확인해야 저장됩니다.
+                  </p>
+                )}
+              </div>
+            )}
+          </form>
+          {memos.length === 0 ? (
+            <p className="py-4 text-center text-xs text-slate-400">등록된 메모가 없습니다.</p>
+          ) : (
+            <div className="mt-3 max-h-48 overflow-y-auto rounded-xl border border-slate-200">
+              <div className="divide-y divide-slate-100">
+                {memos.map((memo) => (
+                  <article key={memo.id} className="px-3.5 py-3">
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                      <span
+                        className={`rounded-full px-2 py-1 font-semibold ${MEMO_STAGE_CLASS[memo.stage]}`}
+                      >
+                        {MEMO_STAGE_LABEL[memo.stage]}
+                      </span>
+                      <span className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-600">
+                        {MERCHANT_MEMO_ENTRY_TYPE_LABEL[memo.entry_type]}
+                      </span>
+                      <time dateTime={memo.created_at}>{formatMemoDate(memo.created_at)}</time>
+                      <span>·</span>
+                      <span>{memo.author_name ?? "기존 기록"}</span>
+                    </div>
+                    <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-5 text-slate-700">
+                      {memo.content}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="shrink-0 border-b border-slate-100 px-5 py-4 md:px-6">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-bold text-slate-900">설치 장비</h3>
+            <span className="text-xs text-slate-400">{equipment.length}건</span>
+          </div>
+          <form
+            onSubmit={submitEquipment}
+            className="mt-3 grid grid-cols-1 gap-2 rounded-xl border border-blue-100 bg-blue-50/40 p-3 sm:grid-cols-4"
+          >
+            <input
+              value={equipmentDraft.name}
+              onChange={(event) =>
+                setEquipmentDraft((prev) => ({ ...prev, name: event.target.value }))
+              }
+              placeholder="장비명 (필수)"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            />
+            <input
+              value={equipmentDraft.serialNumber}
+              onChange={(event) =>
+                setEquipmentDraft((prev) => ({ ...prev, serialNumber: event.target.value }))
+              }
+              placeholder="시리얼번호"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            />
+            <DatePickerField
+              value={equipmentDraft.installedDate}
+              onChange={(value) => setEquipmentDraft((prev) => ({ ...prev, installedDate: value }))}
+              ariaLabel="설치일 선택"
+              placeholder="설치일"
             />
             <button
               type="submit"
-              disabled={memoSubmitting || !canSubmitMemo}
+              disabled={equipmentSubmitting || !equipmentDraft.name.trim()}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
-              {memoSubmitting ? "등록 중..." : "새 히스토리 추가"}
+              {equipmentSubmitting ? "등록 중..." : "장비 추가"}
             </button>
-          </div>
-          {isAsEntry && (
-            <div className="mt-3 max-h-72 space-y-3 overflow-y-auto rounded-lg border border-amber-200 bg-amber-50/60 p-3">
-              <p className="text-xs font-semibold text-amber-700">
-                AS 응대 원칙 체크리스트 — 전 항목을 확인해야 저장할 수 있습니다.
-              </p>
-              {AS_CHECKLIST_SECTIONS.map((section) => (
-                <div key={section.id}>
-                  <p className="mb-1 text-xs font-bold text-slate-700">{section.title}</p>
-                  <ul className="space-y-1">
-                    {section.items.map((item) => (
-                      <li key={item.id}>
-                        <label className="flex cursor-pointer items-start gap-2 text-xs text-slate-700">
-                          <input
-                            type="checkbox"
-                            checked={memoChecklist[item.id] === true}
-                            onChange={() => toggleChecklistItem(item.id)}
-                            className="mt-0.5 size-3.5 shrink-0"
-                          />
-                          <span>{item.label}</span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-              {!asChecklistComplete && (
-                <p className="text-[11px] font-semibold text-red-500">
-                  체크되지 않은 항목이 있습니다. 모두 확인해야 저장됩니다.
-                </p>
-              )}
-            </div>
-          )}
-        </form>
-        {memos.length === 0 ? (
-          <p className="py-4 text-center text-xs text-slate-400">등록된 메모가 없습니다.</p>
-        ) : (
-          <div className="mt-3 max-h-48 overflow-y-auto rounded-xl border border-slate-200">
-            <div className="divide-y divide-slate-100">
-              {memos.map((memo) => (
-                <article key={memo.id} className="px-3.5 py-3">
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                    <span
-                      className={`rounded-full px-2 py-1 font-semibold ${MEMO_STAGE_CLASS[memo.stage]}`}
-                    >
-                      {MEMO_STAGE_LABEL[memo.stage]}
-                    </span>
-                    <span className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-600">
-                      {MERCHANT_MEMO_ENTRY_TYPE_LABEL[memo.entry_type]}
-                    </span>
-                    <time dateTime={memo.created_at}>{formatMemoDate(memo.created_at)}</time>
-                    <span>·</span>
-                    <span>{memo.author_name ?? "기존 기록"}</span>
-                  </div>
-                  <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-5 text-slate-700">
-                    {memo.content}
-                  </p>
-                </article>
-              ))}
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section className="shrink-0 border-b border-slate-100 px-5 py-4 md:px-6">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-bold text-slate-900">설치 장비</h3>
-          <span className="text-xs text-slate-400">{equipment.length}건</span>
-        </div>
-        <form
-          onSubmit={submitEquipment}
-          className="mt-3 grid grid-cols-1 gap-2 rounded-xl border border-blue-100 bg-blue-50/40 p-3 sm:grid-cols-4"
-        >
-          <input
-            value={equipmentDraft.name}
-            onChange={(event) =>
-              setEquipmentDraft((prev) => ({ ...prev, name: event.target.value }))
-            }
-            placeholder="장비명 (필수)"
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-          />
-          <input
-            value={equipmentDraft.serialNumber}
-            onChange={(event) =>
-              setEquipmentDraft((prev) => ({ ...prev, serialNumber: event.target.value }))
-            }
-            placeholder="시리얼번호"
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-          />
-          <DatePickerField
-            value={equipmentDraft.installedDate}
-            onChange={(value) => setEquipmentDraft((prev) => ({ ...prev, installedDate: value }))}
-            ariaLabel="설치일 선택"
-            placeholder="설치일"
-          />
-          <button
-            type="submit"
-            disabled={equipmentSubmitting || !equipmentDraft.name.trim()}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            {equipmentSubmitting ? "등록 중..." : "장비 추가"}
-          </button>
-        </form>
-        {equipment.length === 0 ? (
-          <p className="py-4 text-center text-xs text-slate-400">등록된 장비가 없습니다.</p>
-        ) : (
-          <div className="mt-3 max-h-48 overflow-y-auto rounded-xl border border-slate-200">
-            <div className="divide-y divide-slate-100">
-              {equipment.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800">{item.name}</p>
-                    <p className="text-[11px] text-slate-400">
-                      {item.serial_number ? `S/N ${item.serial_number} · ` : ""}
-                      {item.installed_date ? `설치일 ${item.installed_date}` : "설치일 미상"}
-                    </p>
-                  </div>
-                  <AppSelect
-                    value={item.status}
-                    disabled={equipmentStatusUpdating === item.id}
-                    onValueChange={(value) =>
-                      changeEquipmentStatus(item.id, value as MerchantEquipmentStatusInput)
-                    }
-                    options={Object.entries(MERCHANT_EQUIPMENT_STATUS_LABEL).map(
-                      ([value, label]) => ({
-                        value,
-                        label,
-                      }),
-                    )}
-                    className="h-8 text-xs"
-                    aria-label="장비 상태"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </section>
-
-      <div className="flex min-h-0 flex-1 flex-col px-5 py-5 md:px-6">
-        <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
-          <h3 className="text-sm font-bold text-slate-900">관련 업무 이력</h3>
-          <span className="text-xs text-slate-400">{filteredHistory.length}건</span>
-        </div>
-        <div className="mb-4 flex shrink-0 gap-1 overflow-x-auto border-b border-slate-100 pb-px">
-          {HISTORY_TABS.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => setTab(item.key)}
-              className={`whitespace-nowrap border-b-2 px-2.5 py-2 text-xs font-semibold transition-colors ${tab === item.key ? "border-blue-600 text-blue-600" : "border-transparent text-slate-400 hover:text-slate-700"}`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-          {filteredHistory.length === 0 ? (
-            <p className="py-12 text-center text-sm text-slate-400">관련 업무 이력이 없습니다.</p>
+          </form>
+          {equipment.length === 0 ? (
+            <p className="py-4 text-center text-xs text-slate-400">등록된 장비가 없습니다.</p>
           ) : (
-            <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
-              {filteredHistory.map((item) => (
-                <article key={`${item.category}-${item.id}`} className="px-3.5 py-3.5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-800">{item.title}</p>
-                      <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-slate-500">
-                        {item.summary}
+            <div className="mt-3 max-h-48 overflow-y-auto rounded-xl border border-slate-200">
+              <div className="divide-y divide-slate-100">
+                {equipment.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">{item.name}</p>
+                      <p className="text-[11px] text-slate-400">
+                        {item.serial_number ? `S/N ${item.serial_number} · ` : ""}
+                        {item.installed_date ? `설치일 ${item.installed_date}` : "설치일 미상"}
                       </p>
                     </div>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${item.statusClass}`}
-                    >
-                      {item.status}
-                    </span>
+                    <AppSelect
+                      value={item.status}
+                      disabled={equipmentStatusUpdating === item.id}
+                      onValueChange={(value) =>
+                        changeEquipmentStatus(item.id, value as MerchantEquipmentStatusInput)
+                      }
+                      options={Object.entries(MERCHANT_EQUIPMENT_STATUS_LABEL).map(
+                        ([value, label]) => ({
+                          value,
+                          label,
+                        }),
+                      )}
+                      className="h-8 text-xs"
+                      aria-label="장비 상태"
+                    />
                   </div>
-                  <div className="mt-2.5 flex items-center justify-between gap-3 text-[11px] text-slate-400">
-                    <span className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-500">
-                        {HISTORY_CATEGORY_LABEL[item.category]}
-                      </span>
-                      <time dateTime={item.date}>{formatDate(item.date)}</time>
-                    </span>
-                    <Link
-                      href={item.href}
-                      className="inline-flex shrink-0 items-center gap-1 font-medium text-blue-600 hover:text-blue-700"
-                    >
-                      관련 화면 열기 <ExternalLink size={12} />
-                    </Link>
-                  </div>
-                </article>
-              ))}
+                ))}
+              </div>
             </div>
           )}
+        </section>
+
+        <div className="flex min-h-0 flex-1 flex-col px-5 py-5 md:px-6">
+          <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
+            <h3 className="text-sm font-bold text-slate-900">관련 업무 이력</h3>
+            <span className="text-xs text-slate-400">{filteredHistory.length}건</span>
+          </div>
+          <div className="mb-4 flex shrink-0 gap-1 overflow-x-auto border-b border-slate-100 pb-px">
+            {HISTORY_TABS.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setTab(item.key)}
+                className={`whitespace-nowrap border-b-2 px-2.5 py-2 text-xs font-semibold transition-colors ${tab === item.key ? "border-blue-600 text-blue-600" : "border-transparent text-slate-400 hover:text-slate-700"}`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+            {filteredHistory.length === 0 ? (
+              <p className="py-12 text-center text-sm text-slate-400">관련 업무 이력이 없습니다.</p>
+            ) : (
+              <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                {filteredHistory.map((item) => (
+                  <article key={`${item.category}-${item.id}`} className="px-3.5 py-3.5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-800">
+                          {item.title}
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-slate-500">
+                          {item.summary}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${item.statusClass}`}
+                      >
+                        {item.status}
+                      </span>
+                    </div>
+                    <div className="mt-2.5 flex items-center justify-between gap-3 text-[11px] text-slate-400">
+                      <span className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-500">
+                          {HISTORY_CATEGORY_LABEL[item.category]}
+                        </span>
+                        <time dateTime={item.date}>{formatDate(item.date)}</time>
+                      </span>
+                      <Link
+                        href={item.href}
+                        className="inline-flex shrink-0 items-center gap-1 font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        관련 화면 열기 <ExternalLink size={12} />
+                      </Link>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </section>

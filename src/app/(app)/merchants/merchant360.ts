@@ -62,7 +62,7 @@ export interface Merchant360Application {
   status: string;
   status_label: string;
   status_class: string;
-  reception_channel: string | null;
+  channel_label: string | null;
   cs_name: string | null;
   tech_name: string | null;
   internet: string | null;
