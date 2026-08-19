@@ -3,8 +3,10 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
   FRANCHISE_CHANNEL_LABEL,
+  FRANCHISE_INSTALL_LOG_LABEL,
   FRANCHISE_STATUS_COLOR,
   FRANCHISE_STATUS_LABEL,
+  FRANCHISE_TRANSFER_LOG_LABEL,
   type FranchiseChannel,
   type FranchiseStatus,
 } from "@/types";
@@ -22,11 +24,11 @@ const PAGE_SIZE = 50;
 
 // franchise_application_logs.to_status는 실제 접수 상태(FranchiseStatus) 외에도
 // 이관승인 반려, 설치이관 생성 같은 내부 이벤트 문자열이 함께 저장된다. 이력에 노출할 것만 한글로 매핑.
+// 이관승인 요청/1차승인/최종승인은 franchise_transfer_approvals 값으로 아래에서 별도 표시하므로 여기선 생략.
 const NON_STATUS_LOG_LABEL: Record<string, string> = {
-  transfer_cs_responsible_rejected: "1차반려",
-  transfer_team_lead_rejected: "최종반려",
-  install_transfer: "설치 이관",
-  install_retransfer: "설치 재이관",
+  ...FRANCHISE_INSTALL_LOG_LABEL,
+  transfer_cs_responsible_rejected: FRANCHISE_TRANSFER_LOG_LABEL.transfer_cs_responsible_rejected,
+  transfer_team_lead_rejected: FRANCHISE_TRANSFER_LOG_LABEL.transfer_team_lead_rejected,
 };
 
 interface Props {
