@@ -19,6 +19,8 @@ import {
 import { formatBusinessNumber, formatPhone } from "@/lib/format";
 import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
 import type { ApprovalNote } from "@/lib/approvalNotes";
+import { AppSelect } from "@/components/ui/AppSelect";
+import { DatePickerField } from "@/components/ui/DatePickerField";
 
 const EQUIPMENT_CATALOG = [
   "토스프론트",
@@ -90,8 +92,6 @@ interface Props {
 
 const inputClass =
   "border-border bg-card text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/30 h-9 w-full rounded-lg border px-3 text-sm outline-none focus-visible:ring-2";
-const selectClass =
-  "border-border bg-card text-foreground focus-visible:ring-primary/30 h-9 w-full rounded-lg border px-3 text-sm outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50";
 const secondaryButton =
   "focus-visible:ring-primary/30 border-border bg-card text-foreground hover:bg-muted inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold transition-colors outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50";
 const primaryButton =
@@ -325,19 +325,17 @@ export default function FranchiseDetailDrawer({
             </button>
           </div>
           <div className="mt-3.5 flex items-center gap-2.5">
-            <select
+            <AppSelect
               aria-label="상태"
               value={row.status}
               disabled={busy}
-              onChange={(event) => onStatusChange(event.target.value as FranchiseStatus)}
-              className={`h-auto rounded-md border-none px-2.5 py-1 text-xs font-semibold outline-none ${colors.pill}`}
-            >
-              {STATUS_OPTIONS.map((status) => (
-                <option key={status} value={status}>
-                  {FRANCHISE_STATUS_LABEL[status]}
-                </option>
-              ))}
-            </select>
+              onValueChange={(value) => onStatusChange(value as FranchiseStatus)}
+              className={`h-auto rounded-md border-none px-2.5 py-1 text-xs font-semibold ${colors.pill}`}
+              options={STATUS_OPTIONS.map((status) => ({
+                value: status,
+                label: FRANCHISE_STATUS_LABEL[status],
+              }))}
+            />
             <span className="text-muted-foreground text-sm">
               접수일 {row.reception_date || "-"}
             </span>
@@ -458,19 +456,17 @@ export default function FranchiseDetailDrawer({
                 </div>
                 <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
                   <Field label="사업자 유형">
-                    <select
+                    <AppSelect
                       value={row.applicant_type}
-                      onChange={(event) =>
-                        onApplicantTypeChange(event.target.value as ApplicantType)
-                      }
-                      className={selectClass}
-                    >
-                      {(Object.keys(APPLICANT_TYPE_LABEL) as ApplicantType[]).map((type) => (
-                        <option key={type} value={type}>
-                          {APPLICANT_TYPE_LABEL[type]}
-                        </option>
-                      ))}
-                    </select>
+                      onValueChange={(value) => onApplicantTypeChange(value as ApplicantType)}
+                      aria-label="사업자 유형"
+                      options={(Object.keys(APPLICANT_TYPE_LABEL) as ApplicantType[]).map(
+                        (type) => ({
+                          value: type,
+                          label: APPLICANT_TYPE_LABEL[type],
+                        }),
+                      )}
+                    />
                   </Field>
                   <Field label="사업자번호">
                     <EditableInput
@@ -483,25 +479,36 @@ export default function FranchiseDetailDrawer({
                 </div>
                 <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
                   <Field label="채널">
-                    <select
+                    <AppSelect
                       value={row.channel ?? ""}
-                      onChange={(event) => onSave("channel", event.target.value)}
-                      className={selectClass}
-                    >
-                      <option value="">미지정</option>
-                      {(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map((c) => (
-                        <option key={c} value={c}>
-                          {FRANCHISE_CHANNEL_LABEL[c]}
-                        </option>
-                      ))}
-                    </select>
+                      onValueChange={(value) => onSave("channel", value)}
+                      aria-label="채널"
+                      options={[
+                        { value: "", label: "미지정" },
+                        ...(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map(
+                          (c) => ({
+                            value: c,
+                            label: FRANCHISE_CHANNEL_LABEL[c],
+                          }),
+                        ),
+                      ]}
+                    />
                   </Field>
                   <Field label="구분">
-                    <select value={row.case_type ?? ""} disabled className={selectClass}>
-                      <option value={row.case_type ?? ""}>
-                        {row.case_type ? FRANCHISE_CASE_TYPE_LABEL[row.case_type] : "미지정"}
-                      </option>
-                    </select>
+                    <AppSelect
+                      value={row.case_type ?? ""}
+                      onValueChange={() => {}}
+                      disabled
+                      aria-label="구분"
+                      options={[
+                        {
+                          value: row.case_type ?? "",
+                          label: row.case_type
+                            ? FRANCHISE_CASE_TYPE_LABEL[row.case_type]
+                            : "미지정",
+                        },
+                      ]}
+                    />
                   </Field>
                   <Field label="옵션">
                     <div className="flex h-9 items-center gap-3">
@@ -535,15 +542,15 @@ export default function FranchiseDetailDrawer({
               <div className="text-foreground mb-2.5 text-[13px] font-bold">상품</div>
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <select
+                  <AppSelect
                     value={productSelect}
-                    onChange={(event) => setProductSelect(event.target.value)}
-                    className={selectClass}
-                  >
-                    {EQUIPMENT_CATALOG.map((product) => (
-                      <option key={product}>{product}</option>
-                    ))}
-                  </select>
+                    onValueChange={setProductSelect}
+                    aria-label="상품 선택"
+                    options={EQUIPMENT_CATALOG.map((product) => ({
+                      value: product,
+                      label: product,
+                    }))}
+                  />
                 </div>
                 <div className="w-12 shrink-0">
                   <input
@@ -605,56 +612,55 @@ export default function FranchiseDetailDrawer({
               </div>
               <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
                 <Field label="오픈예정일">
-                  <input
-                    type="date"
+                  <DatePickerField
                     value={row.open_date ?? ""}
-                    onChange={(event) => onSave("open_date", event.target.value)}
-                    className={inputClass}
+                    onChange={(value) => onSave("open_date", value)}
+                    ariaLabel="오픈예정일"
+                    className="w-full"
                   />
                 </Field>
                 <Field label="카드가맹접수일">
-                  <input
-                    type="date"
+                  <DatePickerField
                     value={row.card_apply_date ?? ""}
-                    onChange={(event) => onSave("card_apply_date", event.target.value)}
-                    className={inputClass}
+                    onChange={(value) => onSave("card_apply_date", value)}
+                    ariaLabel="카드가맹접수일"
+                    className="w-full"
                   />
                 </Field>
                 <Field label="설치 및 발송일">
-                  <input
-                    type="date"
+                  <DatePickerField
                     value={row.install_date ?? ""}
-                    onChange={(event) => onSave("install_date", event.target.value)}
-                    className={inputClass}
+                    onChange={(value) => onSave("install_date", value)}
+                    ariaLabel="설치 및 발송일"
+                    className="w-full"
                   />
                 </Field>
               </div>
               <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
                 <Field label="인터넷">
-                  <select
+                  <AppSelect
                     value={row.internet ?? ""}
-                    onChange={(event) => onSave("internet", event.target.value)}
-                    className={selectClass}
-                  >
-                    <option value="">미설정</option>
-                    {INTERNET_PROVIDERS.map((provider) => (
-                      <option key={provider}>{provider}</option>
-                    ))}
-                  </select>
+                    onValueChange={(value) => onSave("internet", value)}
+                    aria-label="인터넷"
+                    options={[
+                      { value: "", label: "미설정" },
+                      ...INTERNET_PROVIDERS.map((provider) => ({
+                        value: provider,
+                        label: provider,
+                      })),
+                    ]}
+                  />
                 </Field>
                 <Field label="담당자">
-                  <select
+                  <AppSelect
                     value={row.cs_id ?? ""}
-                    onChange={(event) => onCsChange(event.target.value)}
-                    className={selectClass}
-                  >
-                    <option value="">미배정</option>
-                    {csProfiles.map((profile) => (
-                      <option key={profile.id} value={profile.id}>
-                        {profile.name}
-                      </option>
-                    ))}
-                  </select>
+                    onValueChange={onCsChange}
+                    aria-label="담당자"
+                    options={[
+                      { value: "", label: "미배정" },
+                      ...csProfiles.map((profile) => ({ value: profile.id, label: profile.name })),
+                    ]}
+                  />
                 </Field>
               </div>
             </div>
