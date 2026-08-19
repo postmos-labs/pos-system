@@ -135,7 +135,8 @@ async function loadMerchant360(
   const [
     applicationResult,
     installationsResult,
-    franchiseLogResult,
+    franchiseLogsResult,
+    transferApprovalResult,
     memoEntriesResult,
     equipmentResult,
   ] = await Promise.all([
@@ -143,7 +144,7 @@ async function loadMerchant360(
       ? supabase
           .from("franchise_applications")
           .select(
-            "id,business_name,status,created_at,channel,internet,van_company,cs:profiles!franchise_applications_cs_id_fkey(name),tech:profiles!franchise_applications_tech_id_fkey(name)",
+            "id,business_name,status,created_at,channel,internet,van_company,cs:profiles!franchise_applications_cs_id_fkey(name),tech:profiles!franchise_applications_tech_id_fkey(name),creator:profiles!franchise_applications_created_by_fkey(name)",
           )
           .eq("id", franchiseApplicationId)
           .maybeSingle()
@@ -158,10 +159,15 @@ async function loadMerchant360(
     franchiseApplicationId
       ? supabase
           .from("franchise_application_logs")
-          .select("user_name,created_at")
+          .select("user_name,to_status,created_at")
           .eq("franchise_application_id", franchiseApplicationId)
-          .order("created_at", { ascending: false })
-          .limit(1)
+          .order("created_at", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+    franchiseApplicationId
+      ? supabase
+          .from("franchise_transfer_approvals")
+          .select("requested_by_name,cs_approved_by_name,approved_by_name,status")
+          .eq("franchise_application_id", franchiseApplicationId)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     supabase
@@ -186,10 +192,49 @@ async function loadMerchant360(
     van_company: string | null;
     cs: { name: string | null }[] | { name: string | null } | null;
     tech: { name: string | null }[] | { name: string | null } | null;
+    creator: { name: string | null }[] | { name: string | null } | null;
   } | null;
   const installations = (installationsResult.data ?? []) as InstallationRow[];
-  const franchiseLatestActor = (franchiseLogResult.data as { user_name: string | null } | null)
-    ?.user_name;
+  const franchiseLogs = (franchiseLogsResult.data ?? []) as Array<{
+    user_name: string | null;
+    to_status: string | null;
+    created_at: string;
+  }>;
+  const transferApproval = transferApprovalResult.data as {
+    requested_by_name: string | null;
+    cs_approved_by_name: string | null;
+    approved_by_name: string | null;
+    status: string;
+  } | null;
+
+  function franchiseActorChain() {
+    const creatorName = Array.isArray(application?.creator)
+      ? application?.creator[0]?.name
+      : application?.creator?.name;
+    const parts: string[] = [];
+    if (creatorName) parts.push(`등록 ${creatorName}`);
+    const seen = new Set<string>();
+    for (const log of franchiseLogs) {
+      if (!log.user_name) continue;
+      const key = `${log.to_status ?? ""}:${log.user_name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const statusLabel = log.to_status
+        ? (FRANCHISE_STATUS_LABEL[log.to_status as FranchiseStatus] ?? log.to_status)
+        : null;
+      parts.push(statusLabel ? `${statusLabel} ${log.user_name}` : log.user_name);
+    }
+    if (transferApproval) {
+      if (transferApproval.requested_by_name)
+        parts.push(`이관신청 ${transferApproval.requested_by_name}`);
+      if (transferApproval.cs_approved_by_name)
+        parts.push(`1차승인 ${transferApproval.cs_approved_by_name}`);
+      if (transferApproval.approved_by_name)
+        parts.push(`최종승인 ${transferApproval.approved_by_name}`);
+    }
+    return parts.length ? parts.join(" > ") : undefined;
+  }
+
   const memoEntries = memoEntriesResult.error
     ? []
     : ((memoEntriesResult.data ?? []) as MerchantMemoEntryRow[]);
@@ -251,7 +296,7 @@ async function loadMerchant360(
       status: FRANCHISE_STATUS_LABEL[status] ?? application.status,
       statusClass: FRANCHISE_STATUS_COLOR[status] ?? "bg-slate-100 text-slate-600",
       href: `/franchise?id=${application.id}`,
-      actorName: franchiseLatestActor,
+      actorName: franchiseActorChain(),
     });
   }
 
