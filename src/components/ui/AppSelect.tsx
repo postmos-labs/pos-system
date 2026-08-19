@@ -9,6 +9,7 @@ const EMPTY_VALUE = "__empty__";
 export type AppSelectOption = {
   value: string;
   label: ReactNode;
+  disabled?: boolean;
 };
 
 type AppSelectProps = {
@@ -62,6 +63,7 @@ export function AppSelect({
                 <Select.Item
                   key={itemValue}
                   value={itemValue}
+                  disabled={option.disabled}
                   className="relative flex cursor-default select-none items-center rounded-md py-2 pl-8 pr-3 outline-none transition data-[disabled]:pointer-events-none data-[disabled]:opacity-40 data-[highlighted]:bg-blue-50 data-[highlighted]:text-slate-900"
                 >
                   <Select.ItemIndicator className="absolute left-2.5 inline-flex items-center text-blue-600">

@@ -38,6 +38,8 @@ import {
   FRANCHISE_STATUS_LABEL,
 } from "@/types";
 import RateBadge from "@/components/ui/RateBadge";
+import { AppSelect } from "@/components/ui/AppSelect";
+import { DatePickerField } from "@/components/ui/DatePickerField";
 
 type TableView =
   | "all"
@@ -184,8 +186,6 @@ const buttonBase =
 const secondaryButton = `${buttonBase} border-border bg-card text-foreground hover:bg-muted h-9 px-4 text-sm`;
 const primaryButton = `${buttonBase} border-primary bg-primary text-primary-foreground hover:bg-primary-hover h-9 px-4 text-sm`;
 const iconButton = `${buttonBase} border-border bg-card text-foreground hover:bg-muted size-9 p-0`;
-const selectBase =
-  "border-border bg-card text-foreground focus-visible:ring-primary/30 h-9 w-full rounded-lg border px-3 text-sm outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50";
 
 function statusTone(status: FranchiseStatus) {
   if (status === "doc_waiting")
@@ -441,20 +441,18 @@ export default function FranchiseReceiptSurface(props: Props) {
               ]}
               controls={
                 <div className="flex w-full items-center justify-end gap-1">
-                  <input
-                    aria-label="성공률 시작일"
-                    type="date"
+                  <DatePickerField
+                    ariaLabel="성공률 시작일"
                     value={props.successRateFrom}
-                    onChange={(event) => props.onSuccessRateFromChange(event.target.value)}
-                    className="border-border bg-surface-subtle h-[22px] w-[78px] rounded-md border px-1 text-[10px] outline-none"
+                    onChange={props.onSuccessRateFromChange}
+                    className="h-[22px] w-[78px] rounded-md px-1 text-[10px]"
                   />
                   <span className="text-muted-foreground text-[10px]">~</span>
-                  <input
-                    aria-label="성공률 종료일"
-                    type="date"
+                  <DatePickerField
+                    ariaLabel="성공률 종료일"
                     value={props.successRateTo}
-                    onChange={(event) => props.onSuccessRateToChange(event.target.value)}
-                    className="border-border bg-surface-subtle h-[22px] w-[78px] rounded-md border px-1 text-[10px] outline-none"
+                    onChange={props.onSuccessRateToChange}
+                    className="h-[22px] w-[78px] rounded-md px-1 text-[10px]"
                   />
                 </div>
               }
@@ -654,104 +652,101 @@ export default function FranchiseReceiptSurface(props: Props) {
         {advancedOpen && (
           <div className="border-border flex flex-wrap items-center gap-2 border-t pt-2.5">
             <div className="w-40">
-              <select
+              <AppSelect
                 aria-label="상태"
                 value={props.statusFilter}
-                onChange={(event) => props.onStatusFilterChange(event.target.value)}
-                className={selectBase}
-              >
-                <option value="">전체</option>
-                {STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {FRANCHISE_STATUS_LABEL[status]}
-                  </option>
-                ))}
-              </select>
+                onValueChange={props.onStatusFilterChange}
+                options={[
+                  { value: "", label: "전체" },
+                  ...STATUS_OPTIONS.map((status) => ({
+                    value: status,
+                    label: FRANCHISE_STATUS_LABEL[status],
+                  })),
+                ]}
+              />
             </div>
             <div className="w-40">
-              <select
+              <AppSelect
                 aria-label="사업자 유형"
                 value={props.applicantTypeFilter}
-                onChange={(event) => props.onApplicantTypeFilterChange(event.target.value)}
-                className={selectBase}
-              >
-                <option value="">사업자 유형 전체</option>
-                {(Object.keys(APPLICANT_TYPE_LABEL) as ApplicantType[]).map((type) => (
-                  <option key={type} value={type}>
-                    {APPLICANT_TYPE_LABEL[type]}
-                  </option>
-                ))}
-              </select>
+                onValueChange={props.onApplicantTypeFilterChange}
+                options={[
+                  { value: "", label: "사업자 유형 전체" },
+                  ...(Object.keys(APPLICANT_TYPE_LABEL) as ApplicantType[]).map((type) => ({
+                    value: type,
+                    label: APPLICANT_TYPE_LABEL[type],
+                  })),
+                ]}
+              />
             </div>
             <div className="w-32">
-              <select
+              <AppSelect
                 aria-label="채널"
                 value={props.channelFilter}
-                onChange={(event) => props.onChannelFilterChange(event.target.value)}
-                className={selectBase}
-              >
-                <option value="">채널 전체</option>
-                {(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map((c) => (
-                  <option key={c} value={c}>
-                    {FRANCHISE_CHANNEL_LABEL[c]}
-                  </option>
-                ))}
-              </select>
+                onValueChange={props.onChannelFilterChange}
+                options={[
+                  { value: "", label: "채널 전체" },
+                  ...(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map((c) => ({
+                    value: c,
+                    label: FRANCHISE_CHANNEL_LABEL[c],
+                  })),
+                ]}
+              />
             </div>
             <div className="w-32">
-              <select
+              <AppSelect
                 aria-label="구분"
                 value={props.caseTypeFilter}
-                onChange={(event) => props.onCaseTypeFilterChange(event.target.value)}
-                className={selectBase}
-              >
-                <option value="">구분 전체</option>
-                {(Object.keys(FRANCHISE_CASE_TYPE_LABEL) as FranchiseCaseType[]).map((c) => (
-                  <option key={c} value={c}>
-                    {FRANCHISE_CASE_TYPE_LABEL[c]}
-                  </option>
-                ))}
-              </select>
+                onValueChange={props.onCaseTypeFilterChange}
+                options={[
+                  { value: "", label: "구분 전체" },
+                  ...(Object.keys(FRANCHISE_CASE_TYPE_LABEL) as FranchiseCaseType[]).map((c) => ({
+                    value: c,
+                    label: FRANCHISE_CASE_TYPE_LABEL[c],
+                  })),
+                ]}
+              />
             </div>
             <div className="w-32" title="인터넷 필터 기능 추가 필요">
-              <select aria-label="인터넷" value="all" disabled className={selectBase}>
-                <option value="all">인터넷 전체</option>
-                <option value="3S">3S</option>
-                <option value="백메가">백메가</option>
-              </select>
+              <AppSelect
+                aria-label="인터넷"
+                value="all"
+                onValueChange={() => {}}
+                disabled
+                options={[
+                  { value: "all", label: "인터넷 전체" },
+                  { value: "3S", label: "3S" },
+                  { value: "백메가", label: "백메가" },
+                ]}
+              />
             </div>
             <div className="flex items-center gap-1">
-              <input
-                aria-label="접수일 시작"
-                type="date"
+              <DatePickerField
+                ariaLabel="접수일 시작"
                 value={props.dateFrom}
-                onChange={(event) => props.onDateFromChange(event.target.value)}
-                className={`${selectBase} w-[130px]`}
+                onChange={props.onDateFromChange}
+                className="w-[130px]"
               />
               <span className="text-muted-foreground text-xs">~</span>
-              <input
-                aria-label="접수일 종료"
-                type="date"
+              <DatePickerField
+                ariaLabel="접수일 종료"
                 value={props.dateTo}
-                onChange={(event) => props.onDateToChange(event.target.value)}
-                className={`${selectBase} w-[130px]`}
+                onChange={props.onDateToChange}
+                className="w-[130px]"
               />
             </div>
             <div className="w-32">
-              <select
+              <AppSelect
                 aria-label="정렬"
                 value={props.sortBy === "created_at" ? "latest" : props.sortBy}
-                onChange={(event) => {
-                  if (event.target.value !== "oldest")
-                    props.onSortChange(event.target.value as SortBy);
+                onValueChange={(value) => {
+                  if (value !== "oldest") props.onSortChange(value as SortBy);
                 }}
-                className={selectBase}
-              >
-                <option value="latest">등록일순</option>
-                <option value="oldest" disabled>
-                  오래된순
-                </option>
-              </select>
+                options={[
+                  { value: "latest", label: "등록일순" },
+                  { value: "oldest", label: "오래된순", disabled: true },
+                ]}
+              />
             </div>
           </div>
         )}
@@ -887,41 +882,37 @@ export default function FranchiseReceiptSurface(props: Props) {
                       </button>
                     </td>
                     <td className="px-2.5 py-2.5 whitespace-nowrap">
-                      <input
-                        aria-label="접수일"
-                        type="date"
+                      <DatePickerField
+                        ariaLabel="접수일"
                         value={row.reception_date ?? ""}
-                        onChange={(event) =>
-                          props.onSaveField(row, "reception_date", event.target.value)
-                        }
-                        className="h-auto border-none bg-transparent px-0 text-[12.5px] outline-none"
+                        onChange={(value) => props.onSaveField(row, "reception_date", value)}
+                        className="h-auto border-none bg-transparent px-0 text-[12.5px]"
                       />
                     </td>
                     <td className="px-2.5 py-2.5 whitespace-nowrap">
-                      <input
-                        aria-label="오픈 예정일"
-                        type="date"
+                      <DatePickerField
+                        ariaLabel="오픈 예정일"
                         value={row.open_date ?? ""}
-                        onChange={(event) =>
-                          props.onSaveField(row, "open_date", event.target.value)
-                        }
-                        className="h-auto border-none bg-transparent px-0 text-[12.5px] outline-none"
+                        onChange={(value) => props.onSaveField(row, "open_date", value)}
+                        className="h-auto border-none bg-transparent px-0 text-[12.5px]"
                       />
                     </td>
                     <td className="px-2.5 py-2.5 whitespace-nowrap">
-                      <select
+                      <AppSelect
                         aria-label="채널"
                         value={row.channel ?? ""}
-                        onChange={(event) => props.onSaveField(row, "channel", event.target.value)}
-                        className="text-foreground h-auto border-none bg-transparent py-0 pr-6 pl-0 text-[12.5px] outline-none"
-                      >
-                        <option value="">미지정</option>
-                        {(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map((c) => (
-                          <option key={c} value={c}>
-                            {FRANCHISE_CHANNEL_LABEL[c]}
-                          </option>
-                        ))}
-                      </select>
+                        onValueChange={(value) => props.onSaveField(row, "channel", value)}
+                        className="text-foreground h-auto border-none bg-transparent py-0 pr-6 pl-0 text-[12.5px]"
+                        options={[
+                          { value: "", label: "미지정" },
+                          ...(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map(
+                            (c) => ({
+                              value: c,
+                              label: FRANCHISE_CHANNEL_LABEL[c],
+                            }),
+                          ),
+                        ]}
+                      />
                     </td>
                     <td className="px-2.5 py-2.5 whitespace-nowrap">
                       <span className="text-foreground text-[12.5px]">
@@ -955,19 +946,19 @@ export default function FranchiseReceiptSurface(props: Props) {
                       {row.phone || "-"}
                     </td>
                     <td className="px-2.5 py-2.5 whitespace-nowrap">
-                      <select
+                      <AppSelect
                         aria-label="담당자"
                         value={row.cs_id ?? ""}
-                        onChange={(event) => props.onCsChange(row, event.target.value)}
-                        className="text-foreground h-auto border-none bg-transparent py-0 pr-6 pl-0 text-[12.5px] outline-none"
-                      >
-                        <option value="">미배정</option>
-                        {props.csProfiles.map((profile) => (
-                          <option key={profile.id} value={profile.id}>
-                            {profile.name}
-                          </option>
-                        ))}
-                      </select>
+                        onValueChange={(value) => props.onCsChange(row, value)}
+                        className="text-foreground h-auto border-none bg-transparent py-0 pr-6 pl-0 text-[12.5px]"
+                        options={[
+                          { value: "", label: "미배정" },
+                          ...props.csProfiles.map((profile) => ({
+                            value: profile.id,
+                            label: profile.name,
+                          })),
+                        ]}
+                      />
                     </td>
                     <td
                       className={`px-2.5 py-2.5 font-semibold whitespace-nowrap ${props.linkedInternets[row.id] ? "text-green-500" : "text-muted-foreground"}`}
@@ -975,33 +966,30 @@ export default function FranchiseReceiptSurface(props: Props) {
                       {props.linkedInternets[row.id]?.category || row.internet || "-"}
                     </td>
                     <td className="px-2.5 py-2.5 whitespace-nowrap">
-                      <select
+                      <AppSelect
                         aria-label="상태"
                         value={row.status}
                         disabled={props.busyId === row.id}
-                        onChange={(event) =>
-                          props.onStatusChange(row, event.target.value as FranchiseStatus)
+                        onValueChange={(value) =>
+                          props.onStatusChange(row, value as FranchiseStatus)
                         }
-                        className={`h-auto rounded-md border-none px-2.5 py-1.5 text-[11.5px] font-semibold outline-none ${tone.pill}`}
-                      >
-                        {STATUS_OPTIONS.map((status) => (
-                          <option key={status} value={status}>
-                            {FRANCHISE_STATUS_LABEL[status]}
-                          </option>
-                        ))}
-                      </select>
+                        className={`h-auto rounded-md border-none px-2.5 py-1.5 text-[11.5px] font-semibold ${tone.pill}`}
+                        options={STATUS_OPTIONS.map((status) => ({
+                          value: status,
+                          label: FRANCHISE_STATUS_LABEL[status],
+                        }))}
+                      />
                     </td>
                     <td className="px-2.5 py-2.5 whitespace-nowrap">
                       {(() => {
                         const severity = nextCheckSeverity(row.next_check_date, props.todayDate);
                         const color = nextCheckTextColor(severity);
                         return (
-                          <input
-                            aria-label="확인일"
-                            type="date"
+                          <DatePickerField
+                            ariaLabel="확인일"
                             value={row.next_check_date ?? ""}
-                            onChange={(event) => props.onSaveNextCheckDate(row, event.target.value)}
-                            className={`h-auto border-none bg-transparent px-0 text-[12.5px] outline-none ${color} ${severity > 0 ? "animate-pulse font-semibold" : ""}`}
+                            onChange={(value) => props.onSaveNextCheckDate(row, value)}
+                            className={`h-auto border-none bg-transparent px-0 text-[12.5px] ${color} ${severity > 0 ? "animate-pulse font-semibold" : ""}`}
                           />
                         );
                       })()}
@@ -1126,17 +1114,18 @@ export default function FranchiseReceiptSurface(props: Props) {
               <ChevronRightIcon className="size-3.5" />
             </button>
           </div>
-          <select
+          <AppSelect
             aria-label="페이지당 표시 개수"
             value="50"
+            onValueChange={() => {}}
             disabled
-            title="페이지 크기 변경 기능 추가 필요"
-            className={`${selectBase} h-8 w-auto py-0 text-xs`}
-          >
-            <option value="10">10개씩 보기</option>
-            <option value="20">20개씩 보기</option>
-            <option value="50">50개씩 보기</option>
-          </select>
+            className="h-8 w-auto py-0 text-xs"
+            options={[
+              { value: "10", label: "10개씩 보기" },
+              { value: "20", label: "20개씩 보기" },
+              { value: "50", label: "50개씩 보기" },
+            ]}
+          />
         </div>
       </div>
     </div>
