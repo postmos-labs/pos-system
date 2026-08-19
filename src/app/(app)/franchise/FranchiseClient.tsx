@@ -19,7 +19,6 @@ import {
   ChevronUp,
   Search,
   Download,
-  Calendar,
   GripVertical,
   X,
   ClipboardList,
@@ -76,6 +75,8 @@ import {
   type InstallationDeliveryType,
 } from "@/lib/installationDeliveryType";
 import { appendApprovalNote, type ApprovalNote } from "@/lib/approvalNotes";
+import { AppSelect } from "@/components/ui/AppSelect";
+import { CalendarPopoverButton } from "@/components/ui/DatePickerField";
 import {
   docCaseOf,
   applyFranchiseStatusSideEffects,
@@ -284,17 +285,12 @@ function EquipmentCart({
   return (
     <div onClick={(e) => e.stopPropagation()}>
       <div className="flex gap-1.5">
-        <select
+        <AppSelect
           value={product}
-          onChange={(e) => setProduct(e.target.value)}
-          className="text-sm border border-slate-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          {EQUIPMENT_CATALOG.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
+          onValueChange={setProduct}
+          aria-label="상품 선택"
+          options={EQUIPMENT_CATALOG.map((p) => ({ value: p, label: p }))}
+        />
         <input
           type="number"
           min={1}
@@ -721,20 +717,8 @@ interface DateFieldProps {
 }
 const DateField = memo(function DateField({ row, field, onSave }: DateFieldProps) {
   const [value, setValue] = useState((row[field] as string) ?? "");
-  const dateInputRef = useRef<HTMLInputElement>(null);
-  const isoValue = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
 
-  function openPicker(e: React.MouseEvent) {
-    e.stopPropagation();
-    const el = dateInputRef.current;
-    if (!el) return;
-    const withPicker = el as HTMLInputElement & { showPicker?: () => void };
-    if (typeof withPicker.showPicker === "function") withPicker.showPicker();
-    else el.focus();
-  }
-
-  function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
-    const next = e.target.value;
+  function handlePick(next: string) {
     setValue(next);
     onSave(row, field, next);
   }
@@ -750,23 +734,7 @@ const DateField = memo(function DateField({ row, field, onSave }: DateFieldProps
         placeholder="-"
         className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1 -mx-1 text-sm"
       />
-      <button
-        type="button"
-        onClick={openPicker}
-        tabIndex={-1}
-        aria-label="날짜 선택"
-        className="shrink-0 text-slate-400 hover:text-blue-500"
-      >
-        <Calendar size={14} />
-      </button>
-      <input
-        ref={dateInputRef}
-        type="date"
-        value={isoValue}
-        onChange={handlePick}
-        tabIndex={-1}
-        className="w-0 h-0 opacity-0 absolute pointer-events-none"
-      />
+      <CalendarPopoverButton value={value} onSelect={handlePick} ariaLabel="날짜 선택" />
     </div>
   );
 });
@@ -776,17 +744,6 @@ interface DateFormFieldProps {
   onChange: (value: string) => void;
 }
 const DateFormField = memo(function DateFormField({ value, onChange }: DateFormFieldProps) {
-  const dateInputRef = useRef<HTMLInputElement>(null);
-  const isoValue = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
-
-  function openPicker() {
-    const el = dateInputRef.current;
-    if (!el) return;
-    const withPicker = el as HTMLInputElement & { showPicker?: () => void };
-    if (typeof withPicker.showPicker === "function") withPicker.showPicker();
-    else el.focus();
-  }
-
   return (
     <div className="flex items-center gap-1">
       <input
@@ -794,21 +751,7 @@ const DateFormField = memo(function DateFormField({ value, onChange }: DateFormF
         onChange={(e) => onChange(formatDateText(e.target.value))}
         className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
-      <button
-        type="button"
-        onClick={openPicker}
-        aria-label="날짜 선택"
-        className="shrink-0 text-slate-400 hover:text-blue-500"
-      >
-        <Calendar size={14} />
-      </button>
-      <input
-        ref={dateInputRef}
-        type="date"
-        value={isoValue}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-0 h-0 opacity-0 absolute pointer-events-none"
-      />
+      <CalendarPopoverButton value={value} onSelect={onChange} ariaLabel="날짜 선택" />
     </div>
   );
 });
@@ -877,32 +820,29 @@ const CreateForm = memo(function CreateForm({ onSubmit, submitting, onClose }: C
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">접수채널</label>
-          <select
+          <AppSelect
             value={form.reception_channel}
-            onChange={(e) => setForm({ ...form, reception_channel: e.target.value })}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">선택 안함</option>
-            {RECEPTION_CHANNELS.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+            onValueChange={(value) => setForm({ ...form, reception_channel: value })}
+            aria-label="접수채널"
+            className="w-32"
+            options={[
+              { value: "", label: "선택 안함" },
+              ...RECEPTION_CHANNELS.map((c) => ({ value: c, label: c })),
+            ]}
+          />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">사업자 유형</label>
-          <select
+          <AppSelect
             value={form.applicant_type}
-            onChange={(e) => setForm({ ...form, applicant_type: e.target.value as ApplicantType })}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {(Object.keys(APPLICANT_TYPE_LABEL) as ApplicantType[]).map((t) => (
-              <option key={t} value={t}>
-                {APPLICANT_TYPE_LABEL[t]}
-              </option>
-            ))}
-          </select>
+            onValueChange={(value) => setForm({ ...form, applicant_type: value as ApplicantType })}
+            aria-label="사업자 유형"
+            className="w-32"
+            options={(Object.keys(APPLICANT_TYPE_LABEL) as ApplicantType[]).map((t) => ({
+              value: t,
+              label: APPLICANT_TYPE_LABEL[t],
+            }))}
+          />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">상호명</label>
@@ -942,18 +882,16 @@ const CreateForm = memo(function CreateForm({ onSubmit, submitting, onClose }: C
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">인터넷</label>
-          <select
+          <AppSelect
             value={form.internet}
-            onChange={(e) => setForm({ ...form, internet: e.target.value })}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-28 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">선택 안함</option>
-            {INTERNET_PROVIDERS.map((v) => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-          </select>
+            onValueChange={(value) => setForm({ ...form, internet: value })}
+            aria-label="인터넷"
+            className="w-28"
+            options={[
+              { value: "", label: "선택 안함" },
+              ...INTERNET_PROVIDERS.map((v) => ({ value: v, label: v })),
+            ]}
+          />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">VAN사 (중복선택 가능)</label>
@@ -2726,33 +2664,29 @@ export default function FranchiseClient({
             <p className="text-sm font-bold text-slate-800">{selected.size}건 일괄 담당자 배정</p>
             <div className="flex flex-col gap-2">
               <label className="text-xs text-slate-500">담당 CS</label>
-              <select
+              <AppSelect
                 value={bulkAssignCs}
-                onChange={(e) => setBulkAssignCs(e.target.value)}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">변경 안함</option>
-                {csProfiles.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+                onValueChange={setBulkAssignCs}
+                aria-label="담당 CS"
+                className="w-full"
+                options={[
+                  { value: "", label: "변경 안함" },
+                  ...csProfiles.map((p) => ({ value: p.id, label: p.name })),
+                ]}
+              />
             </div>
             <div className="flex flex-col gap-2">
               <label className="text-xs text-slate-500">담당 영업</label>
-              <select
+              <AppSelect
                 value={bulkAssignSales}
-                onChange={(e) => setBulkAssignSales(e.target.value)}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">변경 안함</option>
-                {salesProfiles.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+                onValueChange={setBulkAssignSales}
+                aria-label="담당 영업"
+                className="w-full"
+                options={[
+                  { value: "", label: "변경 안함" },
+                  ...salesProfiles.map((p) => ({ value: p.id, label: p.name })),
+                ]}
+              />
             </div>
             <div className="flex flex-col gap-2">
               <button
@@ -2782,18 +2716,19 @@ export default function FranchiseClient({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white border border-slate-200 rounded-2xl shadow-xl p-6 w-72 flex flex-col gap-4">
             <p className="text-sm font-bold text-slate-800">{selected.size}건 일괄 상태 변경</p>
-            <select
+            <AppSelect
               value={bulkStatus}
-              onChange={(e) => setBulkStatus(e.target.value as FranchiseStatus)}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">상태 선택</option>
-              {SELECTABLE_FRANCHISE_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {FRANCHISE_STATUS_LABEL[s]}
-                </option>
-              ))}
-            </select>
+              onValueChange={(value) => setBulkStatus(value as FranchiseStatus)}
+              aria-label="상태 선택"
+              className="w-full"
+              options={[
+                { value: "", label: "상태 선택" },
+                ...SELECTABLE_FRANCHISE_STATUSES.map((s) => ({
+                  value: s,
+                  label: FRANCHISE_STATUS_LABEL[s],
+                })),
+              ]}
+            />
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => setBulkStatusConfirmOpen(true)}
@@ -2893,20 +2828,21 @@ export default function FranchiseClient({
               <label className="mb-1.5 block text-sm font-semibold text-slate-700">
                 이관 구분 <span className="text-red-500">*</span>
               </label>
-              <select
+              <AppSelect
                 value={teamLeadDeliveryType}
-                onChange={(event) =>
-                  setTeamLeadDeliveryType(event.target.value as InstallationDeliveryType | "")
+                onValueChange={(value) =>
+                  setTeamLeadDeliveryType(value as InstallationDeliveryType | "")
                 }
-                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-              >
-                <option value="">구분을 선택해주세요</option>
-                {INSTALLATION_DELIVERY_TYPE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                aria-label="이관 구분"
+                className="h-10 w-full"
+                options={[
+                  { value: "", label: "구분을 선택해주세요" },
+                  ...INSTALLATION_DELIVERY_TYPE_OPTIONS.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                  })),
+                ]}
+              />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-semibold text-slate-700">
@@ -3094,21 +3030,20 @@ export default function FranchiseClient({
                 <label className="text-xs text-slate-500">
                   발송 템플릿 ({APPLICANT_TYPE_LABEL[statusConfirm.row.applicant_type]})
                 </label>
-                <select
+                <AppSelect
                   value={statusConfirm.docCase}
-                  onChange={(e) =>
+                  onValueChange={(value) =>
                     setStatusConfirm((prev) =>
-                      prev ? { ...prev, docCase: e.target.value as DocCase } : prev,
+                      prev ? { ...prev, docCase: value as DocCase } : prev,
                     )
                   }
-                  className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm"
-                >
-                  {(Object.keys(DOC_CASE_LABEL) as DocCase[]).map((c) => (
-                    <option key={c} value={c}>
-                      {DOC_CASE_LABEL[c]}
-                    </option>
-                  ))}
-                </select>
+                  aria-label="발송 템플릿"
+                  className="w-full"
+                  options={(Object.keys(DOC_CASE_LABEL) as DocCase[]).map((c) => ({
+                    value: c,
+                    label: DOC_CASE_LABEL[c],
+                  }))}
+                />
               </div>
             )}
             <div className="flex flex-col gap-2">
