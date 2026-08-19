@@ -649,8 +649,8 @@ function MerchantDetailPanel({
                         {item.status}
                       </span>
                     </div>
-                    <div className="mt-2.5 flex items-center justify-between gap-3 text-[11px] text-slate-400">
-                      <span className="flex items-center gap-2">
+                    <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] text-slate-400">
+                      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span className="font-semibold text-slate-500">
                           {HISTORY_CATEGORY_LABEL[item.category]}
                         </span>

@@ -35,6 +35,7 @@ type InstallationRow = {
 type InstallationActivityLogRow = {
   installation_id: string;
   user_name: string | null;
+  action: string;
   to_status: string | null;
   created_at: string;
 };
@@ -196,7 +197,7 @@ async function loadMerchant360(
   const activityLogsResult = installationIds.length
     ? await supabase
         .from("installation_activity_logs")
-        .select("installation_id,user_name,to_status,created_at")
+        .select("installation_id,user_name,action,to_status,created_at")
         .in("installation_id", installationIds)
         .order("created_at", { ascending: true })
     : { data: [] as InstallationActivityLogRow[], error: null };
@@ -207,8 +208,25 @@ async function loadMerchant360(
       .map((log) => log.created_at),
   );
   const latestActorByInstallation = new Map<string, string>();
+  const requestedByInstallation = new Map<string, string>();
+  const decidedByInstallation = new Map<string, { label: string; name: string }>();
   for (const log of activityLogs) {
-    if (log.user_name) latestActorByInstallation.set(log.installation_id, log.user_name);
+    if (!log.user_name) continue;
+    latestActorByInstallation.set(log.installation_id, log.user_name);
+    if (log.action === "completion_requested") {
+      requestedByInstallation.set(log.installation_id, log.user_name);
+    } else if (log.action === "completion_approved") {
+      decidedByInstallation.set(log.installation_id, { label: "승인", name: log.user_name });
+    } else if (log.action === "completion_rejected") {
+      decidedByInstallation.set(log.installation_id, { label: "반려", name: log.user_name });
+    }
+  }
+  function installationActorName(installationId: string) {
+    const requested = requestedByInstallation.get(installationId);
+    const decided = decidedByInstallation.get(installationId);
+    if (requested && decided) return `승인신청 ${requested} > ${decided.label} ${decided.name}`;
+    if (requested) return `승인신청 ${requested}`;
+    return latestActorByInstallation.get(installationId);
   }
   const memos: MerchantMemoEntry[] = memoEntries.map((memo) => ({
     id: memo.id,
@@ -250,7 +268,7 @@ async function loadMerchant360(
       status,
       statusClass: installationStatusClass(installation.status),
       href: `/installs?id=${installation.id}`,
-      actorName: latestActorByInstallation.get(installation.id),
+      actorName: installationActorName(installation.id),
     });
   }
 
