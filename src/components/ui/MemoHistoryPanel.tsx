@@ -8,6 +8,11 @@ import {
   INSTALLATION_DELIVERY_TYPE_LABEL,
   isInstallationDeliveryType,
 } from "@/lib/installationDeliveryType";
+import {
+  FRANCHISE_ALIMTALK_LOG_LABEL,
+  FRANCHISE_INSTALL_LOG_LABEL,
+  FRANCHISE_TRANSFER_LOG_LABEL,
+} from "@/types";
 
 type NotificationLog = {
   id: string;
@@ -201,30 +206,66 @@ export default function MemoHistoryPanel({
         </li>
       ),
     })),
-    ...franchiseLogs.map((log) => ({
-      at: log.created_at,
-      node: (
-        <li key={`franchise-${log.id}`} className="text-[15pt] text-purple-300">
-          <div className="text-slate-400">
-            {new Date(log.created_at).toLocaleString("ko-KR")}
-            {" · "}
-            <span className="font-semibold text-blue-300">
-              {log.user_name ?? log.user?.name ?? "알수없음"}
-            </span>
-            {" · 가맹접수"}
-          </div>
-          <div>
-            {log.from_status
-              ? (franchiseStatusLabelMap?.[log.from_status] ?? log.from_status)
-              : "-"}{" "}
-            → {log.to_status ? (franchiseStatusLabelMap?.[log.to_status] ?? log.to_status) : "-"}
-            {log.details?.delivery_type && isInstallationDeliveryType(log.details.delivery_type)
-              ? ` · 구분: ${INSTALLATION_DELIVERY_TYPE_LABEL[log.details.delivery_type]}`
-              : ""}
-          </div>
-        </li>
-      ),
-    })),
+    ...franchiseLogs.map((log) => {
+      const actor = (
+        <span className="font-semibold text-blue-300">
+          {log.user_name ?? log.user?.name ?? "알수없음"}
+        </span>
+      );
+      const isAlimtalk = log.to_status?.startsWith("alimtalk:");
+      if (isAlimtalk) {
+        const key = log.to_status!.replace("alimtalk:", "");
+        return {
+          at: log.created_at,
+          node: (
+            <li key={`franchise-${log.id}`} className="text-[15pt] text-blue-400">
+              <div className="text-slate-400">
+                {new Date(log.created_at).toLocaleString("ko-KR")} · {actor}
+              </div>
+              <div>알림톡 발송 ({FRANCHISE_ALIMTALK_LOG_LABEL[key] ?? key})</div>
+            </li>
+          ),
+        };
+      }
+      const installLabel = log.to_status ? FRANCHISE_INSTALL_LOG_LABEL[log.to_status] : undefined;
+      const transferLabel = log.to_status ? FRANCHISE_TRANSFER_LOG_LABEL[log.to_status] : undefined;
+      if (installLabel || transferLabel) {
+        return {
+          at: log.created_at,
+          node: (
+            <li
+              key={`franchise-${log.id}`}
+              className={`text-[15pt] font-medium ${installLabel ? "text-purple-400" : "text-amber-400"}`}
+            >
+              <div className="text-slate-400 font-normal">
+                {new Date(log.created_at).toLocaleString("ko-KR")} · {actor}
+              </div>
+              <div>{installLabel ?? transferLabel}</div>
+            </li>
+          ),
+        };
+      }
+      return {
+        at: log.created_at,
+        node: (
+          <li key={`franchise-${log.id}`} className="text-[15pt] text-purple-300">
+            <div className="text-slate-400">
+              {new Date(log.created_at).toLocaleString("ko-KR")}
+              {" · "}
+              {actor}
+              {" · 가맹접수"}
+            </div>
+            <div>
+              {log.from_status ? (franchiseStatusLabelMap?.[log.from_status] ?? "기타") : "-"} →{" "}
+              {log.to_status ? (franchiseStatusLabelMap?.[log.to_status] ?? "기타") : "-"}
+              {log.details?.delivery_type && isInstallationDeliveryType(log.details.delivery_type)
+                ? ` · 구분: ${INSTALLATION_DELIVERY_TYPE_LABEL[log.details.delivery_type]}`
+                : ""}
+            </div>
+          </li>
+        ),
+      };
+    }),
   ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
   function submit() {

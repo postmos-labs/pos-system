@@ -56,6 +56,9 @@ import {
   FRANCHISE_STATUS_COLOR,
   FRANCHISE_CHANNEL_LABEL,
   FRANCHISE_CASE_TYPE_LABEL,
+  FRANCHISE_ALIMTALK_LOG_LABEL,
+  FRANCHISE_INSTALL_LOG_LABEL,
+  FRANCHISE_TRANSFER_LOG_LABEL,
 } from "@/types";
 import type { DocCase } from "@/lib/solapi";
 import { useToast } from "@/components/ui/Toast";
@@ -248,23 +251,9 @@ const SELECTABLE_FRANCHISE_STATUSES = (
   Object.keys(FRANCHISE_STATUS_LABEL) as FranchiseStatus[]
 ).filter((s) => !STATUS_DROPDOWN_HIDDEN.includes(s));
 
-const ALIMTALK_LOG_LABEL: Record<string, string> = {
-  doc_request: "서류 안내",
-  doc_incomplete: "서류미비",
-  card_apply_done: "카드접수완료",
-  card_done: "카드가맹완료",
-  internet_apply_done: "인터넷접수완료",
-  internet_done: "인터넷개통완료",
-  toss_review_apply_done: "토스심사접수완료",
-  toss_review_done: "토스심사완료",
-};
-
-const INSTALL_LOG_LABEL: Record<string, string> = {
-  install_transfer: "기술지원 이관",
-  install_retransfer: "기술지원 재이관",
-  install_rejected: "기술지원 반려",
-  card_done: "설치완료 (가맹접수 자동갱신)",
-};
+const ALIMTALK_LOG_LABEL = FRANCHISE_ALIMTALK_LOG_LABEL;
+const INSTALL_LOG_LABEL = FRANCHISE_INSTALL_LOG_LABEL;
+const TRANSFER_LOG_LABEL = FRANCHISE_TRANSFER_LOG_LABEL;
 
 function EquipmentCart({
   items,
@@ -617,6 +606,7 @@ const HistoryPanel = memo(function HistoryPanel({
     ...(logs ?? []).map((log) => {
       const isAlimtalk = log.to_status?.startsWith("alimtalk:");
       const isInstallEvent = log.to_status && INSTALL_LOG_LABEL[log.to_status];
+      const isTransferEvent = log.to_status && TRANSFER_LOG_LABEL[log.to_status];
       if (isAlimtalk) {
         const key = log.to_status!.replace("alimtalk:", "");
         return {
@@ -650,6 +640,22 @@ const HistoryPanel = memo(function HistoryPanel({
           ),
         };
       }
+      if (isTransferEvent) {
+        return {
+          at: log.created_at,
+          pinned: false,
+          pinnedAt: null,
+          node: (
+            <li key={log.id} className="text-[15pt] text-amber-400 font-medium">
+              <div className="text-slate-400 font-normal">
+                {new Date(log.created_at).toLocaleString("ko-KR")} ·{" "}
+                {log.user_name ?? log.user?.name ?? "알수없음"}
+              </div>
+              <div>{TRANSFER_LOG_LABEL[log.to_status!]}</div>
+            </li>
+          ),
+        };
+      }
       return {
         at: log.created_at,
         pinned: false,
@@ -662,11 +668,11 @@ const HistoryPanel = memo(function HistoryPanel({
             </div>
             <div>
               {log.from_status
-                ? (FRANCHISE_STATUS_LABEL[log.from_status as FranchiseStatus] ?? log.from_status)
+                ? (FRANCHISE_STATUS_LABEL[log.from_status as FranchiseStatus] ?? "기타")
                 : "-"}{" "}
               →{" "}
               {log.to_status
-                ? (FRANCHISE_STATUS_LABEL[log.to_status as FranchiseStatus] ?? log.to_status)
+                ? (FRANCHISE_STATUS_LABEL[log.to_status as FranchiseStatus] ?? "기타")
                 : "-"}
             </div>
           </li>

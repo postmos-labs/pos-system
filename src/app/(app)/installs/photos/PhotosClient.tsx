@@ -32,6 +32,16 @@ const TABS = [
   ["as", "AS"],
 ] as const;
 
+const STATUS_LABELS: Record<string, string> = {
+  received: "접수",
+  preparing: "제품준비",
+  scheduled: "일정확정",
+  in_transit: "이동중",
+  delivery_sent: "택배발송",
+  completed: "설치완료",
+  rejected: "반려",
+};
+
 export default function PhotosClient({ profile, installs: initialInstalls }: Props) {
   const [installs, setInstalls] = useState(initialInstalls);
   const [tab, setTab] = useState<"all" | "install" | "as">("all");
@@ -261,6 +271,7 @@ export default function PhotosClient({ profile, installs: initialInstalls }: Pro
               createdAt={row.created_at}
               entityType="install"
               entityId={row.id}
+              labelMap={STATUS_LABELS}
               onAddMemo={(value) =>
                 saveNotes(
                   row.id,

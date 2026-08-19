@@ -340,6 +340,35 @@ export const FRANCHISE_STATUS_LABEL: Record<FranchiseStatus, string> = {
   canceled: "취소",
 };
 
+// franchise_application_logs.to_status에는 실제 상태값(FranchiseStatus) 외에
+// 알림톡 발송(alimtalk:*), 기술지원 이관, 이관승인 워크플로 이벤트 문자열도 함께 저장된다.
+// 이력 화면에서 원본 코드가 그대로 노출되지 않도록 한글 라벨로 매핑한다.
+export const FRANCHISE_ALIMTALK_LOG_LABEL: Record<string, string> = {
+  doc_request: "서류 안내",
+  doc_incomplete: "서류미비",
+  card_apply_done: "카드접수완료",
+  card_done: "카드가맹완료",
+  internet_apply_done: "인터넷접수완료",
+  internet_done: "인터넷개통완료",
+  toss_review_apply_done: "토스심사접수완료",
+  toss_review_done: "토스심사완료",
+};
+
+export const FRANCHISE_INSTALL_LOG_LABEL: Record<string, string> = {
+  install_transfer: "기술지원 이관",
+  install_retransfer: "기술지원 재이관",
+  install_rejected: "기술지원 반려",
+  card_done: "설치완료 (가맹접수 자동갱신)",
+};
+
+export const FRANCHISE_TRANSFER_LOG_LABEL: Record<string, string> = {
+  transfer_approval_requested: "이관승인 요청",
+  transfer_cs_responsible_approved: "이관승인 1차승인",
+  transfer_team_lead_approved: "이관승인 최종승인",
+  transfer_cs_responsible_rejected: "이관승인 1차반려",
+  transfer_team_lead_rejected: "이관승인 최종반려",
+};
+
 export const FRANCHISE_STATUS_COLOR: Record<FranchiseStatus, string> = {
   info_input: "bg-slate-100 text-slate-700 border-slate-200",
   doc_waiting: "bg-[#ff0000] text-[#ffffff] border-[#ff0000]",
