@@ -38,6 +38,58 @@ const CALENDAR_CLASSNAMES = {
   disabled: "[&_button]:!text-slate-300",
 };
 
+/**
+ * 캘린더 아이콘 버튼만 제공하는 트리거. 옆에 자유 텍스트 입력을 별도로 두고
+ * "날짜 또는 텍스트"를 함께 받는 필드(예: WooClient)에서, 숨겨진 native
+ * input[type=date] + showPicker() 트릭 대신 사용한다.
+ */
+export function CalendarPopoverButton({
+  onSelect,
+  value,
+  ariaLabel,
+  className = "",
+}: {
+  onSelect: (value: string) => void;
+  value?: string;
+  ariaLabel: string;
+  className?: string;
+}) {
+  const selected = value ? parseDate(value) : undefined;
+  return (
+    <Popover.Root>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          aria-label={ariaLabel}
+          onClick={(event) => event.stopPropagation()}
+          className={`shrink-0 text-slate-400 hover:text-blue-500 ${className}`}
+        >
+          <CalendarDays size={14} aria-hidden="true" />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          align="start"
+          sideOffset={6}
+          onClick={(event) => event.stopPropagation()}
+          className="z-50 rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
+        >
+          <DayPicker
+            mode="single"
+            locale={ko}
+            selected={selected}
+            defaultMonth={selected}
+            onSelect={(date) => {
+              if (date) onSelect(formatDate(date));
+            }}
+            classNames={CALENDAR_CLASSNAMES}
+          />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
 export function DatePickerField({
   value,
   onChange,

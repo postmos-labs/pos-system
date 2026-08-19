@@ -7,7 +7,6 @@ import {
   Search,
   ChevronDown,
   ChevronUp,
-  Calendar,
   ClipboardList,
   CalendarCheck,
   FileWarning,
@@ -26,6 +25,8 @@ import FormModal from "@/components/ui/FormModal";
 import HistoryButton from "@/components/ui/HistoryButton";
 import MemoHistoryPanel from "@/components/ui/MemoHistoryPanel";
 import KpiCard from "@/components/ui/KpiCard";
+import { AppSelect } from "@/components/ui/AppSelect";
+import { CalendarPopoverButton } from "@/components/ui/DatePickerField";
 
 interface Props {
   rows: WooCustomer[];
@@ -197,20 +198,8 @@ interface DateFieldProps {
 }
 const DateField = memo(function DateField({ row, field, onSave }: DateFieldProps) {
   const [value, setValue] = useState((row[field] as string) ?? "");
-  const dateInputRef = useRef<HTMLInputElement>(null);
-  const isoValue = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
 
-  function openPicker(e: React.MouseEvent) {
-    e.stopPropagation();
-    const el = dateInputRef.current;
-    if (!el) return;
-    const withPicker = el as HTMLInputElement & { showPicker?: () => void };
-    if (typeof withPicker.showPicker === "function") withPicker.showPicker();
-    else el.focus();
-  }
-
-  function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
-    const next = e.target.value;
+  function handlePick(next: string) {
     setValue(next);
     onSave(row, field, next);
   }
@@ -227,23 +216,7 @@ const DateField = memo(function DateField({ row, field, onSave }: DateFieldProps
         placeholder="날짜 또는 텍스트"
         className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1 -mx-1 text-sm"
       />
-      <button
-        type="button"
-        onClick={openPicker}
-        tabIndex={-1}
-        className="shrink-0 text-slate-400 hover:text-blue-500"
-      >
-        <Calendar size={14} />
-      </button>
-      <input
-        ref={dateInputRef}
-        type="date"
-        value={isoValue}
-        onChange={handlePick}
-        onClick={(e) => e.stopPropagation()}
-        tabIndex={-1}
-        className="w-0 h-0 opacity-0 absolute pointer-events-none"
-      />
+      <CalendarPopoverButton value={value} onSelect={handlePick} ariaLabel="날짜 선택" />
     </div>
   );
 });
@@ -267,23 +240,19 @@ const SelectField = memo(function SelectField({
       ? cardApplyStatusColor((row[field] as string) ?? "")
       : "bg-slate-100 text-slate-700 border-slate-200";
   return (
-    <select
-      value={(row[field] as string) ?? ""}
-      onChange={(e) => onSave(row, field, e.target.value)}
-      onClick={(e) => e.stopPropagation()}
-      className={
-        pill
-          ? `text-xs font-medium rounded-full pl-2.5 pr-1.5 py-1 border focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer ${pillColor}`
-          : "w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1 -mx-1 text-sm"
-      }
-    >
-      <option value="">-</option>
-      {options.map((o) => (
-        <option key={o} value={o}>
-          {o}
-        </option>
-      ))}
-    </select>
+    <span onClick={(e) => e.stopPropagation()} className={pill ? "" : "block w-full"}>
+      <AppSelect
+        value={(row[field] as string) ?? ""}
+        onValueChange={(value) => onSave(row, field, value)}
+        aria-label={field}
+        className={
+          pill
+            ? `h-auto rounded-full border pl-2.5 pr-1.5 py-1 text-xs font-medium ${pillColor}`
+            : "h-auto w-full border-0 bg-transparent px-1 -mx-1 text-sm"
+        }
+        options={[{ value: "", label: "-" }, ...options.map((o) => ({ value: o, label: o }))]}
+      />
+    </span>
   );
 });
 
@@ -292,17 +261,6 @@ interface DateFormFieldProps {
   onChange: (value: string) => void;
 }
 const DateFormField = memo(function DateFormField({ value, onChange }: DateFormFieldProps) {
-  const dateInputRef = useRef<HTMLInputElement>(null);
-  const isoValue = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
-
-  function openPicker() {
-    const el = dateInputRef.current;
-    if (!el) return;
-    const withPicker = el as HTMLInputElement & { showPicker?: () => void };
-    if (typeof withPicker.showPicker === "function") withPicker.showPicker();
-    else el.focus();
-  }
-
   return (
     <div className="flex items-center gap-1">
       <input
@@ -311,20 +269,7 @@ const DateFormField = memo(function DateFormField({ value, onChange }: DateFormF
         placeholder="날짜 또는 텍스트"
         className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
-      <button
-        type="button"
-        onClick={openPicker}
-        className="shrink-0 text-slate-400 hover:text-blue-500"
-      >
-        <Calendar size={14} />
-      </button>
-      <input
-        ref={dateInputRef}
-        type="date"
-        value={isoValue}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-0 h-0 opacity-0 absolute pointer-events-none"
-      />
+      <CalendarPopoverButton value={value} onSelect={onChange} ariaLabel="날짜 선택" />
     </div>
   );
 });
@@ -352,18 +297,16 @@ const CreateForm = memo(function CreateForm({ onSubmit, submitting, onClose }: C
             <div key={col.key} className="flex flex-col gap-1">
               <label className="text-xs font-medium text-slate-500">{col.label}</label>
               {options ? (
-                <select
+                <AppSelect
                   value={form[col.key as keyof typeof form]}
-                  onChange={(e) => setForm({ ...form, [col.key]: e.target.value })}
-                  className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">선택 안함</option>
-                  {options.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={(value) => setForm({ ...form, [col.key]: value })}
+                  aria-label={col.label}
+                  className="w-32"
+                  options={[
+                    { value: "", label: "선택 안함" },
+                    ...options.map((o) => ({ value: o, label: o })),
+                  ]}
+                />
               ) : DATE_FIELDS.includes(col.key) ? (
                 <DateFormField
                   value={form[col.key as keyof typeof form]}
@@ -771,28 +714,25 @@ export default function WooClient({
             className="pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg w-56 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <select
+        <AppSelect
           value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">분류 전체</option>
-          {CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        <select
+          onValueChange={setCategoryFilter}
+          aria-label="분류 필터"
+          options={[
+            { value: "", label: "분류 전체" },
+            ...CATEGORIES.map((c) => ({ value: c, label: c })),
+          ]}
+        />
+        <AppSelect
           value={sortKey}
-          onChange={(e) => setSortKey(e.target.value as SortKey)}
+          onValueChange={(value) => setSortKey(value as SortKey)}
           aria-label="정렬 기준"
-          className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="created_at">등록일</option>
-          <option value="open_date">오픈일</option>
-          <option value="received_date">접수날짜</option>
-        </select>
+          options={[
+            { value: "created_at", label: "등록일" },
+            { value: "open_date", label: "오픈일" },
+            { value: "received_date", label: "접수날짜" },
+          ]}
+        />
         {(search || categoryFilter) && (
           <button
             onClick={() => {
