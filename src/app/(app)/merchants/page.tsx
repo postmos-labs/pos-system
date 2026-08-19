@@ -16,6 +16,7 @@ import {
 } from "@/types";
 import MerchantsClient from "./MerchantsClient";
 import type {
+  Merchant360Application,
   Merchant360Merchant,
   MerchantEquipmentItem,
   MerchantMemoEntry,
@@ -125,6 +126,7 @@ async function loadMerchant360(
   merchantId: string,
 ): Promise<{
   merchant: Merchant360Merchant | null;
+  application: Merchant360Application | null;
   history: WorkHistoryItem[];
   memos: MerchantMemoEntry[];
   equipment: MerchantEquipmentItem[];
@@ -132,12 +134,13 @@ async function loadMerchant360(
   const { data: merchant } = await supabase
     .from("merchants")
     .select(
-      "id,business_name,owner_name,phone,address,address_detail,created_at,franchise_application_id",
+      "id,business_name,owner_name,phone,address,address_detail,business_number,open_date,toss_merchant_no,contract_expires_at,brand,created_at,franchise_application_id",
     )
     .eq("id", merchantId)
     .maybeSingle();
 
-  if (!merchant) return { merchant: null, history: [], memos: [], equipment: [] };
+  if (!merchant)
+    return { merchant: null, application: null, history: [], memos: [], equipment: [] };
 
   const franchiseApplicationId = merchant.franchise_application_id;
   const [
@@ -152,7 +155,9 @@ async function loadMerchant360(
     franchiseApplicationId
       ? supabase
           .from("franchise_applications")
-          .select("id,business_name,status,created_at")
+          .select(
+            "id,business_name,status,created_at,reception_channel,internet,van_company,cs:profiles!franchise_applications_cs_id_fkey(name),tech:profiles!franchise_applications_tech_id_fkey(name)",
+          )
           .eq("id", franchiseApplicationId)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -196,6 +201,11 @@ async function loadMerchant360(
     business_name: string | null;
     status: string;
     created_at: string;
+    reception_channel: string | null;
+    internet: string | null;
+    van_company: string | null;
+    cs: { name: string | null }[] | { name: string | null } | null;
+    tech: { name: string | null }[] | { name: string | null } | null;
   } | null;
   const installations = (installationsResult.data ?? []) as InstallationRow[];
   const tickets = (ticketsResult.data ?? []) as TicketRow[];
@@ -320,7 +330,34 @@ async function loadMerchant360(
   const equipment = equipmentResult.error
     ? []
     : ((equipmentResult.data ?? []) as MerchantEquipmentItem[]);
-  return { merchant: merchant as Merchant360Merchant, history, memos, equipment };
+
+  const applicationSummary: Merchant360Application | null = application
+    ? {
+        status: application.status,
+        status_label:
+          FRANCHISE_STATUS_LABEL[application.status as FranchiseStatus] ?? application.status,
+        status_class:
+          FRANCHISE_STATUS_COLOR[application.status as FranchiseStatus] ??
+          "bg-slate-100 text-slate-600",
+        reception_channel: application.reception_channel,
+        cs_name: Array.isArray(application.cs)
+          ? (application.cs[0]?.name ?? null)
+          : (application.cs?.name ?? null),
+        tech_name: Array.isArray(application.tech)
+          ? (application.tech[0]?.name ?? null)
+          : (application.tech?.name ?? null),
+        internet: application.internet,
+        van_company: application.van_company,
+      }
+    : null;
+
+  return {
+    merchant: merchant as Merchant360Merchant,
+    application: applicationSummary,
+    history,
+    memos,
+    equipment,
+  };
 }
 
 export default async function MerchantsPage({ searchParams }: Props) {
@@ -364,6 +401,7 @@ export default async function MerchantsPage({ searchParams }: Props) {
         merchants={merchantRows}
         selectedId={selectedId}
         selectedMerchant={selected?.merchant ?? null}
+        selectedApplication={selected?.application ?? null}
         history={selected?.history ?? []}
         memos={selected?.memos ?? []}
         equipment={selected?.equipment ?? []}

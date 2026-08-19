@@ -70,6 +70,10 @@ export async function updateMerchantInfo(
     phone: string;
     address: string;
     addressDetail: string;
+    businessNumber?: string;
+    tossMerchantNo?: string;
+    contractExpiresAt?: string;
+    brand?: string;
   },
 ) {
   const supabase = await createClient();
@@ -89,6 +93,10 @@ export async function updateMerchantInfo(
       phone: input.phone.trim(),
       address: input.address.trim() || null,
       address_detail: input.addressDetail.trim() || null,
+      business_number: input.businessNumber?.trim() || null,
+      toss_merchant_no: input.tossMerchantNo?.trim() || null,
+      contract_expires_at: input.contractExpiresAt?.trim() || null,
+      brand: input.brand?.trim() || null,
     })
     .eq("id", merchantId);
   if (error) return { error: error.message };

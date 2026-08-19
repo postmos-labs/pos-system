@@ -16,6 +16,7 @@ import {
 } from "./actions";
 import {
   MERCHANT_EQUIPMENT_STATUS_LABEL,
+  type Merchant360Application,
   type Merchant360Merchant,
   type MerchantEquipmentItem,
   type MerchantMemoEntry,
@@ -39,6 +40,7 @@ interface Props {
   merchants: Merchant360Merchant[];
   selectedId: string | null;
   selectedMerchant: Merchant360Merchant | null;
+  selectedApplication: Merchant360Application | null;
   history: WorkHistoryItem[];
   memos: MerchantMemoEntry[];
   equipment: MerchantEquipmentItem[];
@@ -92,13 +94,17 @@ function DetailField({ label, value }: { label: string; value: string | null | u
   );
 }
 
+const NON_TERMINAL_STATUS_KEYWORDS = ["완료", "반려", "취소"];
+
 function MerchantDetailPanel({
   merchant,
+  application,
   history,
   memos,
   equipment,
 }: {
   merchant: Merchant360Merchant | null;
+  application: Merchant360Application | null;
   history: WorkHistoryItem[];
   memos: MerchantMemoEntry[];
   equipment: MerchantEquipmentItem[];
@@ -112,6 +118,10 @@ function MerchantDetailPanel({
     phone: merchant?.phone ?? "",
     address: merchant?.address ?? "",
     addressDetail: merchant?.address_detail ?? "",
+    businessNumber: merchant?.business_number ?? "",
+    tossMerchantNo: merchant?.toss_merchant_no ?? "",
+    contractExpiresAt: merchant?.contract_expires_at ?? "",
+    brand: merchant?.brand ?? "",
   });
   const [infoSubmitting, setInfoSubmitting] = useState(false);
   const [memoContent, setMemoContent] = useState("");
@@ -154,7 +164,17 @@ function MerchantDetailPanel({
     event.preventDefault();
     if (!infoDraft.businessName.trim()) return;
     setInfoSubmitting(true);
-    const result = await updateMerchantInfo(merchantId, infoDraft);
+    const result = await updateMerchantInfo(merchantId, {
+      businessName: infoDraft.businessName,
+      ownerName: infoDraft.ownerName,
+      phone: infoDraft.phone,
+      address: infoDraft.address,
+      addressDetail: infoDraft.addressDetail,
+      businessNumber: infoDraft.businessNumber,
+      tossMerchantNo: infoDraft.tossMerchantNo,
+      contractExpiresAt: infoDraft.contractExpiresAt,
+      brand: infoDraft.brand,
+    });
     setInfoSubmitting(false);
     if (result.error) {
       alert("가맹점 정보 수정 실패: " + result.error);
@@ -219,21 +239,50 @@ function MerchantDetailPanel({
     router.refresh();
   }
 
+  const progressCount = history.filter(
+    (item) => !NON_TERMINAL_STATUS_KEYWORDS.some((keyword) => item.status.includes(keyword)),
+  ).length;
+  const latestHistory = history[0];
+
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <div className="shrink-0 border-b border-slate-100 px-5 py-5 md:px-6">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-slate-900">{merchant.business_name}</h2>
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="truncate text-lg font-bold text-slate-900">{merchant.business_name}</h2>
+            {application && (
+              <span
+                className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${application.status_class}`}
+              >
+                {application.status_label}
+              </span>
+            )}
+          </div>
           {!editingInfo && (
             <button
               type="button"
               onClick={() => setEditingInfo(true)}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
             >
               정보 수정
             </button>
           )}
         </div>
+        {(progressCount > 0 || latestHistory) && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            {progressCount > 0 && (
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-amber-600">
+                진행 중 {progressCount}건
+              </span>
+            )}
+            {latestHistory && (
+              <span className="truncate">
+                최근 이력: {latestHistory.title} {latestHistory.summary} · {latestHistory.status} ·{" "}
+                {latestHistory.date.slice(0, 10)}
+              </span>
+            )}
+          </div>
+        )}
         <p className="mt-1 text-sm text-slate-500">가맹점 기본 정보</p>
         {editingInfo ? (
           <form onSubmit={submitInfo} className="mt-5 space-y-2.5">
@@ -289,6 +338,47 @@ function MerchantDetailPanel({
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                 />
               </label>
+              <label className="block text-xs">
+                <span className="mb-1 block font-semibold text-slate-500">사업자번호</span>
+                <input
+                  value={infoDraft.businessNumber}
+                  onChange={(event) =>
+                    setInfoDraft((prev) => ({ ...prev, businessNumber: event.target.value }))
+                  }
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+              </label>
+              <label className="block text-xs">
+                <span className="mb-1 block font-semibold text-slate-500">토스 가맹점번호</span>
+                <input
+                  value={infoDraft.tossMerchantNo}
+                  onChange={(event) =>
+                    setInfoDraft((prev) => ({ ...prev, tossMerchantNo: event.target.value }))
+                  }
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+              </label>
+              <label className="block text-xs">
+                <span className="mb-1 block font-semibold text-slate-500">계약 만료일</span>
+                <DatePickerField
+                  value={infoDraft.contractExpiresAt}
+                  onChange={(value) =>
+                    setInfoDraft((prev) => ({ ...prev, contractExpiresAt: value }))
+                  }
+                  ariaLabel="계약 만료일"
+                  className="w-full"
+                />
+              </label>
+              <label className="block text-xs">
+                <span className="mb-1 block font-semibold text-slate-500">소속 브랜드</span>
+                <input
+                  value={infoDraft.brand}
+                  onChange={(event) =>
+                    setInfoDraft((prev) => ({ ...prev, brand: event.target.value }))
+                  }
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+              </label>
             </div>
             <div className="flex justify-end gap-2">
               <button
@@ -309,10 +399,22 @@ function MerchantDetailPanel({
           </form>
         ) : (
           <div className="mt-5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            <DetailField label="인입경로" value={application?.reception_channel} />
             <DetailField label="대표자" value={merchant.owner_name} />
             <DetailField label="연락처" value={merchant.phone} />
+            <DetailField label="사업자번호" value={merchant.business_number} />
             <DetailField label="주소" value={merchant.address} />
             <DetailField label="상세주소" value={merchant.address_detail} />
+            <DetailField label="개업 예정일" value={merchant.open_date} />
+            <DetailField label="계약 만료일" value={merchant.contract_expires_at} />
+            <DetailField label="CS 담당" value={application?.cs_name} />
+            <DetailField label="기술 담당" value={application?.tech_name} />
+            <DetailField label="토스 가맹점번호" value={merchant.toss_merchant_no} />
+            <DetailField label="소속 브랜드" value={merchant.brand} />
+            <DetailField
+              label="인터넷·VAN사"
+              value={[application?.internet, application?.van_company].filter(Boolean).join(" · ")}
+            />
           </div>
         )}
       </div>
@@ -568,6 +670,7 @@ export default function MerchantsClient({
   merchants,
   selectedId,
   selectedMerchant,
+  selectedApplication,
   history,
   memos,
   equipment,
@@ -724,6 +827,7 @@ export default function MerchantsClient({
       <MerchantDetailPanel
         key={selectedMerchant?.id ?? "empty"}
         merchant={selectedMerchant}
+        application={selectedApplication}
         history={history}
         memos={memos}
         equipment={equipment}
