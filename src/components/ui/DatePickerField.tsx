@@ -140,7 +140,7 @@ export function DatePickerField({
           className={`inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition hover:border-slate-300 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
         >
           <CalendarDays size={14} className="shrink-0 text-slate-400" aria-hidden="true" />
-          <span className={currentValue ? "text-slate-700" : "text-slate-400"}>
+          <span className={currentValue ? "" : "text-slate-400"}>
             {currentValue || placeholder}
           </span>
         </button>
