@@ -15,6 +15,7 @@ interface CallLogEntry {
 
 interface Props {
   row: FranchiseApplication;
+  currentUserName: string;
   onClose: () => void;
   onRecordMissed: (row: FranchiseApplication, cancelReason?: string) => void | Promise<void>;
   onRecordCompleted: (row: FranchiseApplication) => void | Promise<void>;
@@ -27,6 +28,7 @@ function formatEntryDate(value: string) {
 
 export default function FranchiseCallDrawer({
   row,
+  currentUserName,
   onClose,
   onRecordMissed,
   onRecordCompleted,
@@ -91,7 +93,7 @@ export default function FranchiseCallDrawer({
           id: `local-${Date.now()}`,
           call_type: "missed",
           created_at: new Date().toISOString(),
-          user_name: null,
+          user_name: currentUserName,
         },
         ...prev,
       ]);
@@ -110,7 +112,7 @@ export default function FranchiseCallDrawer({
           id: `local-${Date.now()}`,
           call_type: "completed",
           created_at: new Date().toISOString(),
-          user_name: null,
+          user_name: currentUserName,
         },
         ...prev,
       ]);

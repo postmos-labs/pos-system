@@ -87,9 +87,9 @@ const MEMO_STAGE_CLASS: Record<MerchantMemoStage, string> = {
 
 function DetailField({ label, value }: { label: string; value: string | null | undefined }) {
   return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50/70 px-2.5 py-1.5">
-      <p className="text-[10px] font-semibold text-slate-400">{label}</p>
-      <p className="truncate text-xs text-slate-800" title={value || "-"}>
+    <div className="rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2">
+      <p className="text-xs font-semibold text-slate-400">{label}</p>
+      <p className="truncate text-sm text-slate-800" title={value || "-"}>
         {value || "-"}
       </p>
     </div>

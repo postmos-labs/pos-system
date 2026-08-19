@@ -3331,6 +3331,7 @@ export default function FranchiseClient({
           return (
             <FranchiseCallDrawer
               row={row}
+              currentUserName={currentUserName}
               onClose={() => setCallOpenId(null)}
               onRecordMissed={recordMissedCall}
               onRecordCompleted={recordCompletedCall}
