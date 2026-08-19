@@ -9,6 +9,7 @@ import { ArrowRight, UserCheck, Calendar, CheckCircle } from "lucide-react";
 import { NotificationHistory } from "@/components/ui/NotificationHistory";
 import { useToast } from "@/components/ui/Toast";
 import BulkConfirmDialog from "@/components/ui/BulkConfirmDialog";
+import { AppSelect } from "@/components/ui/AppSelect";
 
 interface Props {
   ticket: Ticket & { merchant: any; sales: any; cs: any; tech: any };
@@ -26,6 +27,8 @@ export default function TicketActions({ ticket, profile, techUsers, csUsers }: P
   const [completePhotos, setCompletePhotos] = useState<File[]>([]);
   const [completeNote, setCompleteNote] = useState("");
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [csPick, setCsPick] = useState("");
+  const [techPick, setTechPick] = useState("");
 
   async function notifyTargets(newStatus: string, logMessage: string) {
     const supabase = createClient();
@@ -240,18 +243,18 @@ export default function TicketActions({ ticket, profile, techUsers, csUsers }: P
         {}
         {status === "sales" && (role === "sales" || role === "admin" || role === "master") && (
           <>
-            <select
-              onChange={(e) => e.target.value && assignUser("cs_id", e.target.value)}
-              defaultValue=""
-              className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">CS 담당자 선택</option>
-              {csUsers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <AppSelect
+              value={csPick}
+              onValueChange={(value) => {
+                setCsPick(value);
+                if (value) assignUser("cs_id", value);
+              }}
+              aria-label="CS 담당자 선택"
+              options={[
+                { value: "", label: "CS 담당자 선택" },
+                ...csUsers.map((c) => ({ value: c.id, label: c.name })),
+              ]}
+            />
             <button
               onClick={() => updateStatus("cs_pending")}
               disabled={loading || !ticket.cs_id}
@@ -278,18 +281,18 @@ export default function TicketActions({ ticket, profile, techUsers, csUsers }: P
         {(status === "cs_pending" || status === "cs_progress") &&
           (role === "cs" || role === "admin" || role === "master") && (
             <>
-              <select
-                onChange={(e) => e.target.value && assignUser("tech_id", e.target.value)}
-                defaultValue=""
-                className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">기사 선택</option>
-                {techUsers.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+              <AppSelect
+                value={techPick}
+                onValueChange={(value) => {
+                  setTechPick(value);
+                  if (value) assignUser("tech_id", value);
+                }}
+                aria-label="기사 선택"
+                options={[
+                  { value: "", label: "기사 선택" },
+                  ...techUsers.map((t) => ({ value: t.id, label: t.name })),
+                ]}
+              />
               <button
                 onClick={() => updateStatus("tech_pending")}
                 disabled={loading || !ticket.tech_id}

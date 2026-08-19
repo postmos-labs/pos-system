@@ -3,6 +3,8 @@
 import { useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Ticket } from "@/types";
+import { AppSelect } from "@/components/ui/AppSelect";
+import { DatePickerField } from "@/components/ui/DatePickerField";
 
 const RECEPTION_CHANNELS = ["전화", "카카오톡", "문자", "방문", "온라인", "기타"];
 const DOCUMENT_STATUSES = ["미접수", "일부접수", "완료"];
@@ -72,7 +74,6 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
   }
 
   const INPUT = `w-full border-0 border-b border-slate-200 bg-transparent px-0 py-1 text-sm text-slate-900 focus:outline-none focus:border-blue-400 transition-colors ${canEdit ? "" : "pointer-events-none"}`;
-  const SELECT = `w-full border-0 border-b border-slate-200 bg-transparent px-0 py-1 text-sm text-slate-900 focus:outline-none focus:border-blue-400 transition-colors ${canEdit ? "" : "pointer-events-none"}`;
 
   function StatusDot({ field }: { field: string }) {
     if (saving === field) return <span className="text-[10px] text-slate-400 ml-1">저장중...</span>;
@@ -92,18 +93,19 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
           <p className="text-xs text-gray-400 mb-1">
             사업자 구분 <StatusDot field="business_type" />
           </p>
-          <select
+          <AppSelect
             value={form.business_type}
             disabled={!canEdit}
-            onChange={(e) => {
-              handleChange("business_type", e.target.value);
-              save("business_type", e.target.value);
+            onValueChange={(value) => {
+              handleChange("business_type", value);
+              save("business_type", value);
             }}
-            className={SELECT}
-          >
-            <option value="개인">개인사업자</option>
-            <option value="법인">법인사업자</option>
-          </select>
+            aria-label="사업자 구분"
+            options={[
+              { value: "개인", label: "개인사업자" },
+              { value: "법인", label: "법인사업자" },
+            ]}
+          />
         </div>
 
         {}
@@ -111,22 +113,19 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
           <p className="text-xs text-gray-400 mb-1">
             접수 채널 <StatusDot field="reception_channel" />
           </p>
-          <select
+          <AppSelect
             value={form.reception_channel}
             disabled={!canEdit}
-            onChange={(e) => {
-              handleChange("reception_channel", e.target.value);
-              save("reception_channel", e.target.value);
+            onValueChange={(value) => {
+              handleChange("reception_channel", value);
+              save("reception_channel", value);
             }}
-            className={SELECT}
-          >
-            <option value="">선택</option>
-            {RECEPTION_CHANNELS.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+            aria-label="접수 채널"
+            options={[
+              { value: "", label: "선택" },
+              ...RECEPTION_CHANNELS.map((c) => ({ value: c, label: c })),
+            ]}
+          />
         </div>
 
         {}
@@ -134,21 +133,16 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
           <p className="text-xs text-gray-400 mb-1">
             서류 접수 상태 <StatusDot field="document_status" />
           </p>
-          <select
+          <AppSelect
             value={form.document_status}
             disabled={!canEdit}
-            onChange={(e) => {
-              handleChange("document_status", e.target.value);
-              save("document_status", e.target.value);
+            onValueChange={(value) => {
+              handleChange("document_status", value);
+              save("document_status", value);
             }}
-            className={SELECT}
-          >
-            {DOCUMENT_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+            aria-label="서류 접수 상태"
+            options={DOCUMENT_STATUSES.map((s) => ({ value: s, label: s }))}
+          />
         </div>
 
         {}
@@ -171,22 +165,19 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
           <p className="text-xs text-gray-400 mb-1">
             VAN사 <StatusDot field="van_company" />
           </p>
-          <select
+          <AppSelect
             value={form.van_company}
             disabled={!canEdit}
-            onChange={(e) => {
-              handleChange("van_company", e.target.value);
-              save("van_company", e.target.value);
+            onValueChange={(value) => {
+              handleChange("van_company", value);
+              save("van_company", value);
             }}
-            className={SELECT}
-          >
-            <option value="">선택</option>
-            {VAN_COMPANIES.map((v) => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-          </select>
+            aria-label="VAN사"
+            options={[
+              { value: "", label: "선택" },
+              ...VAN_COMPANIES.map((v) => ({ value: v, label: v })),
+            ]}
+          />
         </div>
 
         {}
@@ -209,15 +200,14 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
           <p className="text-xs text-gray-400 mb-1">
             카드가맹 접수일 <StatusDot field="card_apply_date" />
           </p>
-          <input
-            type="date"
+          <DatePickerField
             value={form.card_apply_date}
             disabled={!canEdit}
-            onChange={(e) => {
-              handleChange("card_apply_date", e.target.value);
-              save("card_apply_date", e.target.value);
+            onChange={(value) => {
+              handleChange("card_apply_date", value);
+              save("card_apply_date", value);
             }}
-            className={INPUT}
+            ariaLabel="카드가맹 접수일"
           />
         </div>
 
@@ -226,22 +216,19 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
           <p className="text-xs text-gray-400 mb-1">
             간편결제 <StatusDot field="simple_payment" />
           </p>
-          <select
+          <AppSelect
             value={form.simple_payment}
             disabled={!canEdit}
-            onChange={(e) => {
-              handleChange("simple_payment", e.target.value);
-              save("simple_payment", e.target.value);
+            onValueChange={(value) => {
+              handleChange("simple_payment", value);
+              save("simple_payment", value);
             }}
-            className={SELECT}
-          >
-            <option value="">선택</option>
-            {SIMPLE_PAYMENTS.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
+            aria-label="간편결제"
+            options={[
+              { value: "", label: "선택" },
+              ...SIMPLE_PAYMENTS.map((p) => ({ value: p, label: p })),
+            ]}
+          />
         </div>
 
         {}
