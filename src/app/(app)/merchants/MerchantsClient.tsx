@@ -6,13 +6,22 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { ExternalLink, MapPin, Phone, Search } from "lucide-react";
-import { addMerchantMemo, deleteMerchants } from "./actions";
-import type {
-  Merchant360Merchant,
-  MerchantMemoEntry,
-  MerchantMemoStage,
-  WorkHistoryCategory,
-  WorkHistoryItem,
+import {
+  addMerchantEquipment,
+  addMerchantMemo,
+  deleteMerchants,
+  updateMerchantEquipmentStatus,
+  updateMerchantInfo,
+  type MerchantEquipmentStatus as MerchantEquipmentStatusInput,
+} from "./actions";
+import {
+  MERCHANT_EQUIPMENT_STATUS_LABEL,
+  type Merchant360Merchant,
+  type MerchantEquipmentItem,
+  type MerchantMemoEntry,
+  type MerchantMemoStage,
+  type WorkHistoryCategory,
+  type WorkHistoryItem,
 } from "./merchant360";
 import EmptyState from "@/components/ui/EmptyState";
 import BulkDeleteActions from "@/components/ui/BulkDeleteActions";
@@ -30,6 +39,7 @@ interface Props {
   selectedMerchant: Merchant360Merchant | null;
   history: WorkHistoryItem[];
   memos: MerchantMemoEntry[];
+  equipment: MerchantEquipmentItem[];
   page: number;
   totalPages: number;
 }
@@ -84,17 +94,36 @@ function MerchantDetailPanel({
   merchant,
   history,
   memos,
+  equipment,
 }: {
   merchant: Merchant360Merchant | null;
   history: WorkHistoryItem[];
   memos: MerchantMemoEntry[];
+  equipment: MerchantEquipmentItem[];
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<"all" | WorkHistoryCategory>("all");
+  const [editingInfo, setEditingInfo] = useState(false);
+  const [infoDraft, setInfoDraft] = useState({
+    businessName: merchant?.business_name ?? "",
+    ownerName: merchant?.owner_name ?? "",
+    phone: merchant?.phone ?? "",
+    address: merchant?.address ?? "",
+    addressDetail: merchant?.address_detail ?? "",
+  });
+  const [infoSubmitting, setInfoSubmitting] = useState(false);
   const [memoContent, setMemoContent] = useState("");
   const [memoSubmitting, setMemoSubmitting] = useState(false);
   const [memoEntryType, setMemoEntryType] = useState<MerchantMemoEntryType>("general");
   const [memoChecklist, setMemoChecklist] = useState<Record<string, boolean>>({});
+  const [equipmentDraft, setEquipmentDraft] = useState({
+    name: "",
+    serialNumber: "",
+    installedDate: "",
+    notes: "",
+  });
+  const [equipmentSubmitting, setEquipmentSubmitting] = useState(false);
+  const [equipmentStatusUpdating, setEquipmentStatusUpdating] = useState<string | null>(null);
 
   const filteredHistory = useMemo(
     () => (tab === "all" ? history : history.filter((item) => item.category === tab)),
@@ -117,6 +146,49 @@ function MerchantDetailPanel({
 
   function toggleChecklistItem(id: string) {
     setMemoChecklist((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  async function submitInfo(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!infoDraft.businessName.trim()) return;
+    setInfoSubmitting(true);
+    const result = await updateMerchantInfo(merchantId, infoDraft);
+    setInfoSubmitting(false);
+    if (result.error) {
+      alert("가맹점 정보 수정 실패: " + result.error);
+      return;
+    }
+    setEditingInfo(false);
+    router.refresh();
+  }
+
+  async function submitEquipment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!equipmentDraft.name.trim()) return;
+    setEquipmentSubmitting(true);
+    const result = await addMerchantEquipment(merchantId, equipmentDraft);
+    setEquipmentSubmitting(false);
+    if (result.error) {
+      alert("장비 등록 실패: " + result.error);
+      return;
+    }
+    if (result.skipped) {
+      alert("장비 테이블이 아직 적용되지 않아 저장하지 않았습니다.");
+      return;
+    }
+    setEquipmentDraft({ name: "", serialNumber: "", installedDate: "", notes: "" });
+    router.refresh();
+  }
+
+  async function changeEquipmentStatus(id: string, status: MerchantEquipmentStatusInput) {
+    setEquipmentStatusUpdating(id);
+    const result = await updateMerchantEquipmentStatus(id, status);
+    setEquipmentStatusUpdating(null);
+    if (result.error) {
+      alert("장비 상태 변경 실패: " + result.error);
+      return;
+    }
+    router.refresh();
   }
 
   async function submitMemo(event: FormEvent<HTMLFormElement>) {
@@ -148,14 +220,99 @@ function MerchantDetailPanel({
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <div className="shrink-0 border-b border-slate-100 px-5 py-5 md:px-6">
-        <h2 className="text-lg font-bold text-slate-900">{merchant.business_name}</h2>
-        <p className="mt-1 text-sm text-slate-500">가맹점 기본 정보</p>
-        <div className="mt-5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-          <DetailField label="대표자" value={merchant.owner_name} />
-          <DetailField label="연락처" value={merchant.phone} />
-          <DetailField label="주소" value={merchant.address} />
-          <DetailField label="상세주소" value={merchant.address_detail} />
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-bold text-slate-900">{merchant.business_name}</h2>
+          {!editingInfo && (
+            <button
+              type="button"
+              onClick={() => setEditingInfo(true)}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              정보 수정
+            </button>
+          )}
         </div>
+        <p className="mt-1 text-sm text-slate-500">가맹점 기본 정보</p>
+        {editingInfo ? (
+          <form onSubmit={submitInfo} className="mt-5 space-y-2.5">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              <label className="block text-xs">
+                <span className="mb-1 block font-semibold text-slate-500">상호명</span>
+                <input
+                  required
+                  value={infoDraft.businessName}
+                  onChange={(event) =>
+                    setInfoDraft((prev) => ({ ...prev, businessName: event.target.value }))
+                  }
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+              </label>
+              <label className="block text-xs">
+                <span className="mb-1 block font-semibold text-slate-500">대표자</span>
+                <input
+                  value={infoDraft.ownerName}
+                  onChange={(event) =>
+                    setInfoDraft((prev) => ({ ...prev, ownerName: event.target.value }))
+                  }
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+              </label>
+              <label className="block text-xs">
+                <span className="mb-1 block font-semibold text-slate-500">연락처</span>
+                <input
+                  value={infoDraft.phone}
+                  onChange={(event) =>
+                    setInfoDraft((prev) => ({ ...prev, phone: event.target.value }))
+                  }
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+              </label>
+              <label className="block text-xs">
+                <span className="mb-1 block font-semibold text-slate-500">주소</span>
+                <input
+                  value={infoDraft.address}
+                  onChange={(event) =>
+                    setInfoDraft((prev) => ({ ...prev, address: event.target.value }))
+                  }
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+              </label>
+              <label className="block text-xs sm:col-span-2">
+                <span className="mb-1 block font-semibold text-slate-500">상세주소</span>
+                <input
+                  value={infoDraft.addressDetail}
+                  onChange={(event) =>
+                    setInfoDraft((prev) => ({ ...prev, addressDetail: event.target.value }))
+                  }
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+              </label>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingInfo(false)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                disabled={infoSubmitting || !infoDraft.businessName.trim()}
+                className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {infoSubmitting ? "저장 중..." : "저장"}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="mt-5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            <DetailField label="대표자" value={merchant.owner_name} />
+            <DetailField label="연락처" value={merchant.phone} />
+            <DetailField label="주소" value={merchant.address} />
+            <DetailField label="상세주소" value={merchant.address_detail} />
+          </div>
+        )}
       </div>
 
       <section className="shrink-0 border-b border-slate-100 px-5 py-4 md:px-6">
@@ -203,7 +360,7 @@ function MerchantDetailPanel({
             </button>
           </div>
           {isAsEntry && (
-            <div className="mt-3 space-y-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+            <div className="mt-3 max-h-72 space-y-3 overflow-y-auto rounded-lg border border-amber-200 bg-amber-50/60 p-3">
               <p className="text-xs font-semibold text-amber-700">
                 AS 응대 원칙 체크리스트 — 전 항목을 확인해야 저장할 수 있습니다.
               </p>
@@ -259,6 +416,88 @@ function MerchantDetailPanel({
                     {memo.content}
                   </p>
                 </article>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="shrink-0 border-b border-slate-100 px-5 py-4 md:px-6">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-bold text-slate-900">설치 장비</h3>
+          <span className="text-xs text-slate-400">{equipment.length}건</span>
+        </div>
+        <form
+          onSubmit={submitEquipment}
+          className="mt-3 grid grid-cols-1 gap-2 rounded-xl border border-blue-100 bg-blue-50/40 p-3 sm:grid-cols-4"
+        >
+          <input
+            value={equipmentDraft.name}
+            onChange={(event) =>
+              setEquipmentDraft((prev) => ({ ...prev, name: event.target.value }))
+            }
+            placeholder="장비명 (필수)"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          />
+          <input
+            value={equipmentDraft.serialNumber}
+            onChange={(event) =>
+              setEquipmentDraft((prev) => ({ ...prev, serialNumber: event.target.value }))
+            }
+            placeholder="시리얼번호"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          />
+          <input
+            type="date"
+            value={equipmentDraft.installedDate}
+            onChange={(event) =>
+              setEquipmentDraft((prev) => ({ ...prev, installedDate: event.target.value }))
+            }
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          />
+          <button
+            type="submit"
+            disabled={equipmentSubmitting || !equipmentDraft.name.trim()}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {equipmentSubmitting ? "등록 중..." : "장비 추가"}
+          </button>
+        </form>
+        {equipment.length === 0 ? (
+          <p className="py-4 text-center text-xs text-slate-400">등록된 장비가 없습니다.</p>
+        ) : (
+          <div className="mt-3 max-h-48 overflow-y-auto rounded-xl border border-slate-200">
+            <div className="divide-y divide-slate-100">
+              {equipment.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">{item.name}</p>
+                    <p className="text-[11px] text-slate-400">
+                      {item.serial_number ? `S/N ${item.serial_number} · ` : ""}
+                      {item.installed_date ? `설치일 ${item.installed_date}` : "설치일 미상"}
+                    </p>
+                  </div>
+                  <select
+                    value={item.status}
+                    disabled={equipmentStatusUpdating === item.id}
+                    onChange={(event) =>
+                      changeEquipmentStatus(
+                        item.id,
+                        event.target.value as MerchantEquipmentStatusInput,
+                      )
+                    }
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs outline-none focus:border-blue-400"
+                  >
+                    {Object.entries(MERCHANT_EQUIPMENT_STATUS_LABEL).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               ))}
             </div>
           </div>
@@ -333,6 +572,7 @@ export default function MerchantsClient({
   selectedMerchant,
   history,
   memos,
+  equipment,
   page,
 }: Props) {
   const router = useRouter();
@@ -488,6 +728,7 @@ export default function MerchantsClient({
         merchant={selectedMerchant}
         history={history}
         memos={memos}
+        equipment={equipment}
       />
 
       <BulkConfirmDialog

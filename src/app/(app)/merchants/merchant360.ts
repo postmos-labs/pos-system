@@ -24,6 +24,24 @@ export interface MerchantMemoEntry {
   checklist: Record<string, boolean> | null;
 }
 
+export type MerchantEquipmentStatus = "installed" | "as" | "removed";
+
+export const MERCHANT_EQUIPMENT_STATUS_LABEL: Record<MerchantEquipmentStatus, string> = {
+  installed: "설치됨",
+  as: "AS 중",
+  removed: "철거",
+};
+
+export interface MerchantEquipmentItem {
+  id: string;
+  name: string;
+  serial_number: string | null;
+  status: MerchantEquipmentStatus;
+  installed_date: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
 export interface Merchant360Merchant {
   id: string;
   business_name: string;

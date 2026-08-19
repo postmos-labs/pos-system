@@ -17,6 +17,7 @@ import {
 import MerchantsClient from "./MerchantsClient";
 import type {
   Merchant360Merchant,
+  MerchantEquipmentItem,
   MerchantMemoEntry,
   MerchantMemoStage,
   WorkHistoryItem,
@@ -126,6 +127,7 @@ async function loadMerchant360(
   merchant: Merchant360Merchant | null;
   history: WorkHistoryItem[];
   memos: MerchantMemoEntry[];
+  equipment: MerchantEquipmentItem[];
 }> {
   const { data: merchant } = await supabase
     .from("merchants")
@@ -135,7 +137,7 @@ async function loadMerchant360(
     .eq("id", merchantId)
     .maybeSingle();
 
-  if (!merchant) return { merchant: null, history: [], memos: [] };
+  if (!merchant) return { merchant: null, history: [], memos: [], equipment: [] };
 
   const franchiseApplicationId = merchant.franchise_application_id;
   const [
@@ -145,6 +147,7 @@ async function loadMerchant360(
     changesResult,
     postHistoryResult,
     memoEntriesResult,
+    equipmentResult,
   ] = await Promise.all([
     franchiseApplicationId
       ? supabase
@@ -179,6 +182,11 @@ async function loadMerchant360(
     supabase
       .from("merchant_memo_entries")
       .select("id,content,created_at,created_by,entry_type,checklist,author:profiles(name)")
+      .eq("merchant_id", merchantId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("merchant_equipment")
+      .select("id,name,serial_number,status,installed_date,notes,created_at")
       .eq("merchant_id", merchantId)
       .order("created_at", { ascending: false }),
   ]);
@@ -309,7 +317,10 @@ async function loadMerchant360(
   }
 
   history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  return { merchant: merchant as Merchant360Merchant, history, memos };
+  const equipment = equipmentResult.error
+    ? []
+    : ((equipmentResult.data ?? []) as MerchantEquipmentItem[]);
+  return { merchant: merchant as Merchant360Merchant, history, memos, equipment };
 }
 
 export default async function MerchantsPage({ searchParams }: Props) {
@@ -355,6 +366,7 @@ export default async function MerchantsPage({ searchParams }: Props) {
         selectedMerchant={selected?.merchant ?? null}
         history={selected?.history ?? []}
         memos={selected?.memos ?? []}
+        equipment={selected?.equipment ?? []}
         page={page}
         totalPages={totalPages}
       />
