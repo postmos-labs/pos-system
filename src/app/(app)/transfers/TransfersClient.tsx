@@ -11,7 +11,7 @@ import {
   Fragment,
 } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, ChevronDown, ChevronUp, Calendar, GripVertical } from "lucide-react";
+import { Plus, Search, ChevronDown, ChevronUp, GripVertical } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatPhone, formatDateText } from "@/lib/format";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
@@ -35,6 +35,8 @@ import {
   applyFranchiseStatusSideEffects,
   franchiseStatusChangeConfirm,
 } from "@/lib/franchiseStatusEffects";
+import { AppSelect } from "@/components/ui/AppSelect";
+import { DatePickerField, CalendarPopoverButton } from "@/components/ui/DatePickerField";
 
 interface Props {
   rows: FranchiseApplication[];
@@ -98,6 +100,23 @@ const EditableText = memo(function EditableText({
   type = "text",
 }: EditableTextProps) {
   const [value, setValue] = useState((row[field] as string) ?? "");
+
+  if (type === "date") {
+    return (
+      <div onClick={(e) => e.stopPropagation()}>
+        <DatePickerField
+          value={value}
+          onChange={(next) => {
+            setValue(next);
+            if (next !== ((row[field] as string) ?? "")) onSave(row, field, next);
+          }}
+          ariaLabel="날짜"
+          className="w-full border-0 bg-transparent"
+        />
+      </div>
+    );
+  }
+
   return (
     <input
       type={type}
@@ -119,20 +138,8 @@ interface DateFieldProps {
 }
 const DateField = memo(function DateField({ row, field, onSave }: DateFieldProps) {
   const [value, setValue] = useState((row[field] as string) ?? "");
-  const dateInputRef = useRef<HTMLInputElement>(null);
-  const isoValue = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
 
-  function openPicker(e: React.MouseEvent) {
-    e.stopPropagation();
-    const el = dateInputRef.current;
-    if (!el) return;
-    const withPicker = el as HTMLInputElement & { showPicker?: () => void };
-    if (typeof withPicker.showPicker === "function") withPicker.showPicker();
-    else el.focus();
-  }
-
-  function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
-    const next = e.target.value;
+  function handlePick(next: string) {
     setValue(next);
     onSave(row, field, next);
   }
@@ -148,22 +155,7 @@ const DateField = memo(function DateField({ row, field, onSave }: DateFieldProps
         placeholder="-"
         className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1 -mx-1 text-sm"
       />
-      <button
-        type="button"
-        onClick={openPicker}
-        tabIndex={-1}
-        className="shrink-0 text-slate-400 hover:text-blue-500"
-      >
-        <Calendar size={14} />
-      </button>
-      <input
-        ref={dateInputRef}
-        type="date"
-        value={isoValue}
-        onChange={handlePick}
-        tabIndex={-1}
-        className="w-0 h-0 opacity-0 absolute pointer-events-none"
-      />
+      <CalendarPopoverButton value={value} onSelect={handlePick} ariaLabel="날짜 선택" />
     </div>
   );
 });
@@ -173,17 +165,6 @@ interface DateFormFieldProps {
   onChange: (value: string) => void;
 }
 const DateFormField = memo(function DateFormField({ value, onChange }: DateFormFieldProps) {
-  const dateInputRef = useRef<HTMLInputElement>(null);
-  const isoValue = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
-
-  function openPicker() {
-    const el = dateInputRef.current;
-    if (!el) return;
-    const withPicker = el as HTMLInputElement & { showPicker?: () => void };
-    if (typeof withPicker.showPicker === "function") withPicker.showPicker();
-    else el.focus();
-  }
-
   return (
     <div className="flex items-center gap-1">
       <input
@@ -191,20 +172,7 @@ const DateFormField = memo(function DateFormField({ value, onChange }: DateFormF
         onChange={(e) => onChange(formatDateText(e.target.value))}
         className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
-      <button
-        type="button"
-        onClick={openPicker}
-        className="shrink-0 text-slate-400 hover:text-blue-500"
-      >
-        <Calendar size={14} />
-      </button>
-      <input
-        ref={dateInputRef}
-        type="date"
-        value={isoValue}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-0 h-0 opacity-0 absolute pointer-events-none"
-      />
+      <CalendarPopoverButton value={value} onSelect={onChange} ariaLabel="날짜 선택" />
     </div>
   );
 });
@@ -259,47 +227,42 @@ const CreateForm = memo(function CreateForm({
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">프로그램</label>
-          <select
+          <AppSelect
             value={form.program}
-            onChange={(e) => setForm({ ...form, program: e.target.value })}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-28 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">선택 안함</option>
-            {PROGRAMS.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
+            onValueChange={(value) => setForm({ ...form, program: value })}
+            aria-label="프로그램"
+            className="w-28"
+            options={[
+              { value: "", label: "선택 안함" },
+              ...PROGRAMS.map((p) => ({ value: p, label: p })),
+            ]}
+          />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">상태</label>
-          <select
+          <AppSelect
             value={form.status}
-            onChange={(e) => setForm({ ...form, status: e.target.value as FranchiseStatus })}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {(Object.keys(FRANCHISE_STATUS_LABEL) as FranchiseStatus[]).map((s) => (
-              <option key={s} value={s}>
-                {FRANCHISE_STATUS_LABEL[s]}
-              </option>
-            ))}
-          </select>
+            onValueChange={(value) => setForm({ ...form, status: value as FranchiseStatus })}
+            aria-label="상태"
+            className="w-32"
+            options={(Object.keys(FRANCHISE_STATUS_LABEL) as FranchiseStatus[]).map((s) => ({
+              value: s,
+              label: FRANCHISE_STATUS_LABEL[s],
+            }))}
+          />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">담당자</label>
-          <select
+          <AppSelect
             value={form.tech_id}
-            onChange={(e) => setForm({ ...form, tech_id: e.target.value })}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 w-28 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">미배정</option>
-            {techProfiles.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            onValueChange={(value) => setForm({ ...form, tech_id: value })}
+            aria-label="담당자"
+            className="w-28"
+            options={[
+              { value: "", label: "미배정" },
+              ...techProfiles.map((p) => ({ value: p.id, label: p.name })),
+            ]}
+          />
         </div>
         <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
           <label className="text-xs font-medium text-slate-500">장비목록</label>
@@ -311,20 +274,18 @@ const CreateForm = memo(function CreateForm({
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">오픈일</label>
-          <input
-            type="date"
+          <DatePickerField
             value={form.open_date}
-            onChange={(e) => setForm({ ...form, open_date: e.target.value })}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onChange={(value) => setForm({ ...form, open_date: value })}
+            ariaLabel="오픈일"
           />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">설치 및 발송일</label>
-          <input
-            type="date"
+          <DatePickerField
             value={form.install_date}
-            onChange={(e) => setForm({ ...form, install_date: e.target.value })}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onChange={(value) => setForm({ ...form, install_date: value })}
+            ariaLabel="설치 및 발송일"
           />
         </div>
         <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
@@ -643,18 +604,18 @@ export default function TransfersClient({
             className="pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg w-56 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <select
+        <AppSelect
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">상태 전체</option>
-          {(Object.keys(FRANCHISE_STATUS_LABEL) as FranchiseStatus[]).map((s) => (
-            <option key={s} value={s}>
-              {FRANCHISE_STATUS_LABEL[s]}
-            </option>
-          ))}
-        </select>
+          onValueChange={setStatusFilter}
+          aria-label="상태 필터"
+          options={[
+            { value: "", label: "상태 전체" },
+            ...(Object.keys(FRANCHISE_STATUS_LABEL) as FranchiseStatus[]).map((s) => ({
+              value: s,
+              label: FRANCHISE_STATUS_LABEL[s],
+            })),
+          ]}
+        />
         {(search || statusFilter) && (
           <button
             onClick={() => {
@@ -819,45 +780,42 @@ export default function TransfersClient({
                     )}
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                    <select
+                    <AppSelect
                       value={row.program ?? ""}
-                      onChange={(e) => saveField(row, "program", e.target.value)}
-                      className="text-xs font-medium rounded-full pl-2.5 pr-1.5 py-1 border border-slate-200 bg-slate-100 text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer"
-                    >
-                      <option value="">-</option>
-                      {PROGRAMS.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
-                      ))}
-                    </select>
+                      onValueChange={(value) => saveField(row, "program", value)}
+                      aria-label="프로그램"
+                      className="h-auto rounded-full border-slate-200 bg-slate-100 pl-2.5 pr-1.5 py-1 text-xs font-medium"
+                      options={[
+                        { value: "", label: "-" },
+                        ...PROGRAMS.map((p) => ({ value: p, label: p })),
+                      ]}
+                    />
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                    <select
+                    <AppSelect
                       value={row.status}
-                      onChange={(e) => changeStatus(row, e.target.value as FranchiseStatus)}
-                      className={`text-xs font-medium rounded-full pl-2.5 pr-1.5 py-1 border focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer ${FRANCHISE_STATUS_COLOR[row.status]}`}
-                    >
-                      {(Object.keys(FRANCHISE_STATUS_LABEL) as FranchiseStatus[]).map((s) => (
-                        <option key={s} value={s}>
-                          {FRANCHISE_STATUS_LABEL[s]}
-                        </option>
-                      ))}
-                    </select>
+                      onValueChange={(value) => changeStatus(row, value as FranchiseStatus)}
+                      aria-label="상태"
+                      className={`h-auto rounded-full pl-2.5 pr-1.5 py-1 text-xs font-medium ${FRANCHISE_STATUS_COLOR[row.status]}`}
+                      options={(Object.keys(FRANCHISE_STATUS_LABEL) as FranchiseStatus[]).map(
+                        (s) => ({
+                          value: s,
+                          label: FRANCHISE_STATUS_LABEL[s],
+                        }),
+                      )}
+                    />
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                    <select
+                    <AppSelect
                       value={row.tech_id ?? ""}
-                      onChange={(e) => saveField(row, "tech_id", e.target.value)}
-                      className="text-sm font-medium text-slate-700 border-0 bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-400 rounded cursor-pointer"
-                    >
-                      <option value="">미배정</option>
-                      {techProfiles.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
+                      onValueChange={(value) => saveField(row, "tech_id", value)}
+                      aria-label="담당자"
+                      className="h-auto rounded border-0 bg-transparent text-sm font-medium"
+                      options={[
+                        { value: "", label: "미배정" },
+                        ...techProfiles.map((p) => ({ value: p.id, label: p.name })),
+                      ]}
+                    />
                   </td>
                 </tr>
                 {expandedId === row.id && (
