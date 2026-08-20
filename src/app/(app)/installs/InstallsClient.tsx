@@ -47,6 +47,11 @@ import {
   rescheduleInstallationByTeamLead,
   sendInstallTransitNotice,
 } from "./actions";
+import InstallCompositionSection from "../merchants/InstallCompositionSection";
+import {
+  computeEquipmentCategorySummaries,
+  type MerchantEquipmentItem,
+} from "../merchants/merchant360";
 
 const STATUS_LABELS: Record<string, string> = {
   received: "접수",
@@ -101,6 +106,21 @@ function deliveryTypeOf(value?: string): DeliveryType {
   return value === "delivery" || value === "as" || value === "name_change" || value === "transfer"
     ? value
     : "install";
+}
+
+// merchants/loadMerchant360.ts의 fetchEquipmentRows와 같은 컬럼 세트. 114번 마이그레이션 미적용
+// 환경(카테고리/수량 등 컬럼 없음)에서도 가맹접수 원본 정보 모달이 깨지지 않도록 기본 컬럼으로
+// 재조회한다.
+const EQUIPMENT_COLUMNS_EXTENDED =
+  "id,name,serial_number,status,installed_date,notes,created_at,category,quantity,components,manufacturer,supplier,location,source";
+const EQUIPMENT_COLUMNS_BASE = "id,name,serial_number,status,installed_date,notes,created_at";
+function isMissingEquipmentColumnError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /column .* does not exist/i.test(error.message ?? "")
+  );
 }
 const STATUS_COLORS: Record<string, string> = {
   received: "bg-gray-100 text-gray-600 border-gray-200",
@@ -718,6 +738,12 @@ export default function InstallsClient({
   const [showCompleted, setShowCompleted] = useState(false);
   const [franchiseDetail, setFranchiseDetail] = useState<Record<string, unknown> | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  // 가맹접수 원본 정보 모달에서 함께 보여주는 실제 설치 구성(merchant_equipment) 상태.
+  // franchise_application_id -> merchants 역조회로 구한 merchantId가 null이면 연결된 가맹점이
+  // 없다는 뜻 — InstallCompositionSection이 이 경우 저장을 막고 이유를 보여준다.
+  const [compositionInstallationId, setCompositionInstallationId] = useState<string | null>(null);
+  const [compositionMerchantId, setCompositionMerchantId] = useState<string | null>(null);
+  const [compositionEquipment, setCompositionEquipment] = useState<MerchantEquipmentItem[]>([]);
   const [deliveryTab, setDeliveryTab] = useState<"all" | DeliveryType>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -793,18 +819,48 @@ export default function InstallsClient({
     }
   }
 
-  async function openFranchiseDetail(franchiseId: string) {
+  async function openFranchiseDetail(franchiseId: string, installationId: string) {
     setLoadingDetail(true);
     setFranchiseDetail({});
-    const { data } = await supabase
-      .from("franchise_applications")
-      .select(
-        "*, sales:profiles!franchise_applications_sales_id_fkey(name), cs:profiles!franchise_applications_cs_id_fkey(name)",
-      )
-      .eq("id", franchiseId)
-      .single();
+    setCompositionInstallationId(installationId);
+    setCompositionMerchantId(null);
+    setCompositionEquipment([]);
+    const [{ data }, { data: merchantRow }] = await Promise.all([
+      supabase
+        .from("franchise_applications")
+        .select(
+          "*, sales:profiles!franchise_applications_sales_id_fkey(name), cs:profiles!franchise_applications_cs_id_fkey(name)",
+        )
+        .eq("id", franchiseId)
+        .single(),
+      // 실제 설치 구성(merchant_equipment)의 정본은 merchant_id 기준이라, 이 설치건이 연결된
+      // franchise_application_id로 merchants를 역조회해야 한다(merchants-360/decisions.md).
+      supabase
+        .from("merchants")
+        .select("id")
+        .eq("franchise_application_id", franchiseId)
+        .maybeSingle(),
+    ]);
     setFranchiseDetail(data ?? null);
     setLoadingDetail(false);
+
+    const merchantId = merchantRow?.id ?? null;
+    setCompositionMerchantId(merchantId);
+    if (!merchantId) return;
+
+    const extended = await supabase
+      .from("merchant_equipment")
+      .select(EQUIPMENT_COLUMNS_EXTENDED)
+      .eq("merchant_id", merchantId)
+      .order("created_at", { ascending: false });
+    const rows = isMissingEquipmentColumnError(extended.error)
+      ? await supabase
+          .from("merchant_equipment")
+          .select(EQUIPMENT_COLUMNS_BASE)
+          .eq("merchant_id", merchantId)
+          .order("created_at", { ascending: false })
+      : extended;
+    setCompositionEquipment((rows.data ?? []) as unknown as MerchantEquipmentItem[]);
   }
 
   async function handleCreate(newInstall: {
@@ -1912,7 +1968,7 @@ export default function InstallsClient({
           onClick={() => setFranchiseDetail(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 w-[480px] max-h-[80vh] overflow-y-auto"
+            className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 w-[720px] max-w-[95vw] max-h-[85vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
@@ -1928,46 +1984,64 @@ export default function InstallsClient({
             {loadingDetail ? (
               <p className="text-sm text-slate-400 text-center py-8">불러오는 중...</p>
             ) : franchiseDetail && Object.keys(franchiseDetail).length > 0 ? (
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                {[
-                  ["상호명", (franchiseDetail as any).business_name],
-                  ["대표자", (franchiseDetail as any).owner_name],
-                  ["연락처", (franchiseDetail as any).phone],
-                  ["사업자번호", (franchiseDetail as any).business_number],
-                  ["주소", (franchiseDetail as any).address],
-                  ["상세주소", (franchiseDetail as any).address_detail],
-                  ["오픈예정일", (franchiseDetail as any).open_date],
-                  ["설치발송일", (franchiseDetail as any).install_date],
-                  ["VAN사", (franchiseDetail as any).van_company],
-                  ["인터넷", (franchiseDetail as any).internet],
-                  ["담당영업", (franchiseDetail as any).sales?.name],
-                  ["담당CS", (franchiseDetail as any).cs?.name],
-                ].map(([label, value]) =>
-                  value ? (
-                    <div key={label as string}>
-                      <p className="text-xs text-slate-400 font-medium">{label}</p>
-                      <p className="text-slate-800 break-words">{value as string}</p>
+              <div className="space-y-5">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                  {[
+                    ["상호명", (franchiseDetail as any).business_name],
+                    ["대표자", (franchiseDetail as any).owner_name],
+                    ["연락처", (franchiseDetail as any).phone],
+                    ["사업자번호", (franchiseDetail as any).business_number],
+                    ["주소", (franchiseDetail as any).address],
+                    ["상세주소", (franchiseDetail as any).address_detail],
+                    ["오픈예정일", (franchiseDetail as any).open_date],
+                    ["설치발송일", (franchiseDetail as any).install_date],
+                    ["VAN사", (franchiseDetail as any).van_company],
+                    ["인터넷", (franchiseDetail as any).internet],
+                    ["담당영업", (franchiseDetail as any).sales?.name],
+                    ["담당CS", (franchiseDetail as any).cs?.name],
+                  ].map(([label, value]) =>
+                    value ? (
+                      <div key={label as string}>
+                        <p className="text-xs text-slate-400 font-medium">{label}</p>
+                        <p className="text-slate-800 break-words">{value as string}</p>
+                      </div>
+                    ) : null,
+                  )}
+                  {(franchiseDetail as any).equipment_items?.length > 0 && (
+                    <div className="col-span-2">
+                      <p className="text-xs text-slate-400 font-medium">접수 장비 (주문 내역)</p>
+                      <p className="text-slate-800">
+                        {(franchiseDetail as any).equipment_items
+                          .map((i: any) => `${i.name} x${i.quantity}`)
+                          .join(", ")}
+                      </p>
                     </div>
-                  ) : null,
-                )}
-                {(franchiseDetail as any).equipment_items?.length > 0 && (
-                  <div className="col-span-2">
-                    <p className="text-xs text-slate-400 font-medium">장비</p>
-                    <p className="text-slate-800">
-                      {(franchiseDetail as any).equipment_items
-                        .map((i: any) => `${i.name} x${i.quantity}`)
-                        .join(", ")}
-                    </p>
-                  </div>
-                )}
-                {(franchiseDetail as any).memo && (
-                  <div className="col-span-2">
-                    <p className="text-xs text-slate-400 font-medium">비고</p>
-                    <p className="text-slate-800 whitespace-pre-wrap">
-                      {(franchiseDetail as any).memo}
-                    </p>
-                  </div>
-                )}
+                  )}
+                  {(franchiseDetail as any).memo && (
+                    <div className="col-span-2">
+                      <p className="text-xs text-slate-400 font-medium">비고</p>
+                      <p className="text-slate-800 whitespace-pre-wrap">
+                        {(franchiseDetail as any).memo}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {}
+                <div className="space-y-3 border-t border-slate-100 pt-4">
+                  <p className="text-xs font-semibold text-slate-400">
+                    실제 설치 구성 (현장 확정 기준 — 접수 장비와 다를 수 있음)
+                  </p>
+                  <InstallCompositionSection
+                    merchantId={compositionMerchantId}
+                    installationId={compositionInstallationId ?? undefined}
+                    equipment={compositionEquipment}
+                    categorySummaries={computeEquipmentCategorySummaries(compositionEquipment)}
+                    totalEquipmentSets={compositionEquipment
+                      .filter((item) => item.status !== "removed")
+                      .reduce((sum, item) => sum + (item.quantity ?? 1), 0)}
+                  />
+                </div>
               </div>
             ) : (
               <p className="text-sm text-slate-400 text-center py-8">정보를 불러올 수 없습니다.</p>
@@ -3018,7 +3092,9 @@ export default function InstallsClient({
                         <div className="flex flex-wrap gap-1.5">
                           {inst.franchise_application_id && (
                             <button
-                              onClick={() => openFranchiseDetail(inst.franchise_application_id!)}
+                              onClick={() =>
+                                openFranchiseDetail(inst.franchise_application_id!, inst.id)
+                              }
                               className="text-xs text-purple-600 border border-purple-200 px-2 py-1 rounded-lg hover:bg-purple-50"
                             >
                               가맹접수
@@ -3357,7 +3433,9 @@ export default function InstallsClient({
                           <div className="flex items-center justify-between mt-1">
                             {inst.franchise_application_id ? (
                               <button
-                                onClick={() => openFranchiseDetail(inst.franchise_application_id!)}
+                                onClick={() =>
+                                  openFranchiseDetail(inst.franchise_application_id!, inst.id)
+                                }
                                 className="text-xs text-purple-600 border border-purple-200 px-2.5 py-1 rounded-lg hover:bg-purple-50"
                               >
                                 가맹접수 원본 보기

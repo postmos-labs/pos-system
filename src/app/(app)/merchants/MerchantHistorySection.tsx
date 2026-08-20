@@ -11,6 +11,9 @@ const HISTORY_TABS: Array<{ key: "all" | WorkHistoryCategory; label: string }> =
   { key: "all", label: "전체" },
   { key: "reception", label: "접수" },
   { key: "install", label: "설치" },
+  { key: "as", label: "AS" },
+  { key: "change", label: "변경" },
+  { key: "post", label: "설치·배송 이후" },
 ];
 
 const HISTORY_CATEGORY_LABEL: Record<WorkHistoryCategory, string> = {

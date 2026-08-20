@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { DatePickerField } from "@/components/ui/DatePickerField";
+import { DatePickerField, formatDate, parseDate } from "@/components/ui/DatePickerField";
 import { updateMerchantInfo } from "./actions";
 import type { Merchant360Merchant, MerchantOperationStatus } from "./merchant360";
 
@@ -15,6 +15,22 @@ function DetailField({ label, value }: { label: string; value: string | null | u
       </p>
     </div>
   );
+}
+
+// contract_started_at/contract_expires_at 두 날짜에서 파생만 하고 개월수 컬럼은 새로 만들지
+// 않는다 — loadMerchant360.ts의 contractMonths 계산식과 동일하게 맞춰 화면에 보이는 값과
+// 저장 후 다시 계산되는 값이 어긋나지 않게 한다.
+function monthsBetween(startValue: string, endValue: string): number | null {
+  const start = parseDate(startValue);
+  const end = parseDate(endValue);
+  if (!start || !end) return null;
+  return (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+}
+
+function addMonthsToDate(startValue: string, months: number): string | null {
+  const start = parseDate(startValue);
+  if (!start) return null;
+  return formatDate(new Date(start.getFullYear(), start.getMonth() + months, start.getDate()));
 }
 
 export default function ContractCard({
@@ -31,11 +47,59 @@ export default function ContractCard({
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // 시작일+종료일을 마지막으로 저장된 값 기준으로 초기화하므로, 처음 편집을 열었을 때는
+  // "종료일 쪽을 마지막으로 건드린" 상태로 취급한다.
+  const [lastTouched, setLastTouched] = useState<"months" | "endDate">("endDate");
   const [draft, setDraft] = useState({
     contractStartedAt: merchant.contract_started_at ?? "",
     contractExpiresAt: merchant.contract_expires_at ?? "",
+    contractMonths:
+      merchant.contract_started_at && merchant.contract_expires_at
+        ? (monthsBetween(merchant.contract_started_at, merchant.contract_expires_at)?.toString() ??
+          "")
+        : "",
     tossMerchantNo: merchant.toss_merchant_no ?? "",
   });
+
+  function handleStartChange(value: string) {
+    setDraft((prev) => {
+      const next = { ...prev, contractStartedAt: value };
+      if (lastTouched === "months") {
+        const months = Number.parseInt(prev.contractMonths, 10);
+        if (value && Number.isInteger(months) && months >= 0) {
+          next.contractExpiresAt = addMonthsToDate(value, months) ?? prev.contractExpiresAt;
+        }
+      } else if (value && prev.contractExpiresAt) {
+        next.contractMonths = monthsBetween(value, prev.contractExpiresAt)?.toString() ?? "";
+      }
+      return next;
+    });
+  }
+
+  function handleMonthsChange(raw: string) {
+    setLastTouched("months");
+    setDraft((prev) => {
+      const next = { ...prev, contractMonths: raw };
+      const months = Number.parseInt(raw, 10);
+      if (prev.contractStartedAt && Number.isInteger(months) && months >= 0) {
+        next.contractExpiresAt =
+          addMonthsToDate(prev.contractStartedAt, months) ?? prev.contractExpiresAt;
+      }
+      return next;
+    });
+  }
+
+  function handleEndChange(value: string) {
+    setLastTouched("endDate");
+    setDraft((prev) => ({
+      ...prev,
+      contractExpiresAt: value,
+      contractMonths:
+        prev.contractStartedAt && value
+          ? (monthsBetween(prev.contractStartedAt, value)?.toString() ?? "")
+          : "",
+    }));
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -83,26 +147,37 @@ export default function ContractCard({
 
       {editing ? (
         <form onSubmit={submit} className="mt-4 space-y-2.5">
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
             <label className="block text-xs">
               <span className="mb-1 block font-semibold text-slate-500">계약 시작일</span>
               <DatePickerField
                 value={draft.contractStartedAt}
-                onChange={(value) => setDraft((p) => ({ ...p, contractStartedAt: value }))}
+                onChange={handleStartChange}
                 ariaLabel="계약 시작일"
                 className="w-full"
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="mb-1 block font-semibold text-slate-500">계약기간(개월)</span>
+              <input
+                type="number"
+                min={0}
+                value={draft.contractMonths}
+                onChange={(e) => handleMonthsChange(e.target.value)}
+                placeholder="예: 36"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
               />
             </label>
             <label className="block text-xs">
               <span className="mb-1 block font-semibold text-slate-500">계약 종료일</span>
               <DatePickerField
                 value={draft.contractExpiresAt}
-                onChange={(value) => setDraft((p) => ({ ...p, contractExpiresAt: value }))}
+                onChange={handleEndChange}
                 ariaLabel="계약 종료일"
                 className="w-full"
               />
             </label>
-            <label className="block text-xs sm:col-span-2">
+            <label className="block text-xs sm:col-span-3">
               <span className="mb-1 block font-semibold text-slate-500">토스 가맹점번호</span>
               <input
                 value={draft.tossMerchantNo}

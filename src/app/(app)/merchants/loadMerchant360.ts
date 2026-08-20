@@ -1,23 +1,31 @@
 import { createClient } from "@/lib/supabase/server";
 import {
+  CHANGE_STATUS_COLOR,
+  CHANGE_STATUS_LABEL,
+  CHANGE_TYPE_LABEL,
   FRANCHISE_CHANNEL_LABEL,
   FRANCHISE_INSTALL_LOG_LABEL,
   FRANCHISE_STATUS_COLOR,
   FRANCHISE_STATUS_LABEL,
   FRANCHISE_TRANSFER_LOG_LABEL,
+  STATUS_COLOR as TICKET_STATUS_COLOR,
+  STATUS_LABEL as TICKET_STATUS_LABEL,
+  type ChangeRequestStatus,
+  type ChangeType,
   type FranchiseChannel,
   type FranchiseStatus,
+  type TicketStatus,
 } from "@/types";
-import type {
-  Merchant360Application,
-  Merchant360Merchant,
-  MerchantDerivedSummary,
-  MerchantEquipmentCategory,
-  MerchantEquipmentCategorySummary,
-  MerchantEquipmentItem,
-  MerchantMemoEntry,
-  MerchantMemoStage,
-  WorkHistoryItem,
+import {
+  computeEquipmentCategorySummaries,
+  type Merchant360Application,
+  type Merchant360Merchant,
+  type MerchantDerivedSummary,
+  type MerchantEquipmentCategorySummary,
+  type MerchantEquipmentItem,
+  type MerchantMemoEntry,
+  type MerchantMemoStage,
+  type WorkHistoryItem,
 } from "./merchant360";
 
 // franchise_application_logs.to_status는 실제 접수 상태(FranchiseStatus) 외에도
@@ -28,8 +36,6 @@ const NON_STATUS_LOG_LABEL: Record<string, string> = {
   transfer_cs_responsible_rejected: FRANCHISE_TRANSFER_LOG_LABEL.transfer_cs_responsible_rejected,
   transfer_team_lead_rejected: FRANCHISE_TRANSFER_LOG_LABEL.transfer_team_lead_rejected,
 };
-
-const EQUIPMENT_CATEGORIES: MerchantEquipmentCategory[] = ["main_pos", "kiosk", "table_order"];
 
 // 113/114번 마이그레이션이 아직 적용되지 않은 dev/기존 환경에서도 이 컬럼을 select하면
 // "column does not exist"(42703) 에러가 난다. 이 코드를 실패로 취급하지 않고 기본 컬럼만
@@ -76,6 +82,42 @@ type MerchantMemoEntryRow = {
   entry_type: "as" | "claim" | "general" | "etc" | null;
   checklist: Record<string, boolean> | null;
 };
+
+type AsTicketRow = {
+  id: string;
+  title: string | null;
+  status: string;
+  created_at: string;
+};
+
+type ChangeRequestRow = {
+  id: string;
+  change_type: string;
+  before_value: string | null;
+  after_value: string | null;
+  status: string;
+  created_at: string;
+};
+
+type InstallationPostHistoryRow = {
+  id: string;
+  installation_id: string;
+  content: string;
+  created_at: string;
+  author: { name: string | null }[] | { name: string | null } | null;
+};
+
+// change_requests / installation_post_history는 052/100번에서 만들어졌지만, merchant_equipment와
+// 마찬가지로 아직 이 테이블이 없는 환경(42P01)이나 PostgREST 스키마 캐시에 안 잡힌 경우
+// (PGRST205)를 빈 배열로 흡수한다.
+function isMissingTableError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "42P01" ||
+    error.code === "PGRST205" ||
+    /schema cache|relation .* does not exist/i.test(error.message ?? "")
+  );
+}
 
 function firstTimestamp(values: string[]) {
   return values
@@ -157,21 +199,6 @@ function profileName(value: { name: string | null }[] | { name: string | null } 
   return Array.isArray(value) ? (value[0]?.name ?? null) : (value?.name ?? null);
 }
 
-function computeEquipmentCategorySummaries(
-  equipment: MerchantEquipmentItem[],
-): MerchantEquipmentCategorySummary[] {
-  const active = equipment.filter((item) => item.status !== "removed");
-  return EQUIPMENT_CATEGORIES.map((category) => {
-    const rows = active.filter((item) => (item.category ?? "etc") === category);
-    const totalQuantity = rows.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
-    const componentsSummary = rows
-      .map((item) => item.components || item.name)
-      .filter(Boolean)
-      .join(" + ");
-    return { category, totalQuantity, componentsSummary };
-  });
-}
-
 async function fetchMerchantRow(
   supabase: Awaited<ReturnType<typeof createClient>>,
   merchantId: string,
@@ -244,7 +271,9 @@ export async function loadMerchant360(
     transferApprovalResult,
     memoEntriesResult,
     equipmentResultRaw,
-    asTicketResult,
+    asTicketsResult,
+    changeRequestsResult,
+    postHistoryResult,
   ] = await Promise.all([
     franchiseApplicationId
       ? supabase
@@ -286,15 +315,33 @@ export async function loadMerchant360(
     fetchEquipmentRows(supabase, merchantId),
     supabase
       .from("tickets")
-      .select("created_at")
+      .select("id,title,status,created_at")
       .eq("merchant_id", merchantId)
       .eq("type", "as")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("change_requests")
+      .select("id,change_type,before_value,after_value,status,created_at")
+      .eq("merchant_id", merchantId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("installation_post_history")
+      .select("id,installation_id,content,created_at,author:profiles(name)")
+      .eq("merchant_id", merchantId)
+      .order("created_at", { ascending: false }),
   ]);
 
   const equipmentResult = equipmentResultRaw;
+  const asTickets = isMissingTableError(asTicketsResult.error)
+    ? []
+    : ((asTicketsResult.data ?? []) as AsTicketRow[]);
+  const changeRequests = isMissingTableError(changeRequestsResult.error)
+    ? []
+    : ((changeRequestsResult.data ?? []) as ChangeRequestRow[]);
+  const postHistory = isMissingTableError(postHistoryResult.error)
+    ? []
+    : ((postHistoryResult.data ?? []) as InstallationPostHistoryRow[]);
 
   const application = applicationResult.data as {
     id: string;
@@ -442,6 +489,89 @@ export async function loadMerchant360(
     });
   }
 
+  // 배송: installations 중 delivery_type='delivery'. franchiseApplicationId로 이미 필터된
+  // installations 배열 안의 항목만 대상이라 접수(이관)에 연결된 배송건만 잡힌다 — 빠른 업무의
+  // "장비 추가출고"로 만드는 접수 미연결 배송건은 애초에 franchise_application_id가 없어 이
+  // 배열에 들어오지 않는다(설치관리 "+등록" 폼에 가맹점 연결 입력이 없음. 별도 UI 작업 필요,
+  // flow.md에 한계로 기록). install과 같은 category로 묶되 제목으로만 구분해 관련 업무 이력
+  // 탭 구조(설치 탭에서 함께 필터)를 그대로 유지한다.
+  for (const installation of installations.filter((item) => item.delivery_type === "delivery")) {
+    const status = installationStatusLabel(installation.status, installation.delivery_type);
+    history.push({
+      id: installation.id,
+      date: installation.created_at,
+      title: "장비 배송",
+      summary: installation.customer_name || merchant.business_name,
+      category: "install",
+      status,
+      statusClass: installationStatusClass(installation.status),
+      href: `/installs?id=${installation.id}`,
+      actorName: installationActorName(installation.id),
+    });
+  }
+
+  // AS: 같은 접수에 연결된 installations(delivery_type='as') + merchant_id로 직접 연결된
+  // tickets(type='as'). merchants-360/decisions.md의 통합 업무 이력 정의를 따른다.
+  for (const installation of installations.filter((item) => item.delivery_type === "as")) {
+    const status = installationStatusLabel(installation.status, installation.delivery_type);
+    history.push({
+      id: installation.id,
+      date: installation.created_at,
+      title: "AS 작업",
+      summary: installation.customer_name || merchant.business_name,
+      category: "as",
+      status,
+      statusClass: installationStatusClass(installation.status),
+      href: `/installs?id=${installation.id}`,
+      actorName: installationActorName(installation.id),
+    });
+  }
+  for (const ticket of asTickets) {
+    history.push({
+      id: ticket.id,
+      date: ticket.created_at,
+      title: ticket.title || "AS 티켓",
+      summary: merchant.business_name,
+      category: "as",
+      status: TICKET_STATUS_LABEL[ticket.status as TicketStatus] ?? ticket.status,
+      statusClass:
+        TICKET_STATUS_COLOR[ticket.status as TicketStatus] ?? "bg-slate-100 text-slate-600",
+      href: `/tickets/${ticket.id}`,
+    });
+  }
+
+  // 변경: change_requests.merchant_id 직접 연결 (052/055번 스키마).
+  for (const request of changeRequests) {
+    const status = request.status as ChangeRequestStatus;
+    history.push({
+      id: request.id,
+      date: request.created_at,
+      title: `변경 접수 (${CHANGE_TYPE_LABEL[request.change_type as ChangeType] ?? request.change_type})`,
+      summary:
+        [request.before_value, request.after_value].filter(Boolean).join(" → ") ||
+        merchant.business_name,
+      category: "change",
+      status: CHANGE_STATUS_LABEL[status] ?? request.status,
+      statusClass: CHANGE_STATUS_COLOR[status] ?? "bg-slate-100 text-slate-600",
+      href: "/changes",
+    });
+  }
+
+  // 설치·배송 이후: installation_post_history.merchant_id 직접 연결 (100번 스키마).
+  for (const entry of postHistory) {
+    history.push({
+      id: entry.id,
+      date: entry.created_at,
+      title: "설치·배송 이후 메모",
+      summary: entry.content,
+      category: "post",
+      status: "기록",
+      statusClass: "bg-slate-100 text-slate-600",
+      href: `/installs?id=${entry.installation_id}`,
+      actorName: profileName(entry.author),
+    });
+  }
+
   history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const equipment = equipmentResult.error
     ? []
@@ -514,17 +644,17 @@ export async function loadMerchant360(
     .filter((item) => item.status !== "removed")
     .reduce((sum, item) => sum + (item.quantity ?? 1), 0);
 
+  // "최근 A/S" KPI와 관련 업무 이력의 AS 탭이 서로 다른 날짜를 보여주는 모순을 막기 위해,
+  // 이력 탭에 실제로 들어가는 것과 동일한 배열(installations의 as건 + asTickets 전체)에서
+  // 최신 시각을 뽑는다. 별도로 "가장 최근 1건만" 조회하지 않는다.
   const asInstallationTimes = installations
     .filter((item) => item.delivery_type === "as")
     .map((item) => item.created_at);
   const asMemoTimes = memos
     .filter((memo) => memo.entry_type === "as")
     .map((memo) => memo.created_at);
-  const lastAsAtMs = latestTimestamp([
-    ...asInstallationTimes,
-    ...asMemoTimes,
-    asTicketResult.data?.created_at,
-  ]);
+  const asTicketTimes = asTickets.map((ticket) => ticket.created_at);
+  const lastAsAtMs = latestTimestamp([...asInstallationTimes, ...asMemoTimes, ...asTicketTimes]);
   const lastAsAt = lastAsAtMs !== undefined ? new Date(lastAsAtMs).toISOString() : null;
 
   const derivedSummary: MerchantDerivedSummary = {

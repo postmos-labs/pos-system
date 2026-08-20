@@ -160,3 +160,177 @@ design.md 1~~6단계 구현 시작. 7~~8단계(115 트리거, 운영 반영)는 
   로그인 후 브라우저로 직접 클릭해 확인하지는 못했다. 사용자가 `/merchants`에서 가맹점 A를 선택해
   기본정보 카드를 "수정" 상태로 열어 값을 바꾼 뒤 저장하지 않고 가맹점 B로 전환했을 때, B의 패널이
   "수정" 모드가 아닌 읽기 전용 상태로 뜨고 입력값도 B의 실제 값으로 나오는지 확인해달라.
+
+## 2026-08-20 (3): "표시는 하는데 채울 방법이 없는" 항목 파이프라인 연결
+
+design.md에 이미 설계된 115(접수 장비 시딩)를 작성하고, 백필(116)·설치관리 편집(항목 3)·
+계약기간 직접입력(항목 4)·관련 업무 이력 확장(항목 5)을 진행했다. 113/114는 이미 라이브에
+적용된 상태라 손대지 않았고, 115/116은 파일만 작성하고 실행하지 않았다.
+
+### 사전 확인: SECURITY DEFINER 경고 (design.md 115절)
+
+design.md는 "적용 전 반드시 확인하고 보고"하라고 두 가지를 명시했다. 실제로 확인한 결과:
+
+- `sync_merchant_on_tech_transfer()`는 101번 정의 기준으로 SECURITY DEFINER가 **아니다**.
+- 하지만 이 함수를 트리거하는 `installations` INSERT/UPDATE는 앱 전체에서 예외 없이
+  `createAdminClient()`(service_role 키)로만 실행된다 — `approvals/actions.ts`(이관승인),
+  `installs/actions.ts`(수동 등록) 모두 확인. Supabase의 `service_role` Postgres 롤은
+  BYPASSRLS라 이 세션에서 발생하는 트리거 내부 INSERT는 SECURITY DEFINER 여부와 무관하게
+  이미 RLS를 우회한다.
+- 즉 design.md가 우려한 "created_by = auth.uid() 정책 때문에 트리거 INSERT가 막힘" 상황은
+  현재 코드 경로상으로는 재현되지 않는다.
+- 그럼에도 115에는 design.md 원안대로 `SECURITY DEFINER` + `created_by NULL` 허용 정책을
+  그대로 넣었다. 위 사실에만 의존하면 나중에 service_role이 아닌 경로로 installations를
+  쓰는 코드가 추가될 때 조용히 깨질 수 있어, 비용이 거의 없는 방어적 조치를 그대로 채택했다.
+  근거와 확인 내용은 115 파일 상단 주석에도 남겼다.
+
+### 1. 115: 접수 장비 → merchant_equipment 시딩
+
+design.md 표를 그대로 따랐고, EQUIPMENT_CATALOG(FranchiseClient.tsx) 13개 품목
+(포스기/토스프론트/영수증프린터/주방프린터기/무선단말기/금전함 → main_pos 6개,
+키오스크/키오스크리더기 → kiosk 2개, 테이블오더/태블릿/보조배터리 → table_order 3개,
+인터넷/원격 → etc 2개)을 매핑 함수(`merchant_equipment_category_for_item`)로 전부 커버하는지
+확인했다 — 6+2+3+2=13, 정확히 일치.
+
+- 카테고리별 세트 수는 대표 품목(`merchant_equipment_category_representative`: main_pos→포스기,
+  kiosk→키오스크, table_order→테이블오더 우선 없으면 태블릿) 우선, 없으면 카테고리 내 최대
+  수량으로 계산하는 로직을 별도 함수로 뽑아 115/116이 공유하도록 했다(`seed_merchant_equipment_from_application`).
+- 가드(source='application' 행이 이미 있으면 스킵)는 함수 내부에 두어, 트리거든 백필이든
+  호출부에서 따로 체크할 필요가 없게 했다.
+- INSERT 정책은 `created_by = auth.uid() OR created_by IS NULL`로 확장.
+
+### 2. 116: 기존 가맹점 백필
+
+115의 `seed_merchant_equipment_from_application()`을 그대로 재사용하는 `DO $$ ... $$` 블록으로
+작성했다. franchise_application_id가 있고 아직 source='application' 행이 없는 가맹점만 대상.
+백필 전/후 건수를 비교할 수 있는 SELECT를 파일 주석으로 남겼다(대상 건수, source별 건수,
+여전히 0세트인 가맹점 확인 쿼리).
+
+### 3. /installs 설치 구성 편집 (항목 3)
+
+- `InstallsClient.tsx`의 "가맹접수 원본 정보" 모달(`openFranchiseDetail`)은 원래
+  `franchise_application_id`만 받았다. `installationId`도 함께 받도록 확장하고, 호출부 2곳
+  (`inst.id`)을 함께 넘기도록 수정.
+- merchant_id는 지시대로 `installations.franchise_application_id → merchants` 역조회로
+  구했다(클라이언트에서 `merchants.select("id").eq("franchise_application_id", franchiseId)`).
+  못 찾으면 `compositionMerchantId`가 null로 남는다.
+- `InstallCompositionSection`(원래 `/merchants`, `/merchants/[id]`가 쓰던 컴포넌트)을 그대로
+  재사용했다. `merchantId` prop 타입을 `string` → `string | null`로 넓히고, null이면 "구성 추가"
+  버튼과 등록 폼의 저장 버튼을 모두 비활성화한 뒤 "접수 연결이 없어 가맹점을 찾을 수 없습니다"
+  문구를 보여주도록 컴포넌트 내부에서 처리했다(조용히 실패하지 않음).
+- `addMerchantEquipment`/`updateMerchantEquipment`(및 `MerchantEquipmentInput`)에
+  `installationId?: string` 인자를 추가해 `installation_id` 컬럼(106번부터 존재, 113/114와
+  무관하므로 항상 안전하게 insert/update 가능)을 채우도록 확장했다. 수정 시에는 installationId가
+  전달된 경우에만 `installation_id`를 덮어써서, `/merchants`에서 편집할 때 기존 연결을 지우지
+  않게 했다. 두 액션 + `updateMerchantEquipmentStatus` + `deleteMerchantEquipment`에
+  `revalidatePath("/installs")`를 추가했다.
+- 새 서버 액션은 만들지 않았다 — 기존 액션 인자만 확장.
+- 모달 폭을 480px → 720px(max-w-95vw)로 넓혔다. 설치 구성 요약 카드 4장 + 상세 표 6컬럼이
+  480px 모달에서는 가로 스크롤이 과해 거의 안 보이는 수준이라 판단했다. design.md/decisions.md에
+  명시된 디자인 토큰은 아니고, 기존 모달 패턴(rounded-2xl/border/shadow-xl)은 그대로 유지했다.
+- 접수 장비(주문 내역, 읽기 전용)는 지우지 않고 "접수 장비 (주문 내역)"으로 라벨만 더 명확히
+  하고, 그 아래에 "실제 설치 구성 (현장 확정 기준 — 접수 장비와 다를 수 있음)" 구간으로
+  `InstallCompositionSection`을 추가했다. 전제(주문 내역 vs 실제 설치 구성은 서로 다른 정본)를
+  화면에서도 구분해 보여주기 위함.
+
+**한계로 남긴 것**: 빠른 업무의 "장비 추가출고" 버튼은 `/installs/delivery`의 "+등록" 폼
+(`createInstallation`)으로 연결되는데, 이 폼은 애초에 `franchise_application_id`를 받지 않는다.
+즉 이렇게 만든 배송 설치건은 이번 3번 작업으로 설치 구성은 편집 가능해져도, merchant_id를 구할
+방법 자체가 없어 5번(관련 업무 이력)에는 여전히 나타날 수 없다. 이관승인(approvals) 흐름에서
+배송유형을 "택배발송"으로 선택해 만든 설치건(franchise_application_id 있음)과는 다른 경로다.
+가맹점 검색·연결 UI를 "+등록" 폼에 추가하는 건 데이터 파이프라인 연결이라는 이번 작업 범위를
+벗어나는 새 UI 기능이라 이번에는 포함하지 않았다. decisions.md가 애초에 "프리필 파라미터도
+이번엔 붙이지 않는다"고 범위를 좁혀둔 것과 같은 맥락으로 판단했다.
+
+### 4. 계약기간 직접입력 (항목 4)
+
+새 컬럼을 추가하지 않고 `ContractCard.tsx` 안에서만 처리했다.
+
+- `lastTouched: "months" | "endDate"` 상태로 마지막으로 사용자가 건드린 쪽을 추적한다.
+  편집을 처음 열 때는 저장된 시작일+종료일 기준으로 개월수를 미리 계산해 채워두고,
+  `lastTouched` 기본값은 `"endDate"`로 둔다(기존 저장 방식과 동일하게 시작+종료일이 기준값).
+- 개월수를 고치면(`handleMonthsChange`) `lastTouched`를 `"months"`로 바꾸고, 시작일이 있으면
+  종료일을 재계산한다. 종료일을 고치면(`handleEndChange`) 반대로 개월수를 재계산한다.
+  시작일을 고치면(`handleStartChange`) `lastTouched`가 가리키는 쪽을 기준으로 나머지 하나만
+  다시 계산한다 — 두 값이 서로를 계속 갱신하는 순환 의존이 아니라 "마지막으로 편집한 쪽 →
+  나머지"의 단방향 계산이라 무한루프 여지가 없다.
+- `DatePickerField`가 이미 export하던 `parseDate`/`formatDate`(로컬 Date 기준, "yyyy-MM-dd"
+  문자열)를 재사용해 날짜 계산을 했다 — 새 유틸을 만들지 않았고, `loadMerchant360.ts`의
+  `contractMonths` 계산식(연·월 차이만, 일자는 무시)과 동일한 공식을 그대로 복제해 편집 중
+  보이는 개월수와 저장 후 다시 계산되는 개월수가 어긋나지 않게 했다.
+- 저장 시 서버로는 여전히 `contractStartedAt`/`contractExpiresAt`만 보낸다 — `contractMonths`는
+  화면에서만 쓰는 계산 편의 필드다.
+
+**검증 (계약 시작일만 있는 경우)**: `handleStartChange`에서 `lastTouched`가 초기값 `"endDate"`고
+`prev.contractExpiresAt`이 빈 문자열이면 `value && prev.contractExpiresAt` 조건이 거짓이 되어
+`contractMonths`를 건드리지 않는다. `handleMonthsChange`도 `prev.contractStartedAt`이 없으면
+종료일을 계산하지 않는다. 두 핸들러 모두 상태를 직접 갱신할 뿐 서로를 트리거하는 `useEffect`가
+없어 무한루프가 발생할 수 없다.
+
+### 5. 관련 업무 이력 확장 (항목 5)
+
+`loadMerchant360.ts`에 아래 4개를 추가했다. `EQUIPMENT_CATEGORIES`/`computeEquipmentCategorySummaries`는
+`merchant360.ts`로 옮겨 서버 로더와 `InstallsClient.tsx`(클라이언트)가 같은 순수 함수를
+공유하도록 했다(3번 작업에서 필요).
+
+- **AS**: `installations`(이미 franchiseApplicationId로 조회 중인 배열)에서
+  `delivery_type='as'`인 건 + `tickets`(신규 쿼리, `merchant_id` 직접 연결 + `type='as'` +
+  `deleted_at IS NULL`로 휴지통 항목 제외) 전체를 합쳤다.
+- **변경**: `change_requests.merchant_id` 직접 연결(052/055번 스키마 — 055에서 상태값이
+  `waiting_docs/docs_incomplete/done`으로 바뀌어 있어 `src/types`의 `ChangeRequestStatus`를
+  그대로 썼다).
+- **설치·배송 이후**: `installation_post_history.merchant_id` 직접 연결(100번 스키마).
+- **배송**: `installations` 중 `delivery_type='delivery'`. `franchiseApplicationId`로 이미
+  필터된 배열 안에서만 찾으므로 접수(이관)에 연결된 배송건만 걸린다. `category`는 `install`과
+  같게 두고 제목만 "장비 배송"으로 구분했다 — 이력 탭 구조를 "설치" 탭 하나로 유지하기 위해
+  별도 탭을 만들지 않았다(관련 업무 이력 탭은 원래 목업에 정의된 5개 카테고리
+  reception/install/as/change/post를 그대로 따르고, "배송"은 목업에 없는 새 카테고리라 임의로
+  추가하지 않았다). 이 판단이 다르면 알려달라 — `install`/`delivery`를 완전히 분리한 탭으로
+  바꾸는 것도 어렵지 않다.
+- `change_requests`/`installation_post_history` 조회는 `merchant_equipment`와 같은 패턴으로
+  42P01/PGRST205를 빈 배열로 흡수하는 `isMissingTableError` 가드를 새로 추가해 적용했다.
+- **최근 A/S KPI ↔ AS 탭 모순 해소**: 기존에는 "최근 A/S" KPI가 `tickets`에서 가장 최근 1건만
+  별도로(`.limit(1).maybeSingle()`) 조회해 계산했는데, 이 1건은 `history` 배열에는 전혀 들어가지
+  않아 KPI에는 날짜가 뜨는데 이력 탭에는 그 AS가 안 보이는 모순이 있었다. 이번에 그 단일-조회를
+  없애고, `lastAsAt`을 `history`의 AS 탭에 실제로 들어가는 것과 **같은 배열**
+  (`installations`의 as건 + `tickets` 전체)에서 최댓값으로 계산하도록 바꿨다. 구조적으로 같은
+  소스를 쓰므로 이 모순은 재발할 수 없다.
+  - 단, `merchant_memo_entries`(entry_type='as')는 여전히 `lastAsAt` 계산에 포함되지만 관련
+    업무 이력 AS 탭에는 넣지 않았다 — 이 항목이 5번 작업 지시("installations 중
+    delivery_type='as' + tickets 중 type='as' AND merchant_id")에 메모를 포함하지 않았고,
+    AS 메모는 같은 페이지의 "메모 히스토리" 섹션에 이미 항상 노출되고 있어 안 보이는 것은
+    아니다. decisions.md가 기존에 정의한 `lastAsAt` 계산식(설치+티켓+메모 세 소스)도 그대로
+    유지했다 — 이번 작업 지시가 그 계산식을 바꾸라고 하지 않았기 때문.
+- `MerchantHistorySection.tsx`의 `HISTORY_TABS`에 AS/변경/설치·배송 이후 탭을 추가했다
+  (라벨은 이미 `HISTORY_CATEGORY_LABEL`에 정의돼 있었다).
+
+### 검증
+
+- `node_modules/.bin/tsc --noEmit`: 통과.
+- `node_modules/.bin/eslint "src/app/(app)/merchants/**/*.{ts,tsx}"`: 문제 없음.
+- `node_modules/.bin/eslint "src/app/(app)/installs/InstallsClient.tsx"`: 26 errors/8 warnings —
+  main 브랜치의 수정 전 같은 파일을 그대로 lint해도 동일하게 34 problems(26 errors, 8 warnings)가
+  나와, 전부 이번 변경과 무관한 기존 부채임을 확인했다(새로 추가한 코드에서 발생한 에러 없음).
+  이 파일 전체를 정리하는 건 이번 작업 범위를 크게 벗어나 손대지 않았다.
+- `node_modules/.bin/prettier --write`(변경 파일 전체): 통과. 최초 작성 시 `InstallCompositionSection.tsx`의
+  `updateMerchantEquipment` 호출부 한 줄이 길어져 자동 줄바꿈됨.
+- dev Supabase 자격증명이 없어 이전 세션들과 동일하게 브라우저로 직접 클릭 검증은 못 했다.
+  대신 코드 경로를 직접 추적해 아래 3가지를 확인했다.
+  - **접수 연결 없는 가맹점에서 3번 저장 시도**: "가맹접수 원본 정보" 버튼 자체가
+    `inst.franchise_application_id`가 있을 때만 렌더링되지만, 그 접수 건에 대응하는
+    `merchants` 행이 아직 없으면(예: 아직 이관되지 않은 접수) `compositionMerchantId`가
+    null로 남는다. 이 경우 `InstallCompositionSection`이 "구성 추가"/저장 버튼을 비활성화하고
+    이유 문구를 보여준다(조용히 실패하지 않음) — 코드 추적으로 확인.
+  - **장비 0행 / 이력 0건**: `equipment.length === 0`이면 "등록된 설치 구성이 없습니다.",
+    `history.length === 0`이면 "관련 업무 이력이 없습니다."를 그대로 보여주는 기존 분기를
+    유지했고, 새로 추가한 4개 쿼리 결과가 모두 빈 배열이어도 단순히 `history`에 아무것도
+    push되지 않을 뿐 예외가 나지 않는다 — 코드 추적으로 확인.
+  - **계약 시작일만 있을 때**: 위 "4. 계약기간 직접입력" 절의 검증 문단 참고 — 무한루프/잘못된
+    값 없음을 코드 추적으로 확인.
+- 사용자가 dev Supabase에 113~116을 순서대로 적용한 뒤 직접 확인해야 하는 것:
+  - 115/116 적용 후 실제 이관 1건과 기존 가맹점 백필 결과(설치 구성 요약 카드에 세트 수가
+    뜨는지, 116 파일 주석의 SELECT로 전/후 건수 비교).
+  - `/installs`에서 접수 연결된 설치건을 열어 실제로 merchant_equipment 행이 뜨고, 등록/수정/
+    삭제가 `/merchants`, `/merchants/[id]`에도 즉시 반영되는지(`revalidatePath` 확인).
+  - 계약기간 입력 UI에서 개월수 ↔ 종료일 상호 계산이 화면상에서 자연스러운지.
+  - "최근 A/S" KPI 날짜와 관련 업무 이력 AS 탭에 실제로 같은 건이 뜨는지.

@@ -44,7 +44,7 @@ const EMPTY_FORM = {
 
 type EquipmentFormState = typeof EMPTY_FORM;
 
-function toInput(form: EquipmentFormState): MerchantEquipmentInput {
+function toInput(form: EquipmentFormState, installationId?: string): MerchantEquipmentInput {
   return {
     name:
       form.name.trim() ||
@@ -59,6 +59,7 @@ function toInput(form: EquipmentFormState): MerchantEquipmentInput {
     manufacturer: form.manufacturer,
     supplier: form.supplier,
     location: form.location,
+    installationId,
   };
 }
 
@@ -134,7 +135,15 @@ function EquipmentFormFields({
   );
 }
 
-function EquipmentRow({ item, merchantId }: { item: MerchantEquipmentItem; merchantId: string }) {
+function EquipmentRow({
+  item,
+  merchantId,
+  installationId,
+}: {
+  item: MerchantEquipmentItem;
+  merchantId: string;
+  installationId?: string;
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -156,7 +165,11 @@ function EquipmentRow({ item, merchantId }: { item: MerchantEquipmentItem; merch
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
-    const result = await updateMerchantEquipment(item.id, merchantId, toInput(form));
+    const result = await updateMerchantEquipment(
+      item.id,
+      merchantId,
+      toInput(form, installationId),
+    );
     setSubmitting(false);
     if (result.error) {
       alert("설치 구성 수정 실패: " + result.error);
@@ -268,11 +281,15 @@ function EquipmentRow({ item, merchantId }: { item: MerchantEquipmentItem; merch
 
 export default function InstallCompositionSection({
   merchantId,
+  installationId,
   equipment,
   categorySummaries,
   totalEquipmentSets,
 }: {
-  merchantId: string;
+  // 설치관리(/installs) 화면에서 접수 연결이 없는 설치건은 merchant_id를 역조회할 수 없어
+  // null이 된다. 이 경우 조회는 항상 equipment=[]로 넘어오고, 아래에서 등록 자체를 막는다.
+  merchantId: string | null;
+  installationId?: string;
   equipment: MerchantEquipmentItem[];
   categorySummaries: MerchantEquipmentCategorySummary[];
   totalEquipmentSets: number;
@@ -284,8 +301,9 @@ export default function InstallCompositionSection({
 
   async function submitAdd(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!merchantId) return;
     setSubmitting(true);
-    const result = await addMerchantEquipment(merchantId, toInput(form));
+    const result = await addMerchantEquipment(merchantId, toInput(form, installationId));
     setSubmitting(false);
     if (result.error) {
       alert("설치 구성 등록 실패: " + result.error);
@@ -334,12 +352,23 @@ export default function InstallCompositionSection({
             <button
               type="button"
               onClick={() => setAdding(true)}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              disabled={!merchantId}
+              title={
+                merchantId ? undefined : "연결된 가맹점이 없어 설치 구성을 추가할 수 없습니다."
+              }
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
             >
               구성 추가
             </button>
           )}
         </div>
+
+        {!merchantId && (
+          <p className="mt-3 rounded-lg border border-amber-100 bg-amber-50/70 px-3 py-2 text-xs text-amber-700">
+            이 설치건은 접수 연결(franchise_application_id)이 없어 가맹점을 찾을 수 없습니다. 설치
+            구성을 저장하려면 먼저 가맹접수와 연결해야 합니다.
+          </p>
+        )}
 
         {adding && (
           <form
@@ -360,7 +389,8 @@ export default function InstallCompositionSection({
               </button>
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || !merchantId}
+                title={merchantId ? undefined : "연결된 가맹점이 없어 저장할 수 없습니다."}
                 className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 {submitting ? "등록 중..." : "등록"}
@@ -387,7 +417,12 @@ export default function InstallCompositionSection({
               </thead>
               <tbody>
                 {equipment.map((item) => (
-                  <EquipmentRow key={item.id} item={item} merchantId={merchantId} />
+                  <EquipmentRow
+                    key={item.id}
+                    item={item}
+                    merchantId={merchantId as string}
+                    installationId={installationId}
+                  />
                 ))}
               </tbody>
             </table>

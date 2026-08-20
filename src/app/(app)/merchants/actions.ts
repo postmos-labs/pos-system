@@ -193,6 +193,9 @@ export interface MerchantEquipmentInput {
   manufacturer?: string;
   supplier?: string;
   location?: string;
+  // 설치관리(/installs) 화면에서 등록/수정할 때만 채운다. merchant_equipment.installation_id는
+  // 106번부터 이미 있던 컬럼이라 113/114 미적용 환경에서도 항상 select/insert 가능하다.
+  installationId?: string;
 }
 
 function validateEquipmentInput(input: MerchantEquipmentInput) {
@@ -216,6 +219,7 @@ export async function addMerchantEquipment(merchantId: string, input: MerchantEq
   const admin = createAdminClient();
   const baseValues = {
     merchant_id: merchantId,
+    installation_id: input.installationId ?? null,
     name: input.name.trim(),
     serial_number: input.serialNumber.trim() || null,
     installed_date: input.installedDate || null,
@@ -254,6 +258,7 @@ export async function addMerchantEquipment(merchantId: string, input: MerchantEq
 
   revalidatePath("/merchants");
   revalidatePath(`/merchants/${merchantId}`);
+  revalidatePath("/installs");
   return { error: null, skipped: false, data };
 }
 
@@ -284,6 +289,8 @@ export async function updateMerchantEquipment(
       manufacturer: input.manufacturer?.trim() || null,
       supplier: input.supplier?.trim() || null,
       location: input.location?.trim() || null,
+      // installationId가 전달되지 않으면(=/merchants에서 편집) 기존 값을 건드리지 않는다.
+      ...(input.installationId ? { installation_id: input.installationId } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
@@ -296,6 +303,7 @@ export async function updateMerchantEquipment(
 
   revalidatePath("/merchants");
   revalidatePath(`/merchants/${merchantId}`);
+  revalidatePath("/installs");
   return { error: null };
 }
 
@@ -314,6 +322,7 @@ export async function updateMerchantEquipmentStatus(id: string, status: Merchant
   if (error) return { error: error.message };
 
   revalidatePath("/merchants");
+  revalidatePath("/installs");
   return { error: null };
 }
 
@@ -330,6 +339,7 @@ export async function deleteMerchantEquipment(id: string) {
   await recordDeletions("merchant_equipment", snapshots);
 
   revalidatePath("/merchants");
+  revalidatePath("/installs");
   const merchantId = snapshots[0]?.merchant_id;
   if (typeof merchantId === "string") revalidatePath(`/merchants/${merchantId}`);
   return { error: null };

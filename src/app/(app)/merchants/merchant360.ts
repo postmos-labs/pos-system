@@ -138,3 +138,30 @@ export interface MerchantEquipmentCategorySummary {
   totalQuantity: number;
   componentsSummary: string;
 }
+
+export const MERCHANT_EQUIPMENT_SUMMARY_CATEGORIES: MerchantEquipmentCategory[] = [
+  "main_pos",
+  "kiosk",
+  "table_order",
+];
+
+/**
+ * merchant_equipment 행을 카테고리별로 묶어 [B] 설치 구성 요약 카드에 쓸 합계를 만든다.
+ * 순수 함수라 서버 로더(loadMerchant360.ts)와 클라이언트 컴포넌트(InstallsClient.tsx)가
+ * 모두 import해서 쓴다 — 서버 전용 import(@/lib/supabase/server)에 의존하지 않기 위해
+ * 이 파일(merchant360.ts)에 둔다.
+ */
+export function computeEquipmentCategorySummaries(
+  equipment: MerchantEquipmentItem[],
+): MerchantEquipmentCategorySummary[] {
+  const active = equipment.filter((item) => item.status !== "removed");
+  return MERCHANT_EQUIPMENT_SUMMARY_CATEGORIES.map((category) => {
+    const rows = active.filter((item) => (item.category ?? "etc") === category);
+    const totalQuantity = rows.reduce((sum, item) => sum + (item.quantity ?? 1), 0);
+    const componentsSummary = rows
+      .map((item) => item.components || item.name)
+      .filter(Boolean)
+      .join(" + ");
+    return { category, totalQuantity, componentsSummary };
+  });
+}
