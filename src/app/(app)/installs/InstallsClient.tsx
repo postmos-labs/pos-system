@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef, memo, Fragment } from "react";
 import { useRouter } from "next/navigation";
-import * as Popover from "@radix-ui/react-popover";
 import { createClient } from "@/lib/supabase/client";
 import { formatPhone, thumbUrl } from "@/lib/format";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
@@ -16,7 +15,6 @@ import {
   GripVertical,
   Trash2,
   ChevronDown,
-  Save,
   Percent,
 } from "lucide-react";
 import type { Profile, FranchiseApplication } from "@/types";
@@ -25,7 +23,6 @@ import { useToast } from "@/components/ui/Toast";
 import BulkConfirmDialog from "@/components/ui/BulkConfirmDialog";
 import { NotificationHistory } from "@/components/ui/NotificationHistory";
 import FormModal from "@/components/ui/FormModal";
-import HistoryButton from "@/components/ui/HistoryButton";
 import MemoHistoryPanel from "@/components/ui/MemoHistoryPanel";
 import InstallationPostHistoryPanel from "@/components/ui/InstallationPostHistoryPanel";
 import RateBadge from "@/components/ui/RateBadge";
@@ -34,6 +31,7 @@ import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
 import { appendApprovalNote, type ApprovalNote } from "@/lib/approvalNotes";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField, CalendarPopoverButton } from "@/components/ui/DatePickerField";
+import { PRODUCT_CATALOG, QtyStepper, InstallItemsEditor } from "./InstallItemsEditor";
 import {
   approveInstallationCompletion,
   approveInstallationStatusByTeamLead,
@@ -76,31 +74,8 @@ function isMissingEquipmentColumnError(error: { code?: string; message?: string 
     /column .* does not exist/i.test(error.message ?? "")
   );
 }
-const PRODUCT_CATALOG = [
-  "J100 화이트",
-  "J100 블랙",
-  "J200 화이트",
-  "J200 블랙",
-  "T100 화이트",
-  "T100 블랙",
-  "T200 화이트",
-  "T200 블랙",
-  "G250 화이트",
-  "G250 블랙",
-  "윙포스 화이트",
-  "ZPP-3000 화이트",
-  "ZPP-3000 블랙",
-  "금전함",
-  "테블릿 PC",
-  "테이블 오더 브라켓",
-  "핸드스캐너",
-  "프론트",
-  "코세스/코밴 SDR-300",
-  "코세스/코밴 KRE-C100+",
-  "기타",
-];
 
-interface Installation {
+export interface Installation {
   id: string;
   customer_name: string;
   contact_name?: string;
@@ -139,7 +114,7 @@ interface Props {
   initialDeliveryStats?: { total: number; completed: number };
 }
 
-type CompletionApproval = {
+export type CompletionApproval = {
   installation_id: string;
   status: "requested" | "responsible_approved" | "approved";
   target_status: string;
@@ -170,7 +145,6 @@ const MAIN_COLUMNS = [
   { key: "tech", label: "담당기사" },
   { key: "notes", label: "비고" },
   { key: "date", label: "등록일" },
-  { key: "actions", label: "" },
 ] as const;
 const DEFAULT_WIDTHS: Record<string, number> = {
   name: 140,
@@ -182,44 +156,8 @@ const DEFAULT_WIDTHS: Record<string, number> = {
   tech: 90,
   notes: 150,
   date: 100,
-  actions: 280,
 };
 const COL_WIDTHS_STORAGE_KEY = "installs_col_widths";
-
-function QtyStepper({
-  value,
-  onChange,
-  size = "md",
-}: {
-  value: number;
-  onChange: (v: number) => void;
-  size?: "sm" | "md";
-}) {
-  const btnCls = size === "sm" ? "w-6 h-6 text-sm" : "w-9 h-9 text-base";
-  const numCls = size === "sm" ? "w-7 text-xs" : "w-10 text-sm";
-  return (
-    <div
-      className="inline-flex items-center border border-slate-200 rounded-lg overflow-hidden"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <button
-        type="button"
-        onClick={() => onChange(Math.max(1, value - 1))}
-        className={`${btnCls} flex items-center justify-center bg-slate-50 text-slate-600 hover:bg-slate-100 font-bold`}
-      >
-        −
-      </button>
-      <span className={`${numCls} text-center font-semibold text-slate-800`}>{value}</span>
-      <button
-        type="button"
-        onClick={() => onChange(value + 1)}
-        className={`${btnCls} flex items-center justify-center bg-slate-50 text-slate-600 hover:bg-slate-100 font-bold`}
-      >
-        +
-      </button>
-    </div>
-  );
-}
 
 interface CreateFormProps {
   techUsers: { id: string; name: string }[];
@@ -512,85 +450,6 @@ const EditableInstallText = memo(function EditableInstallText({
   );
 });
 
-const InstallItemsEditor = memo(function InstallItemsEditor({
-  items,
-  onChange,
-}: {
-  items: { name: string; quantity: number }[];
-  onChange: (items: { name: string; quantity: number }[]) => void;
-}) {
-  const [product, setProduct] = useState(PRODUCT_CATALOG[0]);
-  const [customName, setCustomName] = useState("");
-  const [qty, setQty] = useState(1);
-  function add() {
-    const name = customName.trim() || product;
-    if (!name) return;
-    const existing = items.find((i) => i.name === name);
-    const next = existing
-      ? items.map((i) => (i.name === name ? { ...i, quantity: i.quantity + qty } : i))
-      : [...items, { name, quantity: qty }];
-    onChange(next);
-    setQty(1);
-    setCustomName("");
-  }
-  function remove(name: string) {
-    onChange(items.filter((i) => i.name !== name));
-  }
-  function setQuantity(name: string, q: number) {
-    onChange(items.map((i) => (i.name === name ? { ...i, quantity: q } : i)));
-  }
-  return (
-    <div className="flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
-      {items.length > 0 && (
-        <ul className="flex flex-col gap-1">
-          {items.map((i) => (
-            <li
-              key={i.name}
-              className="flex items-center justify-between text-xs bg-white border border-slate-200 rounded px-2 py-1 gap-2"
-            >
-              <span className="flex-1 min-w-0 truncate">{i.name}</span>
-              <QtyStepper size="sm" value={i.quantity} onChange={(q) => setQuantity(i.name, q)} />
-              <button
-                type="button"
-                onClick={() => remove(i.name)}
-                className="shrink-0 text-slate-400 hover:text-red-500"
-              >
-                ✕
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="flex flex-wrap gap-1.5">
-        <AppSelect
-          value={product}
-          onValueChange={(value) => {
-            setProduct(value);
-            setCustomName("");
-          }}
-          aria-label="제품 선택"
-          className="flex-1 min-w-0"
-          options={PRODUCT_CATALOG.map((p) => ({ value: p, label: p }))}
-        />
-        <QtyStepper size="sm" value={qty} onChange={setQty} />
-        <button
-          type="button"
-          onClick={add}
-          className="shrink-0 px-2.5 py-1 bg-slate-800 text-white text-xs rounded hover:bg-slate-700"
-        >
-          추가
-        </button>
-      </div>
-      <input
-        value={customName}
-        onChange={(e) => setCustomName(e.target.value)}
-        placeholder="목록에 없는 제품은 직접 입력"
-        className="border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none"
-      />
-    </div>
-  );
-});
-
 export default function InstallsClient({
   profile,
   techUsers,
@@ -653,8 +512,7 @@ export default function InstallsClient({
     if (!target) return;
     highlightAppliedRef.current = true;
     setMobileExpandedId(highlightId);
-    setDetailInst(target);
-    setDetailDraft(buildDetailDraft(target));
+    openInstallDetail(target);
     setSearch("");
     setStatusFilter("");
     setTechFilter("");
@@ -683,10 +541,9 @@ export default function InstallsClient({
   const [showCompleted, setShowCompleted] = useState(false);
   const [franchiseDetail, setFranchiseDetail] = useState<InstallFranchiseDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  // 가맹접수 원본 정보 모달에서 함께 보여주는 실제 설치 구성(merchant_equipment) 상태.
+  // 가맹접수 원본 정보 섹션에서 함께 보여주는 실제 설치 구성(merchant_equipment) 상태.
   // franchise_application_id -> merchants 역조회로 구한 merchantId가 null이면 연결된 가맹점이
   // 없다는 뜻 — InstallCompositionSection이 이 경우 저장을 막고 이유를 보여준다.
-  const [compositionInstallationId, setCompositionInstallationId] = useState<string | null>(null);
   const [compositionMerchantId, setCompositionMerchantId] = useState<string | null>(null);
   const [compositionEquipment, setCompositionEquipment] = useState<MerchantEquipmentItem[]>([]);
   const [deliveryTab, setDeliveryTab] = useState<"all" | DeliveryType>("all");
@@ -764,10 +621,9 @@ export default function InstallsClient({
     }
   }
 
-  async function openFranchiseDetail(franchiseId: string, installationId: string) {
+  async function openFranchiseDetail(franchiseId: string) {
     setLoadingDetail(true);
     setFranchiseDetail({});
-    setCompositionInstallationId(installationId);
     setCompositionMerchantId(null);
     setCompositionEquipment([]);
     const [{ data }, { data: merchantRow }] = await Promise.all([
@@ -806,6 +662,31 @@ export default function InstallsClient({
           .order("created_at", { ascending: false })
       : extended;
     setCompositionEquipment((rows.data ?? []) as unknown as MerchantEquipmentItem[]);
+  }
+
+  // 설치건 상세 드로어를 연다. 가맹접수 원본 조회(openFranchiseDetail)는 원래 "가맹접수" 버튼을
+  // 눌렀을 때만 수행했지만, 이제 드로어 하나에서 두 정보를 같이 보여주므로 드로어가 열리는
+  // 시점에 함께 수행한다. 조회 자체(쿼리)는 그대로다.
+  function openInstallDetail(inst: Installation) {
+    setDetailDraft(buildDetailDraft(inst));
+    setDetailInst(inst);
+    if (inst.franchise_application_id) {
+      openFranchiseDetail(inst.franchise_application_id);
+    } else {
+      setFranchiseDetail(null);
+      setLoadingDetail(false);
+      setCompositionMerchantId(null);
+      setCompositionEquipment([]);
+    }
+  }
+
+  function closeInstallDetail() {
+    setDetailInst(null);
+    setDetailDraft(null);
+    setFranchiseDetail(null);
+    setLoadingDetail(false);
+    setCompositionMerchantId(null);
+    setCompositionEquipment([]);
   }
 
   async function handleCreate(newInstall: {
@@ -1809,6 +1690,12 @@ export default function InstallsClient({
   );
 
   const pagedInstalls = filteredInstalls.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  // installs 배열이 최신 상태(예: 상태 변경, 필드 저장)를 갖고 있으므로 detailInst 스냅샷이
+  // 아니라 여기서 다시 찾은 값을 드로어에 넘긴다. 인라인 확장 행이던 시절엔 installs.map의
+  // 루프 변수를 그대로 썼던 것과 동일한 효과.
+  const activeDetailInst = detailInst
+    ? (installs.find((item) => item.id === detailInst.id) ?? null)
+    : null;
 
   useEffect(() => {
     if (!highlightId) return;
@@ -1907,18 +1794,34 @@ export default function InstallsClient({
       )}
 
       {}
-      {franchiseDetail !== null && (
+      {activeDetailInst && (
         <InstallDetailDrawer
-          loading={loadingDetail}
-          detail={franchiseDetail}
-          installation={(() => {
-            const inst = installs.find((item) => item.id === compositionInstallationId);
-            return inst ? { status: inst.status, delivery_type: inst.delivery_type } : null;
-          })()}
+          key={activeDetailInst.id}
+          installation={activeDetailInst}
+          canEdit={canEdit}
+          canDelete={canDelete}
+          profile={profile}
+          draft={detailDraft}
+          onDraftChange={(patch) => setDetailDraft((d) => (d ? { ...d, ...patch } : d))}
+          saving={savingRowId === activeDetailInst.id}
+          onSave={() => saveRowNow(activeDetailInst.id)}
+          franchiseLoading={loadingDetail}
+          franchiseDetail={franchiseDetail}
           merchantId={compositionMerchantId}
-          installationId={compositionInstallationId ?? undefined}
           equipment={compositionEquipment}
-          onClose={() => setFranchiseDetail(null)}
+          approval={completionApprovals[activeDetailInst.id]}
+          approvalNotes={approvalNoteHistory[activeDetailInst.id]}
+          completing={completing}
+          onApproveCompletion={() => approveCompletion(activeDetailInst.id)}
+          onRejectCompletion={() => rejectCompletion(activeDetailInst.id)}
+          onCopyLink={() => copyLink(activeDetailInst.status_token)}
+          onReschedule={() => handleStatusChange(activeDetailInst.id, "reschedule")}
+          onTechReject={() => setRejectModal({ id: activeDetailInst.id, reason: "" })}
+          onDelete={() => handleDelete(activeDetailInst.id)}
+          onOpenPostHistory={() => setPostHistoryOpenId(activeDetailInst.id)}
+          onOpenHistory={() => setHistoryOpenId(activeDetailInst.id)}
+          onOpenWoo={() => router.push("/woo")}
+          onClose={closeInstallDetail}
         />
       )}
 
@@ -2735,16 +2638,10 @@ export default function InstallsClient({
                     <tr
                       id={`install-row-${inst.id}`}
                       className={`hover:bg-blue-50/40 transition cursor-pointer ${rowDragId === inst.id ? "opacity-40" : ""}`}
-                      onClick={() =>
-                        setDetailInst((prev) => {
-                          if (prev?.id === inst.id) {
-                            setDetailDraft(null);
-                            return null;
-                          }
-                          setDetailDraft(buildDetailDraft(inst));
-                          return inst;
-                        })
-                      }
+                      onClick={() => {
+                        if (detailInst?.id === inst.id) closeInstallDetail();
+                        else openInstallDetail(inst);
+                      }}
                       onDragOver={(e) => {
                         if (canReorder && rowDragId) e.preventDefault();
                       }}
@@ -2959,394 +2856,7 @@ export default function InstallsClient({
                       <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap font-mono">
                         {format(new Date(inst.created_at), "M/d HH:mm", { locale: ko })}
                       </td>
-                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex flex-wrap gap-1.5">
-                          {inst.franchise_application_id && (
-                            <button
-                              onClick={() =>
-                                openFranchiseDetail(inst.franchise_application_id!, inst.id)
-                              }
-                              className="text-xs text-purple-600 border border-purple-200 px-2 py-1 rounded-lg hover:bg-purple-50"
-                            >
-                              가맹접수
-                            </button>
-                          )}
-                          {inst.woo_customer_id && (
-                            <button
-                              onClick={() => router.push("/woo")}
-                              className="text-xs text-teal-600 border border-teal-200 px-2 py-1 rounded-lg hover:bg-teal-50"
-                            >
-                              우국상
-                            </button>
-                          )}
-                          <button
-                            onClick={() => copyLink(inst.status_token)}
-                            className="text-xs text-slate-500 border border-slate-200 px-2 py-1 rounded-lg hover:bg-slate-50"
-                          >
-                            링크
-                          </button>
-                          {canEdit && inst.status !== "completed" && inst.status !== "rejected" && (
-                            <button
-                              onClick={() => handleStatusChange(inst.id, "reschedule")}
-                              disabled={!!completionApprovals[inst.id]}
-                              className="text-xs text-indigo-600 border border-indigo-200 px-2 py-1 rounded-lg hover:bg-indigo-50 disabled:opacity-50"
-                            >
-                              일정변경
-                            </button>
-                          )}
-                          {completionApprovals[inst.id] && (
-                            <>
-                              <span className="text-xs text-amber-700 border border-amber-200 bg-amber-50 px-2 py-1 rounded-lg">
-                                {statusLabel(
-                                  completionApprovals[inst.id]!.target_status,
-                                  inst.delivery_type,
-                                )}{" "}
-                                {completionApprovals[inst.id]!.status === "requested"
-                                  ? "1차 승인대기"
-                                  : "최종 승인대기"}
-                              </span>
-                              {completionApprovals[inst.id]!.requested_by !== profile.id && (
-                                <>
-                                  {((completionApprovals[inst.id]!.status === "requested" &&
-                                    (profile.approval_role === "tech_responsible" ||
-                                      profile.approval_role === "team_lead")) ||
-                                    (profile.approval_role === "team_lead" &&
-                                      completionApprovals[inst.id]!.status ===
-                                        "responsible_approved")) && (
-                                    <button
-                                      onClick={() => rejectCompletion(inst.id)}
-                                      disabled={completing}
-                                      className="text-xs text-red-600 border border-red-200 px-2 py-1 rounded-lg hover:bg-red-50 disabled:opacity-50"
-                                    >
-                                      반려
-                                    </button>
-                                  )}
-                                  {((completionApprovals[inst.id]!.status === "requested" &&
-                                    (profile.approval_role === "tech_responsible" ||
-                                      profile.approval_role === "team_lead")) ||
-                                    (profile.approval_role === "team_lead" &&
-                                      completionApprovals[inst.id]!.status ===
-                                        "responsible_approved")) && (
-                                    <button
-                                      onClick={() => approveCompletion(inst.id)}
-                                      disabled={completing}
-                                      className="text-xs text-white bg-green-600 border border-green-600 px-2 py-1 rounded-lg hover:bg-green-700 disabled:opacity-50"
-                                    >
-                                      {statusLabel(
-                                        completionApprovals[inst.id]!.target_status,
-                                        inst.delivery_type,
-                                      )}{" "}
-                                      {completionApprovals[inst.id]!.status === "requested"
-                                        ? "1차 승인"
-                                        : "최종 승인"}
-                                    </button>
-                                  )}
-                                </>
-                              )}
-                            </>
-                          )}
-                          {!!approvalNoteHistory[inst.id]?.length && (
-                            <Popover.Root>
-                              <Popover.Trigger asChild>
-                                <button
-                                  type="button"
-                                  className="rounded-lg border border-blue-200 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
-                                >
-                                  비고 {approvalNoteHistory[inst.id]!.length}
-                                </button>
-                              </Popover.Trigger>
-                              <Popover.Portal>
-                                <Popover.Content
-                                  align="end"
-                                  sideOffset={6}
-                                  className="z-[80] w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
-                                >
-                                  <ApprovalNoteTimeline notes={approvalNoteHistory[inst.id]!} />
-                                </Popover.Content>
-                              </Popover.Portal>
-                            </Popover.Root>
-                          )}
-                          {profile.role === "tech" &&
-                            inst.franchise_application_id &&
-                            inst.status !== "rejected" &&
-                            inst.status !== "completed" && (
-                              <button
-                                onClick={() => setRejectModal({ id: inst.id, reason: "" })}
-                                className="text-xs text-red-500 border border-red-200 px-2 py-1 rounded-lg hover:bg-red-50"
-                              >
-                                반려
-                              </button>
-                            )}
-                          {canDelete && !inst.franchise_application_id && (
-                            <button
-                              onClick={() => handleDelete(inst.id)}
-                              className="text-xs text-red-400 border border-red-100 px-2 py-1 rounded-lg hover:bg-red-50"
-                            >
-                              삭제
-                            </button>
-                          )}
-                        </div>
-                      </td>
                     </tr>
-                    {detailInst?.id === inst.id && (
-                      <tr className="bg-blue-50/50 border-b border-slate-100">
-                        <td
-                          colSpan={(canDelete ? 1 : 0) + 1 + columns.length}
-                          className="px-6 py-4"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div className="grid grid-cols-4 gap-4 mb-3 text-sm">
-                            <div>
-                              <p className="text-xs font-semibold text-slate-400 mb-1">상호명</p>
-                              {canEdit ? (
-                                <input
-                                  value={detailDraft?.customer_name ?? inst.customer_name}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) =>
-                                    setDetailDraft((d) =>
-                                      d ? { ...d, customer_name: e.target.value } : d,
-                                    )
-                                  }
-                                  className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                />
-                              ) : (
-                                <p className="text-slate-800">{inst.customer_name}</p>
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold text-slate-400 mb-1">고객명</p>
-                              {canEdit ? (
-                                <input
-                                  value={detailDraft?.contact_name ?? inst.contact_name ?? ""}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) =>
-                                    setDetailDraft((d) =>
-                                      d ? { ...d, contact_name: e.target.value } : d,
-                                    )
-                                  }
-                                  className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                />
-                              ) : (
-                                <p className="text-slate-800">{inst.contact_name || "-"}</p>
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold text-slate-400 mb-1">전화번호</p>
-                              {canEdit ? (
-                                <input
-                                  value={detailDraft?.customer_phone ?? inst.customer_phone ?? ""}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) =>
-                                    setDetailDraft((d) =>
-                                      d ? { ...d, customer_phone: e.target.value } : d,
-                                    )
-                                  }
-                                  className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                />
-                              ) : (
-                                <p className="text-slate-800">
-                                  {inst.customer_phone ? formatPhone(inst.customer_phone) : "-"}
-                                </p>
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold text-slate-400">상태</p>
-                              <p className="text-slate-800">
-                                {statusLabel(inst.status, inst.delivery_type)}
-                              </p>
-                            </div>
-                            <div className="col-span-2">
-                              <p className="text-xs font-semibold text-slate-400 mb-1">주소</p>
-                              {canEdit ? (
-                                <input
-                                  value={detailDraft?.address ?? inst.address ?? ""}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) =>
-                                    setDetailDraft((d) =>
-                                      d ? { ...d, address: e.target.value } : d,
-                                    )
-                                  }
-                                  className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                />
-                              ) : (
-                                <p className="text-slate-800 break-words">{inst.address || "-"}</p>
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold text-slate-400">담당기사</p>
-                              <p className="text-slate-800">{inst.assignee?.name ?? "미배정"}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold text-slate-400">등록자</p>
-                              <p className="text-slate-800">{inst.creator?.name ?? "-"}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold text-slate-400 mb-1">
-                                설치 예정일
-                              </p>
-                              {canEdit ? (
-                                <DatePickerField
-                                  value={detailDraft?.scheduled_date ?? inst.scheduled_date ?? ""}
-                                  onChange={(next) =>
-                                    setDetailDraft((d) => (d ? { ...d, scheduled_date: next } : d))
-                                  }
-                                  ariaLabel="설치 예정일"
-                                  className="w-full"
-                                />
-                              ) : (
-                                <p className="text-slate-800">{inst.scheduled_date || "-"}</p>
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold text-slate-400 mb-1">
-                                희망 시간대
-                              </p>
-                              {canEdit ? (
-                                <input
-                                  type="time"
-                                  value={detailDraft?.scheduled_time ?? inst.scheduled_time ?? ""}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) =>
-                                    setDetailDraft((d) =>
-                                      d ? { ...d, scheduled_time: e.target.value } : d,
-                                    )
-                                  }
-                                  className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                />
-                              ) : (
-                                <p className="text-slate-800">{inst.scheduled_time || "-"}</p>
-                              )}
-                            </div>
-                            <div className="col-span-2">
-                              <p className="text-xs font-semibold text-slate-400 mb-1">제품</p>
-                              {canEdit ? (
-                                <InstallItemsEditor
-                                  items={detailDraft?.items ?? inst.items ?? []}
-                                  onChange={(items) =>
-                                    setDetailDraft((d) => (d ? { ...d, items } : d))
-                                  }
-                                />
-                              ) : (
-                                <p className="text-slate-800">
-                                  {inst.items?.length > 0
-                                    ? inst.items.map((i) => `${i.name} x${i.quantity}`).join(", ")
-                                    : "-"}
-                                </p>
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold text-slate-400">등록일</p>
-                              <p className="text-slate-800">
-                                {format(new Date(inst.created_at), "yyyy-M-d HH:mm", {
-                                  locale: ko,
-                                })}
-                              </p>
-                            </div>
-                            <div className="col-span-4">
-                              <InstallationActivityHistory
-                                installationId={inst.id}
-                                statusLabels={STATUS_LABELS}
-                              />
-                            </div>
-                            <div className="col-span-4">
-                              <NotificationHistory
-                                entityType="install"
-                                entityId={inst.id}
-                                labelMap={STATUS_LABELS}
-                              />
-                            </div>
-                            <div className="col-span-4">
-                              <p className="text-xs font-semibold text-slate-400 mb-1">비고</p>
-                              {canEdit ? (
-                                <textarea
-                                  value={detailDraft?.notes ?? inst.notes ?? ""}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) =>
-                                    setDetailDraft((d) => (d ? { ...d, notes: e.target.value } : d))
-                                  }
-                                  rows={4}
-                                  className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                />
-                              ) : (
-                                <p className="text-slate-800 whitespace-pre-wrap">
-                                  {inst.notes || "-"}
-                                </p>
-                              )}
-                            </div>
-                            {inst.completion_photo_urls &&
-                              inst.completion_photo_urls.length > 0 && (
-                                <div className="col-span-4">
-                                  <p className="text-xs font-semibold text-slate-400 mb-1">
-                                    설치완료 사진
-                                  </p>
-                                  <div className="flex gap-2 flex-wrap">
-                                    {inst.completion_photo_urls.map((url, idx) => (
-                                      <a
-                                        key={url}
-                                        href={url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        download={`${inst.customer_name} ${idx + 1}.jpg`}
-                                      >
-                                        <img
-                                          src={thumbUrl(url, 80)}
-                                          alt="설치완료사진"
-                                          loading="lazy"
-                                          decoding="async"
-                                          className="w-20 h-20 object-cover rounded border border-slate-200"
-                                        />
-                                      </a>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                          </div>
-                          <div className="flex items-center justify-between mt-1">
-                            {inst.franchise_application_id ? (
-                              <button
-                                onClick={() =>
-                                  openFranchiseDetail(inst.franchise_application_id!, inst.id)
-                                }
-                                className="text-xs text-purple-600 border border-purple-200 px-2.5 py-1 rounded-lg hover:bg-purple-50"
-                              >
-                                가맹접수 원본 보기
-                              </button>
-                            ) : inst.woo_customer_id ? (
-                              <button
-                                onClick={() => router.push("/woo")}
-                                className="text-xs text-teal-600 border border-teal-200 px-2.5 py-1 rounded-lg hover:bg-teal-50"
-                              >
-                                우국상 원본 보기
-                              </button>
-                            ) : (
-                              <span />
-                            )}
-                            <div className="flex items-center gap-2">
-                              {["completed", "delivery_sent"].includes(inst.status) && (
-                                <button
-                                  type="button"
-                                  onClick={() => setPostHistoryOpenId(inst.id)}
-                                  className="rounded-lg border border-blue-200 px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50"
-                                >
-                                  완료 이후 메모
-                                </button>
-                              )}
-                              <button
-                                onClick={() => saveRowNow(inst.id)}
-                                disabled={savingRowId === inst.id}
-                                className="flex items-center gap-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 px-3 py-1.5 rounded-lg transition-colors"
-                              >
-                                <Save size={16} /> 저장
-                              </button>
-                              <HistoryButton
-                                onClick={() => setHistoryOpenId(inst.id)}
-                                size="small"
-                              />
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
                   </Fragment>
                 ))}
               </tbody>

@@ -1,13 +1,26 @@
 "use client";
 
-import { XIcon } from "lucide-react";
-import type { EquipmentItem } from "@/types";
+import { useState } from "react";
+import * as Popover from "@radix-ui/react-popover";
+import { XIcon, Save, ChevronDown, ChevronUp } from "lucide-react";
+import { format } from "date-fns";
+import { ko } from "date-fns/locale";
+import { formatPhone, thumbUrl } from "@/lib/format";
+import type { Profile, EquipmentItem } from "@/types";
+import { DatePickerField } from "@/components/ui/DatePickerField";
+import HistoryButton from "@/components/ui/HistoryButton";
+import { NotificationHistory } from "@/components/ui/NotificationHistory";
+import InstallationActivityHistory from "@/components/ui/InstallationActivityHistory";
+import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
+import type { ApprovalNote } from "@/lib/approvalNotes";
+import { InstallItemsEditor } from "./InstallItemsEditor";
 import InstallCompositionSection from "../merchants/InstallCompositionSection";
 import {
   computeEquipmentCategorySummaries,
   type MerchantEquipmentItem,
 } from "../merchants/merchant360";
-import { STATUS_COLORS, statusLabel, statusOrderFor } from "./installStatus";
+import { STATUS_COLORS, STATUS_LABELS, statusLabel, statusOrderFor } from "./installStatus";
+import type { Installation, CompletionApproval } from "./InstallsClient";
 
 // franchise_applications를 "*"로 select한 뒤 sales/cs 조인의 name만 붙인 결과 중,
 // 이 드로어가 실제로 쓰는 필드만 추린 타입. select 컬럼 근거: InstallsClient.tsx의
@@ -29,20 +42,59 @@ export interface InstallFranchiseDetail {
   cs?: { name: string } | null;
 }
 
-export interface InstallStatusInfo {
-  status: string;
-  delivery_type?: string;
+export interface InstallDetailDraft {
+  customer_name: string;
+  contact_name: string;
+  customer_phone: string;
+  address: string;
+  scheduled_date: string;
+  scheduled_time: string;
+  items: { name: string; quantity: number }[];
+  notes: string;
 }
 
 interface Props {
-  loading: boolean;
-  detail: InstallFranchiseDetail | null;
-  installation: InstallStatusInfo | null;
-  merchantId: string | null;
-  installationId?: string;
-  equipment: MerchantEquipmentItem[];
+  installation: Installation;
+  canEdit: boolean;
+  canDelete: boolean;
+  profile: Profile;
+  draft: InstallDetailDraft | null;
+  onDraftChange: (patch: Partial<InstallDetailDraft>) => void;
+  saving: boolean;
+  onSave: () => void;
   onClose: () => void;
+
+  // 가맹접수 원본 섹션 — 드로어가 열릴 때 InstallsClient.tsx의 openFranchiseDetail()이
+  // 이미 조회를 시작한 상태로 넘어온다(쿼리 자체는 그대로, 호출 시점만 옮김).
+  franchiseLoading: boolean;
+  franchiseDetail: InstallFranchiseDetail | null;
+
+  // 실제 설치 구성 섹션
+  merchantId: string | null;
+  equipment: MerchantEquipmentItem[];
+
+  // 완료 승인 워크플로
+  approval: CompletionApproval | undefined;
+  approvalNotes: ApprovalNote[] | undefined;
+  completing: boolean;
+  onApproveCompletion: () => void;
+  onRejectCompletion: () => void;
+
+  onCopyLink: () => void;
+  onReschedule: () => void;
+  onTechReject: () => void;
+  onDelete: () => void;
+  onOpenPostHistory: () => void;
+  onOpenHistory: () => void;
+  onOpenWoo: () => void;
 }
+
+const inputClass =
+  "border-border bg-card text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/30 w-full rounded-lg border px-3 py-2 text-sm outline-none focus-visible:ring-2";
+const secondaryButton =
+  "focus-visible:ring-primary/30 border-border bg-card text-foreground hover:bg-muted inline-flex items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50";
+const primaryButton =
+  "focus-visible:ring-primary/30 border-primary bg-primary text-primary-foreground hover:bg-primary-hover inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50";
 
 // 스테퍼 점 색상: STATUS_COLORS는 옅은 배지용 톤(bg-x-50)이라 진행선에 쓰기엔 흐리다.
 // FranchiseDetailDrawer의 tone()도 배지용 pill과 별개로 solid 색을 따로 갖고 있어, 같은
@@ -113,7 +165,22 @@ function InstallStageProgress({ status, deliveryType }: { status: string; delive
   );
 }
 
-function Field({ label, value }: { label: string; value?: string | null }) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-muted-foreground text-xs">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function ReadValue({ children }: { children: React.ReactNode }) {
+  return <p className="text-foreground text-sm break-words">{children}</p>;
+}
+
+// 가맹접수 원본 섹션 전용 — 값이 없으면 필드 자체를 숨긴다. 원래 모달의
+// "값 없으면 그 필드는 안 보인다" 동작을 그대로 유지한 것(추가/삭제 없이 재배치만).
+function FranchiseField({ label, value }: { label: string; value?: string | null }) {
   if (!value) return null;
   return (
     <div className="flex flex-col gap-1.5">
@@ -124,23 +191,55 @@ function Field({ label, value }: { label: string; value?: string | null }) {
 }
 
 export default function InstallDetailDrawer({
-  loading,
-  detail,
   installation,
-  merchantId,
-  installationId,
-  equipment,
+  canEdit,
+  canDelete,
+  profile,
+  draft,
+  onDraftChange,
+  saving,
+  onSave,
   onClose,
+  franchiseLoading,
+  franchiseDetail,
+  merchantId,
+  equipment,
+  approval,
+  approvalNotes,
+  completing,
+  onApproveCompletion,
+  onRejectCompletion,
+  onCopyLink,
+  onReschedule,
+  onTechReject,
+  onDelete,
+  onOpenPostHistory,
+  onOpenHistory,
+  onOpenWoo,
 }: Props) {
-  const loaded = !loading && !!detail && Object.keys(detail).length > 0;
-  const headerTitle = loading
-    ? "불러오는 중..."
-    : loaded
-      ? detail?.business_name || "-"
-      : "정보를 불러올 수 없습니다";
-  const headerSubtitle = loaded
-    ? [detail?.owner_name, detail?.phone].filter(Boolean).join(" · ")
-    : "";
+  const [franchiseOpen, setFranchiseOpen] = useState(false);
+
+  // 완료 승인/반려 버튼 노출 조건 — InstallsClient.tsx 표의 "관리" 열에 있던 조건을
+  // 그대로 옮긴 것(상태 전이 규칙은 바꾸지 않았다).
+  const canDecideApproval =
+    !!approval &&
+    approval.requested_by !== profile.id &&
+    ((approval.status === "requested" &&
+      (profile.approval_role === "tech_responsible" || profile.approval_role === "team_lead")) ||
+      (profile.approval_role === "team_lead" && approval.status === "responsible_approved"));
+  const showReschedule =
+    canEdit && installation.status !== "completed" && installation.status !== "rejected";
+  const showTechReject =
+    profile.role === "tech" &&
+    !!installation.franchise_application_id &&
+    installation.status !== "rejected" &&
+    installation.status !== "completed";
+  const showDelete = canDelete && !installation.franchise_application_id;
+  const showPostHistory =
+    installation.status === "completed" || installation.status === "delivery_sent";
+
+  const franchiseLoaded =
+    !franchiseLoading && !!franchiseDetail && Object.keys(franchiseDetail).length > 0;
 
   return (
     <div className="fixed inset-0 z-40 bg-slate-900/35" onMouseDown={onClose}>
@@ -155,10 +254,17 @@ export default function InstallDetailDrawer({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div id="install-detail-title" className="text-foreground truncate text-lg font-bold">
-                {headerTitle}
+                {installation.customer_name}
               </div>
-              {headerSubtitle && (
-                <div className="text-muted-foreground mt-1 text-[13.5px]">{headerSubtitle}</div>
+              {(installation.contact_name || installation.customer_phone) && (
+                <div className="text-muted-foreground mt-1 text-[13.5px]">
+                  {[
+                    installation.contact_name,
+                    installation.customer_phone ? formatPhone(installation.customer_phone) : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </div>
               )}
             </div>
             <button
@@ -170,121 +276,415 @@ export default function InstallDetailDrawer({
               <XIcon className="size-4" />
             </button>
           </div>
-          {loaded && installation && (
-            <>
-              <div className="mt-3.5">
-                <span
-                  className={`inline-flex w-fit items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${STATUS_COLORS[installation.status]}`}
-                >
-                  {statusLabel(installation.status, installation.delivery_type)}
-                </span>
-              </div>
-              <div className="mt-4">
-                <InstallStageProgress
-                  status={installation.status}
-                  deliveryType={installation.delivery_type}
-                />
-              </div>
-            </>
-          )}
+          <div className="mt-3.5">
+            <span
+              className={`inline-flex w-fit items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${STATUS_COLORS[installation.status]}`}
+            >
+              {statusLabel(installation.status, installation.delivery_type)}
+            </span>
+          </div>
+          <div className="mt-4">
+            <InstallStageProgress
+              status={installation.status}
+              deliveryType={installation.delivery_type}
+            />
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5">
-          {loading ? (
-            <p className="text-muted-foreground py-8 text-center text-sm">불러오는 중...</p>
-          ) : loaded && detail ? (
-            <div className="flex flex-col gap-5">
-              {[
-                detail.business_name,
-                detail.owner_name,
-                detail.phone,
-                detail.business_number,
-                detail.address,
-                detail.address_detail,
-              ].some(Boolean) && (
-                <div>
-                  <div className="text-foreground mb-2.5 text-[13px] font-bold">기본정보</div>
-                  <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
-                    <Field label="상호명" value={detail.business_name} />
-                    <Field label="대표자" value={detail.owner_name} />
-                    <Field label="연락처" value={detail.phone} />
-                    <Field label="사업자번호" value={detail.business_number} />
-                    <Field label="주소" value={detail.address} />
-                    <Field label="상세주소" value={detail.address_detail} />
-                  </div>
+          <div className="flex flex-col gap-5">
+            <div>
+              <div className="text-foreground mb-2.5 text-[13px] font-bold">설치 정보</div>
+              <div className="flex flex-col gap-3.5">
+                <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
+                  <Field label="상호명">
+                    {canEdit ? (
+                      <input
+                        value={draft?.customer_name ?? installation.customer_name}
+                        onChange={(e) => onDraftChange({ customer_name: e.target.value })}
+                        className={inputClass}
+                      />
+                    ) : (
+                      <ReadValue>{installation.customer_name}</ReadValue>
+                    )}
+                  </Field>
+                  <Field label="고객명">
+                    {canEdit ? (
+                      <input
+                        value={draft?.contact_name ?? installation.contact_name ?? ""}
+                        onChange={(e) => onDraftChange({ contact_name: e.target.value })}
+                        className={inputClass}
+                      />
+                    ) : (
+                      <ReadValue>{installation.contact_name || "-"}</ReadValue>
+                    )}
+                  </Field>
+                  <Field label="전화번호">
+                    {canEdit ? (
+                      <input
+                        value={draft?.customer_phone ?? installation.customer_phone ?? ""}
+                        onChange={(e) => onDraftChange({ customer_phone: e.target.value })}
+                        className={inputClass}
+                      />
+                    ) : (
+                      <ReadValue>
+                        {installation.customer_phone
+                          ? formatPhone(installation.customer_phone)
+                          : "-"}
+                      </ReadValue>
+                    )}
+                  </Field>
+                  <Field label="상태">
+                    <ReadValue>
+                      {statusLabel(installation.status, installation.delivery_type)}
+                    </ReadValue>
+                  </Field>
                 </div>
-              )}
-
-              {[detail.open_date, detail.install_date].some(Boolean) && (
-                <div>
-                  <div className="text-foreground mb-2.5 text-[13px] font-bold">일정</div>
-                  <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-                    <Field label="오픈예정일" value={detail.open_date} />
-                    <Field label="설치발송일" value={detail.install_date} />
-                  </div>
-                </div>
-              )}
-
-              {[detail.van_company, detail.internet].some(Boolean) && (
-                <div>
-                  <div className="text-foreground mb-2.5 text-[13px] font-bold">연동</div>
-                  <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-                    <Field label="VAN사" value={detail.van_company} />
-                    <Field label="인터넷" value={detail.internet} />
-                  </div>
-                </div>
-              )}
-
-              {[detail.sales?.name, detail.cs?.name].some(Boolean) && (
-                <div>
-                  <div className="text-foreground mb-2.5 text-[13px] font-bold">담당</div>
-                  <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-                    <Field label="담당영업" value={detail.sales?.name} />
-                    <Field label="담당CS" value={detail.cs?.name} />
-                  </div>
-                </div>
-              )}
-
-              {detail.equipment_items && detail.equipment_items.length > 0 && (
-                <div>
-                  <p className="text-muted-foreground text-xs font-semibold">
-                    접수 장비 (주문 내역)
-                  </p>
-                  <p className="text-foreground mt-1 text-sm">
-                    {detail.equipment_items
-                      .map((item) => `${item.name} x${item.quantity}`)
-                      .join(", ")}
-                  </p>
-                </div>
-              )}
-
-              {detail.memo && (
-                <div>
-                  <p className="text-muted-foreground text-xs font-semibold">비고</p>
-                  <p className="text-foreground mt-1 text-sm whitespace-pre-wrap">{detail.memo}</p>
-                </div>
-              )}
-
-              <div className="border-border space-y-3 border-t pt-4">
-                <p className="text-muted-foreground text-xs font-semibold">
-                  실제 설치 구성 (현장 확정 기준 — 접수 장비와 다를 수 있음)
-                </p>
-                <InstallCompositionSection
-                  merchantId={merchantId}
-                  installationId={installationId}
-                  equipment={equipment}
-                  categorySummaries={computeEquipmentCategorySummaries(equipment)}
-                  totalEquipmentSets={equipment
-                    .filter((item) => item.status !== "removed")
-                    .reduce((sum, item) => sum + (item.quantity ?? 1), 0)}
-                />
+                <Field label="주소">
+                  {canEdit ? (
+                    <input
+                      value={draft?.address ?? installation.address ?? ""}
+                      onChange={(e) => onDraftChange({ address: e.target.value })}
+                      className={inputClass}
+                    />
+                  ) : (
+                    <ReadValue>{installation.address || "-"}</ReadValue>
+                  )}
+                </Field>
+                <Field label="제품">
+                  {canEdit ? (
+                    <InstallItemsEditor
+                      items={draft?.items ?? installation.items ?? []}
+                      onChange={(items) => onDraftChange({ items })}
+                    />
+                  ) : (
+                    <ReadValue>
+                      {installation.items?.length > 0
+                        ? installation.items.map((i) => `${i.name} x${i.quantity}`).join(", ")
+                        : "-"}
+                    </ReadValue>
+                  )}
+                </Field>
+                <Field label="비고">
+                  {canEdit ? (
+                    <textarea
+                      value={draft?.notes ?? installation.notes ?? ""}
+                      onChange={(e) => onDraftChange({ notes: e.target.value })}
+                      rows={4}
+                      className={`${inputClass} resize-y`}
+                    />
+                  ) : (
+                    <p className="text-foreground text-sm whitespace-pre-wrap">
+                      {installation.notes || "-"}
+                    </p>
+                  )}
+                </Field>
               </div>
             </div>
-          ) : (
-            <p className="text-muted-foreground py-8 text-center text-sm">
-              정보를 불러올 수 없습니다.
-            </p>
+
+            <div>
+              <div className="text-foreground mb-2.5 text-[13px] font-bold">일정·담당</div>
+              <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
+                <Field label="설치 예정일">
+                  {canEdit ? (
+                    <DatePickerField
+                      value={draft?.scheduled_date ?? installation.scheduled_date ?? ""}
+                      onChange={(value) => onDraftChange({ scheduled_date: value })}
+                      ariaLabel="설치 예정일"
+                      className="w-full"
+                    />
+                  ) : (
+                    <ReadValue>{installation.scheduled_date || "-"}</ReadValue>
+                  )}
+                </Field>
+                <Field label="희망 시간대">
+                  {canEdit ? (
+                    <input
+                      type="time"
+                      value={draft?.scheduled_time ?? installation.scheduled_time ?? ""}
+                      onChange={(e) => onDraftChange({ scheduled_time: e.target.value })}
+                      className={inputClass}
+                    />
+                  ) : (
+                    <ReadValue>{installation.scheduled_time || "-"}</ReadValue>
+                  )}
+                </Field>
+                <Field label="담당기사">
+                  <ReadValue>{installation.assignee?.name ?? "미배정"}</ReadValue>
+                </Field>
+                <Field label="등록자">
+                  <ReadValue>{installation.creator?.name ?? "-"}</ReadValue>
+                </Field>
+                <Field label="등록일">
+                  <ReadValue>
+                    {format(new Date(installation.created_at), "yyyy-M-d HH:mm", { locale: ko })}
+                  </ReadValue>
+                </Field>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <InstallationActivityHistory
+                installationId={installation.id}
+                statusLabels={STATUS_LABELS}
+              />
+              <NotificationHistory
+                entityType="install"
+                entityId={installation.id}
+                labelMap={STATUS_LABELS}
+              />
+            </div>
+
+            {installation.completion_photo_urls &&
+              installation.completion_photo_urls.length > 0 && (
+                <div>
+                  <div className="text-foreground mb-2.5 text-[13px] font-bold">설치 사진</div>
+                  <div className="flex flex-wrap gap-2">
+                    {installation.completion_photo_urls.map((url, idx) => (
+                      <a
+                        key={url}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download={`${installation.customer_name} ${idx + 1}.jpg`}
+                      >
+                        <img
+                          src={thumbUrl(url, 80)}
+                          alt="설치완료사진"
+                          loading="lazy"
+                          decoding="async"
+                          className="border-border h-20 w-20 rounded border object-cover"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            <div className="border-border space-y-3 border-t pt-4">
+              <p className="text-muted-foreground text-xs font-semibold">
+                실제 설치 구성 (현장 확정 기준 — 접수 장비와 다를 수 있음)
+              </p>
+              <InstallCompositionSection
+                merchantId={merchantId}
+                installationId={installation.id}
+                equipment={equipment}
+                categorySummaries={computeEquipmentCategorySummaries(equipment)}
+                totalEquipmentSets={equipment
+                  .filter((item) => item.status !== "removed")
+                  .reduce((sum, item) => sum + (item.quantity ?? 1), 0)}
+              />
+            </div>
+
+            {installation.franchise_application_id && (
+              <div className="border-border border-t pt-4">
+                <button
+                  type="button"
+                  onClick={() => setFranchiseOpen((value) => !value)}
+                  className="flex w-full items-center justify-between text-left"
+                  aria-expanded={franchiseOpen}
+                >
+                  <span className="text-foreground text-[13px] font-bold">가맹접수 원본</span>
+                  {franchiseOpen ? (
+                    <ChevronUp className="text-muted-foreground size-4" />
+                  ) : (
+                    <ChevronDown className="text-muted-foreground size-4" />
+                  )}
+                </button>
+                {franchiseOpen && (
+                  <div className="mt-3">
+                    {franchiseLoading ? (
+                      <p className="text-muted-foreground py-6 text-center text-sm">
+                        불러오는 중...
+                      </p>
+                    ) : franchiseLoaded && franchiseDetail ? (
+                      <div className="flex flex-col gap-4">
+                        {[
+                          franchiseDetail.business_name,
+                          franchiseDetail.owner_name,
+                          franchiseDetail.phone,
+                          franchiseDetail.business_number,
+                          franchiseDetail.address,
+                          franchiseDetail.address_detail,
+                        ].some(Boolean) && (
+                          <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
+                            <FranchiseField label="상호명" value={franchiseDetail.business_name} />
+                            <FranchiseField label="대표자" value={franchiseDetail.owner_name} />
+                            <FranchiseField label="연락처" value={franchiseDetail.phone} />
+                            <FranchiseField
+                              label="사업자번호"
+                              value={franchiseDetail.business_number}
+                            />
+                            <FranchiseField label="주소" value={franchiseDetail.address} />
+                            <FranchiseField
+                              label="상세주소"
+                              value={franchiseDetail.address_detail}
+                            />
+                          </div>
+                        )}
+                        {[franchiseDetail.open_date, franchiseDetail.install_date].some(
+                          Boolean,
+                        ) && (
+                          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                            <FranchiseField label="오픈예정일" value={franchiseDetail.open_date} />
+                            <FranchiseField
+                              label="설치발송일"
+                              value={franchiseDetail.install_date}
+                            />
+                          </div>
+                        )}
+                        {[franchiseDetail.van_company, franchiseDetail.internet].some(Boolean) && (
+                          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                            <FranchiseField label="VAN사" value={franchiseDetail.van_company} />
+                            <FranchiseField label="인터넷" value={franchiseDetail.internet} />
+                          </div>
+                        )}
+                        {[franchiseDetail.sales?.name, franchiseDetail.cs?.name].some(Boolean) && (
+                          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                            <FranchiseField label="담당영업" value={franchiseDetail.sales?.name} />
+                            <FranchiseField label="담당CS" value={franchiseDetail.cs?.name} />
+                          </div>
+                        )}
+                        {franchiseDetail.equipment_items &&
+                          franchiseDetail.equipment_items.length > 0 && (
+                            <div>
+                              <p className="text-muted-foreground text-xs font-semibold">
+                                접수 장비 (주문 내역)
+                              </p>
+                              <p className="text-foreground mt-1 text-sm">
+                                {franchiseDetail.equipment_items
+                                  .map((item) => `${item.name} x${item.quantity}`)
+                                  .join(", ")}
+                              </p>
+                            </div>
+                          )}
+                        {franchiseDetail.memo && (
+                          <div>
+                            <p className="text-muted-foreground text-xs font-semibold">비고</p>
+                            <p className="text-foreground mt-1 text-sm whitespace-pre-wrap">
+                              {franchiseDetail.memo}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground py-6 text-center text-sm">
+                        정보를 불러올 수 없습니다.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="border-border flex flex-shrink-0 flex-wrap items-center gap-2 border-t px-6 py-3.5">
+          <button type="button" onClick={onCopyLink} className={secondaryButton}>
+            고객 조회 링크 복사
+          </button>
+          {installation.woo_customer_id && (
+            <button
+              type="button"
+              onClick={onOpenWoo}
+              className="rounded-lg border border-teal-200 px-2.5 py-1.5 text-xs font-semibold text-teal-600 hover:bg-teal-50"
+            >
+              우국상 원본 보기
+            </button>
           )}
+          {showReschedule && (
+            <button
+              type="button"
+              onClick={onReschedule}
+              disabled={!!approval}
+              className="rounded-lg border border-indigo-200 px-2.5 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
+            >
+              일정변경
+            </button>
+          )}
+          {approval && (
+            <>
+              <span className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700">
+                {statusLabel(approval.target_status, installation.delivery_type)}{" "}
+                {approval.status === "requested" ? "1차 승인대기" : "최종 승인대기"}
+              </span>
+              {canDecideApproval && (
+                <>
+                  <button
+                    type="button"
+                    onClick={onRejectCompletion}
+                    disabled={completing}
+                    className="rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    반려
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onApproveCompletion}
+                    disabled={completing}
+                    className="rounded-lg border border-green-600 bg-green-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {statusLabel(approval.target_status, installation.delivery_type)}{" "}
+                    {approval.status === "requested" ? "1차 승인" : "최종 승인"}
+                  </button>
+                </>
+              )}
+            </>
+          )}
+          {!!approvalNotes?.length && (
+            <Popover.Root>
+              <Popover.Trigger asChild>
+                <button
+                  type="button"
+                  className="rounded-lg border border-blue-200 px-2.5 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+                >
+                  비고 {approvalNotes.length}
+                </button>
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Content
+                  align="start"
+                  side="top"
+                  sideOffset={6}
+                  className="z-[80] w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
+                >
+                  <ApprovalNoteTimeline notes={approvalNotes} />
+                </Popover.Content>
+              </Popover.Portal>
+            </Popover.Root>
+          )}
+          {showTechReject && (
+            <button
+              type="button"
+              onClick={onTechReject}
+              className="rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-50"
+            >
+              반려
+            </button>
+          )}
+          {showPostHistory && (
+            <button
+              type="button"
+              onClick={onOpenPostHistory}
+              className="rounded-lg border border-blue-200 px-2.5 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+            >
+              완료 이후 메모
+            </button>
+          )}
+          <HistoryButton onClick={onOpenHistory} size="small" />
+          <div className="flex-1" />
+          {showDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="rounded-lg border border-red-100 px-2.5 py-1.5 text-xs font-semibold text-red-400 hover:bg-red-50"
+            >
+              삭제
+            </button>
+          )}
+          <button type="button" onClick={onSave} disabled={saving} className={primaryButton}>
+            <Save size={14} /> {saving ? "저장 중..." : "저장"}
+          </button>
         </div>
       </aside>
     </div>
