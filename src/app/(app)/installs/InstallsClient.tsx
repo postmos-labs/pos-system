@@ -47,69 +47,23 @@ import {
   rescheduleInstallationByTeamLead,
   sendInstallTransitNotice,
 } from "./actions";
-import InstallCompositionSection from "../merchants/InstallCompositionSection";
+import type { MerchantEquipmentItem } from "../merchants/merchant360";
+import InstallDetailDrawer, { type InstallFranchiseDetail } from "./InstallDetailDrawer";
 import {
-  computeEquipmentCategorySummaries,
-  type MerchantEquipmentItem,
-} from "../merchants/merchant360";
-
-const STATUS_LABELS: Record<string, string> = {
-  received: "접수",
-  preparing: "제품준비",
-  scheduled: "일정확정",
-  in_transit: "이동중",
-  delivery_sent: "택배발송",
-  completed: "설치완료",
-  rejected: "반려",
-};
-const STATUS_ORDER_INSTALL = ["received", "preparing", "scheduled", "in_transit", "completed"];
-const STATUS_ORDER_DELIVERY = ["received", "preparing", "delivery_sent", "completed"];
-
-const STATUS_ORDER_AS = ["received", "scheduled", "in_transit", "completed"];
-const APPROVAL_TARGETS = new Set(["preparing", "scheduled", "delivery_sent"]);
-function statusOrderFor(deliveryType?: string) {
-  if (deliveryType === "delivery") return STATUS_ORDER_DELIVERY;
-  if (deliveryType === "as") return STATUS_ORDER_AS;
-  return STATUS_ORDER_INSTALL;
-}
-
-function statusLabel(status: string, deliveryType?: string) {
-  if (status === "in_transit" && deliveryType === "delivery") return "택배발송";
-  if (status === "completed" && deliveryType === "as") return "AS완료";
-  if (status === "completed" && deliveryType === "delivery") return "완료";
-  return STATUS_LABELS[status] ?? status;
-}
-
-type DeliveryType = "install" | "delivery" | "as" | "name_change" | "transfer";
-const DELIVERY_TYPE_LABELS: Record<DeliveryType, string> = {
-  install: "설치",
-  delivery: "택배발송",
-  as: "AS",
-  name_change: "명변",
-  transfer: "전환",
-};
-const DELIVERY_TYPE_BADGE_COLORS: Record<DeliveryType, string> = {
-  install: "bg-blue-50 text-blue-600 border-blue-200",
-  delivery: "bg-orange-50 text-orange-600 border-orange-200",
-  as: "bg-purple-50 text-purple-600 border-purple-200",
-  name_change: "bg-teal-50 text-teal-600 border-teal-200",
-  transfer: "bg-pink-50 text-pink-600 border-pink-200",
-};
-const DELIVERY_TYPE_SOLID_COLORS: Record<DeliveryType, string> = {
-  install: "bg-blue-600 text-white border-blue-600",
-  delivery: "bg-orange-500 text-white border-orange-500",
-  as: "bg-purple-500 text-white border-purple-500",
-  name_change: "bg-teal-500 text-white border-teal-500",
-  transfer: "bg-pink-500 text-white border-pink-500",
-};
-function deliveryTypeOf(value?: string): DeliveryType {
-  return value === "delivery" || value === "as" || value === "name_change" || value === "transfer"
-    ? value
-    : "install";
-}
+  STATUS_LABELS,
+  STATUS_COLORS,
+  statusLabel,
+  statusOrderFor,
+  APPROVAL_TARGETS,
+  type DeliveryType,
+  DELIVERY_TYPE_LABELS,
+  DELIVERY_TYPE_BADGE_COLORS,
+  DELIVERY_TYPE_SOLID_COLORS,
+  deliveryTypeOf,
+} from "./installStatus";
 
 // merchants/loadMerchant360.ts의 fetchEquipmentRows와 같은 컬럼 세트. 114번 마이그레이션 미적용
-// 환경(카테고리/수량 등 컬럼 없음)에서도 가맹접수 원본 정보 모달이 깨지지 않도록 기본 컬럼으로
+// 환경(카테고리/수량 등 컬럼 없음)에서도 가맹접수 원본 정보 드로어가 깨지지 않도록 기본 컬럼으로
 // 재조회한다.
 const EQUIPMENT_COLUMNS_EXTENDED =
   "id,name,serial_number,status,installed_date,notes,created_at,category,quantity,components,manufacturer,supplier,location,source";
@@ -122,15 +76,6 @@ function isMissingEquipmentColumnError(error: { code?: string; message?: string 
     /column .* does not exist/i.test(error.message ?? "")
   );
 }
-const STATUS_COLORS: Record<string, string> = {
-  received: "bg-gray-100 text-gray-600 border-gray-200",
-  preparing: "bg-blue-50 text-blue-600 border-blue-200",
-  scheduled: "bg-purple-50 text-purple-600 border-purple-200",
-  in_transit: "bg-amber-50 text-amber-600 border-amber-200",
-  delivery_sent: "bg-amber-50 text-amber-600 border-amber-200",
-  completed: "bg-green-50 text-green-600 border-green-200",
-  rejected: "bg-red-50 text-red-600 border-red-200",
-};
 const PRODUCT_CATALOG = [
   "J100 화이트",
   "J100 블랙",
@@ -736,7 +681,7 @@ export default function InstallsClient({
   const [techFilter, setTechFilter] = useState("");
   const [showRejected, setShowRejected] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
-  const [franchiseDetail, setFranchiseDetail] = useState<Record<string, unknown> | null>(null);
+  const [franchiseDetail, setFranchiseDetail] = useState<InstallFranchiseDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   // 가맹접수 원본 정보 모달에서 함께 보여주는 실제 설치 구성(merchant_equipment) 상태.
   // franchise_application_id -> merchants 역조회로 구한 merchantId가 null이면 연결된 가맹점이
@@ -841,7 +786,7 @@ export default function InstallsClient({
         .eq("franchise_application_id", franchiseId)
         .maybeSingle(),
     ]);
-    setFranchiseDetail(data ?? null);
+    setFranchiseDetail((data as InstallFranchiseDetail | null) ?? null);
     setLoadingDetail(false);
 
     const merchantId = merchantRow?.id ?? null;
@@ -1963,91 +1908,18 @@ export default function InstallsClient({
 
       {}
       {franchiseDetail !== null && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-          onClick={() => setFranchiseDetail(null)}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 w-[720px] max-w-[95vw] max-h-[85vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-slate-800">가맹접수 원본 정보</h3>
-              <button
-                onClick={() => setFranchiseDetail(null)}
-                aria-label="닫기"
-                className="text-slate-400 hover:text-slate-600 text-lg leading-none"
-              >
-                ✕
-              </button>
-            </div>
-            {loadingDetail ? (
-              <p className="text-sm text-slate-400 text-center py-8">불러오는 중...</p>
-            ) : franchiseDetail && Object.keys(franchiseDetail).length > 0 ? (
-              <div className="space-y-5">
-                <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                  {[
-                    ["상호명", (franchiseDetail as any).business_name],
-                    ["대표자", (franchiseDetail as any).owner_name],
-                    ["연락처", (franchiseDetail as any).phone],
-                    ["사업자번호", (franchiseDetail as any).business_number],
-                    ["주소", (franchiseDetail as any).address],
-                    ["상세주소", (franchiseDetail as any).address_detail],
-                    ["오픈예정일", (franchiseDetail as any).open_date],
-                    ["설치발송일", (franchiseDetail as any).install_date],
-                    ["VAN사", (franchiseDetail as any).van_company],
-                    ["인터넷", (franchiseDetail as any).internet],
-                    ["담당영업", (franchiseDetail as any).sales?.name],
-                    ["담당CS", (franchiseDetail as any).cs?.name],
-                  ].map(([label, value]) =>
-                    value ? (
-                      <div key={label as string}>
-                        <p className="text-xs text-slate-400 font-medium">{label}</p>
-                        <p className="text-slate-800 break-words">{value as string}</p>
-                      </div>
-                    ) : null,
-                  )}
-                  {(franchiseDetail as any).equipment_items?.length > 0 && (
-                    <div className="col-span-2">
-                      <p className="text-xs text-slate-400 font-medium">접수 장비 (주문 내역)</p>
-                      <p className="text-slate-800">
-                        {(franchiseDetail as any).equipment_items
-                          .map((i: any) => `${i.name} x${i.quantity}`)
-                          .join(", ")}
-                      </p>
-                    </div>
-                  )}
-                  {(franchiseDetail as any).memo && (
-                    <div className="col-span-2">
-                      <p className="text-xs text-slate-400 font-medium">비고</p>
-                      <p className="text-slate-800 whitespace-pre-wrap">
-                        {(franchiseDetail as any).memo}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {}
-                <div className="space-y-3 border-t border-slate-100 pt-4">
-                  <p className="text-xs font-semibold text-slate-400">
-                    실제 설치 구성 (현장 확정 기준 — 접수 장비와 다를 수 있음)
-                  </p>
-                  <InstallCompositionSection
-                    merchantId={compositionMerchantId}
-                    installationId={compositionInstallationId ?? undefined}
-                    equipment={compositionEquipment}
-                    categorySummaries={computeEquipmentCategorySummaries(compositionEquipment)}
-                    totalEquipmentSets={compositionEquipment
-                      .filter((item) => item.status !== "removed")
-                      .reduce((sum, item) => sum + (item.quantity ?? 1), 0)}
-                  />
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-slate-400 text-center py-8">정보를 불러올 수 없습니다.</p>
-            )}
-          </div>
-        </div>
+        <InstallDetailDrawer
+          loading={loadingDetail}
+          detail={franchiseDetail}
+          installation={(() => {
+            const inst = installs.find((item) => item.id === compositionInstallationId);
+            return inst ? { status: inst.status, delivery_type: inst.delivery_type } : null;
+          })()}
+          merchantId={compositionMerchantId}
+          installationId={compositionInstallationId ?? undefined}
+          equipment={compositionEquipment}
+          onClose={() => setFranchiseDetail(null)}
+        />
       )}
 
       {}
