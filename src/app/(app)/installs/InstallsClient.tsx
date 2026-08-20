@@ -1793,7 +1793,6 @@ export default function InstallsClient({
         </div>
       )}
 
-      {}
       {activeDetailInst && (
         <InstallDetailDrawer
           key={activeDetailInst.id}
