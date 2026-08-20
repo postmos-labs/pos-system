@@ -12,11 +12,11 @@ import {
   MERCHANT_OPERATION_STATUS_LABEL,
   type MerchantOperationStatus,
 } from "../merchant360";
-import MerchantInfoCard from "./MerchantInfoCard";
-import InstallInfoCard from "./InstallInfoCard";
-import ContractCard from "./ContractCard";
-import QuickActions from "./QuickActions";
-import InstallCompositionSection from "./InstallCompositionSection";
+import MerchantInfoCard from "../MerchantInfoCard";
+import InstallInfoCard from "../InstallInfoCard";
+import ContractCard from "../ContractCard";
+import QuickActions from "../QuickActions";
+import InstallCompositionSection from "../InstallCompositionSection";
 
 interface Props {
   params: Promise<{ id: string }>;

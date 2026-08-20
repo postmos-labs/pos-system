@@ -4,9 +4,9 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
-import { updateMerchantInstallNote } from "../actions";
-import { caseTypeLabel } from "../loadMerchant360";
-import type { Merchant360Merchant, MerchantDerivedSummary } from "../merchant360";
+import { updateMerchantInstallNote } from "./actions";
+import { caseTypeLabel } from "./loadMerchant360";
+import type { Merchant360Merchant, MerchantDerivedSummary } from "./merchant360";
 
 function DetailField({ label, value }: { label: string; value: string | null | undefined }) {
   return (

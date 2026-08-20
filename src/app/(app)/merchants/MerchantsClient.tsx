@@ -1,11 +1,29 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, Search } from "lucide-react";
+import { format } from "date-fns";
+import { ko } from "date-fns/locale";
+import { Search } from "lucide-react";
 import { deleteMerchants } from "./actions";
-import type { Merchant360Application, Merchant360Merchant, WorkHistoryItem } from "./merchant360";
+import type {
+  Merchant360Application,
+  Merchant360Merchant,
+  MerchantDerivedSummary,
+  MerchantEquipmentCategorySummary,
+  MerchantEquipmentItem,
+  MerchantMemoEntry,
+  MerchantOperationStatus,
+  WorkHistoryItem,
+} from "./merchant360";
+import { MERCHANT_OPERATION_STATUS_CLASS, MERCHANT_OPERATION_STATUS_LABEL } from "./merchant360";
+import MerchantInfoCard from "./MerchantInfoCard";
+import InstallInfoCard from "./InstallInfoCard";
+import ContractCard from "./ContractCard";
+import QuickActions from "./QuickActions";
+import InstallCompositionSection from "./InstallCompositionSection";
+import MerchantMemoSection from "./MerchantMemoSection";
+import MerchantHistorySection from "./MerchantHistorySection";
 import EmptyState from "@/components/ui/EmptyState";
 import BulkDeleteActions from "@/components/ui/BulkDeleteActions";
 import BulkConfirmDialog from "@/components/ui/BulkConfirmDialog";
@@ -16,31 +34,46 @@ interface Props {
   selectedMerchant: Merchant360Merchant | null;
   selectedApplication: Merchant360Application | null;
   history: WorkHistoryItem[];
+  memos: MerchantMemoEntry[];
+  equipment: MerchantEquipmentItem[];
+  equipmentCategorySummaries: MerchantEquipmentCategorySummary[];
+  derivedSummary: MerchantDerivedSummary | null;
   page: number;
   totalPages: number;
 }
 
-function DetailField({ label, value }: { label: string; value: string | null | undefined }) {
+function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2">
-      <p className="text-xs font-semibold text-slate-400">{label}</p>
-      <p className="truncate text-sm text-slate-800" title={value || "-"}>
-        {value || "-"}
-      </p>
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <p className="text-xs text-slate-400">{label}</p>
+      <p className="mt-1 text-lg font-bold text-slate-900">{value}</p>
     </div>
   );
 }
 
-const NON_TERMINAL_STATUS_KEYWORDS = ["완료", "반려", "취소"];
+function formatDateOnly(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  return format(date, "yyyy-MM-dd", { locale: ko });
+}
 
 function MerchantDetailPanel({
   merchant,
   application,
   history,
+  memos,
+  equipment,
+  equipmentCategorySummaries,
+  derivedSummary,
 }: {
   merchant: Merchant360Merchant | null;
   application: Merchant360Application | null;
   history: WorkHistoryItem[];
+  memos: MerchantMemoEntry[];
+  equipment: MerchantEquipmentItem[];
+  equipmentCategorySummaries: MerchantEquipmentCategorySummary[];
+  derivedSummary: MerchantDerivedSummary | null;
 }) {
   if (!merchant) {
     return (
@@ -50,69 +83,72 @@ function MerchantDetailPanel({
     );
   }
 
-  const progressCount = history.filter(
-    (item) => !NON_TERMINAL_STATUS_KEYWORDS.some((keyword) => item.status.includes(keyword)),
-  ).length;
-  const latestHistory = history[0];
+  const operationStatus: MerchantOperationStatus = merchant.operation_status ?? "active";
+  const contractMonths = derivedSummary?.contractMonths ?? null;
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <div className="shrink-0 border-b border-slate-100 px-5 py-4 md:px-6">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <h2 className="truncate text-lg font-bold text-slate-900">{merchant.business_name}</h2>
-            {application && (
-              <span
-                className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${application.status_class}`}
-              >
-                {application.status_label}
-              </span>
-            )}
-          </div>
-          <Link
-            href={`/merchants/${merchant.id}`}
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="truncate text-lg font-bold text-slate-900">{merchant.business_name}</h2>
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${MERCHANT_OPERATION_STATUS_CLASS[operationStatus]}`}
           >
-            통합정보 열기 <ArrowUpRight size={13} />
-          </Link>
+            {MERCHANT_OPERATION_STATUS_LABEL[operationStatus]}
+          </span>
+          {application?.program && (
+            <span className="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-600">
+              {application.program}
+            </span>
+          )}
         </div>
-        {(progressCount > 0 || latestHistory) && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-            {progressCount > 0 && (
-              <span className="rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-amber-600">
-                진행 중 {progressCount}건
-              </span>
-            )}
-            {latestHistory && (
-              <span className="truncate">
-                최근 이력: {latestHistory.title} {latestHistory.summary} · {latestHistory.status} ·{" "}
-                {latestHistory.date.slice(0, 10)}
-              </span>
-            )}
-          </div>
-        )}
+        <p className="mt-1 truncate text-xs text-slate-400">
+          사업자번호 {merchant.business_number || "-"} · 대표자 {merchant.owner_name || "-"}
+        </p>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 md:px-6">
-        <p className="text-sm text-slate-500">가맹점 기본 정보</p>
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <DetailField label="인입경로" value={application?.channel_label} />
-          <DetailField label="대표자" value={merchant.owner_name} />
-          <DetailField label="연락처" value={merchant.phone} />
-          <DetailField label="사업자번호" value={merchant.business_number} />
-          <DetailField label="주소" value={merchant.address} />
-          <DetailField label="상세주소" value={merchant.address_detail} />
-          <DetailField label="CS 담당" value={application?.cs_name} />
-          <DetailField label="기술 담당" value={application?.tech_name} />
-          <DetailField
-            label="인터넷·VAN사"
-            value={[application?.internet, application?.van_company].filter(Boolean).join(" · ")}
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 md:px-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <SummaryCard
+            label="최초 설치일"
+            value={formatDateOnly(derivedSummary?.firstInstalledAt) ?? "-"}
+          />
+          <SummaryCard
+            label="계약기간"
+            value={contractMonths !== null ? `${contractMonths}개월` : "-"}
+          />
+          <SummaryCard label="설치 구성" value={`${derivedSummary?.totalEquipmentSets ?? 0}세트`} />
+          <SummaryCard label="최근 A/S" value={formatDateOnly(derivedSummary?.lastAsAt) ?? "-"} />
+        </div>
+
+        <InstallCompositionSection
+          merchantId={merchant.id}
+          equipment={equipment}
+          categorySummaries={equipmentCategorySummaries}
+          totalEquipmentSets={derivedSummary?.totalEquipmentSets ?? 0}
+        />
+
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <MerchantInfoCard merchant={merchant} programLabel={application?.program ?? null} />
+          <InstallInfoCard
+            merchant={merchant}
+            derivedSummary={derivedSummary}
+            caseType={application?.case_type ?? null}
           />
         </div>
-        <p className="mt-5 text-xs text-slate-400">
-          메모 히스토리, 설치 구성, 관련 업무 이력 등 상세 정보는 통합정보 화면에서 확인·수정할 수
-          있습니다.
-        </p>
+
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <ContractCard
+            merchant={merchant}
+            contractMonths={contractMonths}
+            vanCompany={application?.van_company ?? null}
+            internet={application?.internet ?? null}
+          />
+          <QuickActions franchiseApplicationId={merchant.franchise_application_id} />
+        </div>
+
+        <MerchantMemoSection merchantId={merchant.id} memos={memos} />
+        <MerchantHistorySection history={history} />
       </div>
     </section>
   );
@@ -124,6 +160,10 @@ export default function MerchantsClient({
   selectedMerchant,
   selectedApplication,
   history,
+  memos,
+  equipment,
+  equipmentCategorySummaries,
+  derivedSummary,
   page,
 }: Props) {
   const router = useRouter();
@@ -274,6 +314,10 @@ export default function MerchantsClient({
         merchant={selectedMerchant}
         application={selectedApplication}
         history={history}
+        memos={memos}
+        equipment={equipment}
+        equipmentCategorySummaries={equipmentCategorySummaries}
+        derivedSummary={derivedSummary}
       />
 
       <BulkConfirmDialog

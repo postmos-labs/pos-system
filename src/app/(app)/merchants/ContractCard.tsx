@@ -3,8 +3,8 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { DatePickerField } from "@/components/ui/DatePickerField";
-import { updateMerchantInfo } from "../actions";
-import type { Merchant360Merchant, MerchantOperationStatus } from "../merchant360";
+import { updateMerchantInfo } from "./actions";
+import type { Merchant360Merchant, MerchantOperationStatus } from "./merchant360";
 
 function DetailField({ label, value }: { label: string; value: string | null | undefined }) {
   return (

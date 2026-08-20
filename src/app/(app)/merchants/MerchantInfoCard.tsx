@@ -3,12 +3,12 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AppSelect } from "@/components/ui/AppSelect";
-import { updateMerchantInfo } from "../actions";
+import { updateMerchantInfo } from "./actions";
 import {
   MERCHANT_OPERATION_STATUS_LABEL,
   type Merchant360Merchant,
   type MerchantOperationStatus,
-} from "../merchant360";
+} from "./merchant360";
 
 function DetailField({ label, value }: { label: string; value: string | null | undefined }) {
   return (

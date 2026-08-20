@@ -11,14 +11,14 @@ import {
   updateMerchantEquipmentStatus,
   type MerchantEquipmentInput,
   type MerchantEquipmentStatus as MerchantEquipmentStatusInput,
-} from "../actions";
+} from "./actions";
 import {
   MERCHANT_EQUIPMENT_CATEGORY_LABEL,
   MERCHANT_EQUIPMENT_STATUS_LABEL,
   type MerchantEquipmentCategory,
   type MerchantEquipmentCategorySummary,
   type MerchantEquipmentItem,
-} from "../merchant360";
+} from "./merchant360";
 
 const CATEGORY_OPTIONS = (
   Object.keys(MERCHANT_EQUIPMENT_CATEGORY_LABEL) as MerchantEquipmentCategory[]

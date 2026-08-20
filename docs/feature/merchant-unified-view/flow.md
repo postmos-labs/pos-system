@@ -108,3 +108,55 @@ design.md 1~~6단계 구현 시작. 7~~8단계(115 트리거, 운영 반영)는 
   있음)를 사용자가 직접 확인해야 한다.
 - 임시로 `.env.example`을 `.env`로 복사해 빌드 시도 후 즉시 삭제함 — 저장소에 `.env`가
   남아있지 않음.
+
+## 2026-08-20 (2)
+
+### 구조 변경: `/merchants` 우측 패널을 통합정보 화면 전체로 교체
+
+4단계~6단계에서는 decisions.md의 "같은 폼을 두 곳에서 관리하지 않기 위함" 원칙을 따라
+`/merchants` 우측 패널을 읽기 전용 요약 + `통합정보 열기`(→ `/merchants/[id]`) 버튼으로
+슬림화했다. 그런데 원래 의도는 "가맹점 탭 한 화면에서 다 본다"였고, 버튼으로 페이지를
+넘어가는 구조는 그 의도와 맞지 않는다는 피드백을 받아 우측 패널 자체를 통합정보 화면으로
+바꿨다.
+
+- `[id]/MerchantInfoCard.tsx`, `InstallInfoCard.tsx`, `ContractCard.tsx`, `QuickActions.tsx`,
+  `InstallCompositionSection.tsx`를 `merchants/`로 이동해 `/merchants` 패널과 `/merchants/[id]`
+  페이지가 동일 컴포넌트를 그대로 공유하도록 했다. 두 화면에서 로직을 두 벌로 유지하지 않기
+  위함 — "같은 폼을 두 곳에서 관리하지 않는다"는 원래 원칙은 유지하되, 그 폼이 이제 두 화면에
+  동시에 렌더링된다는 점만 바뀐 것이다. `../actions`, `../merchant360`, `../loadMerchant360`
+  참조는 전부 `./`로 정리했다.
+- `MerchantsClient.tsx`의 `MerchantDetailPanel`을 `[id]/page.tsx`와 같은 구성(요약 헤더 → 설치
+  구성 요약/상세 → 기본정보/설치정보 → 계약조건/빠른 업무 → 메모 히스토리 → 관련 업무 이력)으로
+  전면 교체했다. `SummaryCard`/`formatDateOnly`는 별도 파일로 추출하지 않고 `MerchantsClient.tsx`
+  안에 그대로 복사해 넣었다 — `DetailField`가 이미 여러 카드 컴포넌트에 각각 복사되어 있는
+  기존 패턴을 따른 것으로, 새 공유 모듈을 만들지 않기 위함이다.
+- 패널 폭이 좌측 목록(280~360px) 때문에 `[id]` 전폭 페이지보다 좁으므로, 기본정보/설치정보와
+  계약조건/빠른 업무의 2단 그리드는 `lg:grid-cols-2` 대신 `xl:grid-cols-2`를 썼다(`[id]/page.tsx`는
+  전폭이라 `lg:grid-cols-2` 그대로 유지). `InstallCompositionSection` 내부의 설치 구성 요약 카드
+  그리드(`sm:grid-cols-4`)와 상세 표의 가로 스크롤은 공유 컴포넌트 내부라 손대지 않았다.
+- `MerchantDetailPanel`의 `key={selectedMerchant?.id ?? "empty"}`는 그대로 유지했다. 좌측 목록
+  클릭은 `router.replace`로 같은 페이지 안에서 `id` 쿼리만 바꾸므로, 이 key가 없으면 리렌더링만
+  일어나 `MerchantInfoCard`/`InstallInfoCard`/`ContractCard`/`InstallCompositionSection`의 편집
+  draft state(`useState`로 `merchant`/`item` prop을 초기값 삼아 보유)가 이전 가맹점 값으로 남는다.
+  key가 바뀌면 패널 서브트리 전체가 언마운트·리마운트되어 각 카드가 새 프로트 기준으로 다시
+  초기화된다.
+- `page.tsx`(목록)에서 `MerchantsClient`로 `memos`/`equipment`/`equipmentCategorySummaries`/
+  `derivedSummary`를 다시 전달하도록 Props를 확장했다 — 6단계에서 뺐던 것을 되돌린 것.
+- `/merchants/[id]`는 그대로 유지, `[id]/page.tsx`의 컴포넌트 import 경로만 `./`에서 `../`로
+  바꿨다. `navItems.ts`의 `breadcrumbForPath` 분기는 변경 없음.
+- 새 서버 액션/쿼리는 추가하지 않았다. `actions.ts`에 5단계에서 만든 액션들을 그대로 재사용.
+
+### 검증
+
+- `node_modules/.bin/tsc --noEmit`: 통과.
+- `node_modules/.bin/eslint "src/app/(app)/merchants/**/*.{ts,tsx}"`: 통과.
+- `npx prettier --check`(변경 파일 전체): 통과 (`MerchantsClient.tsx`는 최초 작성 시 import 정렬이
+  어긋나 `prettier --write`로 재포맷).
+- `npm run build`: Turbopack 컴파일 + TypeScript 단계까지 통과, 이후 페이지 데이터 수집 단계에서
+  기존과 동일하게 `supabaseUrl is required`로 중단됨 — dev Supabase 자격증명이 없는 환경 제약으로
+  이번 변경과 무관.
+- key 리셋 동작(가맹점 A → B 전환 시 A의 편집 draft가 B에 남지 않는지)은 React의 key 시맨틱상
+  코드 레벨에서는 보장되지만(key 변경 시 서브트리 전체 언마운트), dev Supabase 자격증명이 없어
+  로그인 후 브라우저로 직접 클릭해 확인하지는 못했다. 사용자가 `/merchants`에서 가맹점 A를 선택해
+  기본정보 카드를 "수정" 상태로 열어 값을 바꾼 뒤 저장하지 않고 가맹점 B로 전환했을 때, B의 패널이
+  "수정" 모드가 아닌 읽기 전용 상태로 뜨고 입력값도 B의 실제 값으로 나오는지 확인해달라.

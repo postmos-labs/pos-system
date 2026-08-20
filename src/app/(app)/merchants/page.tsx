@@ -54,6 +54,10 @@ export default async function MerchantsPage({ searchParams }: Props) {
         selectedMerchant={selected?.merchant ?? null}
         selectedApplication={selected?.application ?? null}
         history={selected?.history ?? []}
+        memos={selected?.memos ?? []}
+        equipment={selected?.equipment ?? []}
+        equipmentCategorySummaries={selected?.equipmentCategorySummaries ?? []}
+        derivedSummary={selected?.derivedSummary ?? null}
         page={page}
         totalPages={totalPages}
       />
