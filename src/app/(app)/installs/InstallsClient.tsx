@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef, memo, Fragment } from "react";
 import { useRouter } from "next/navigation";
+import * as Popover from "@radix-ui/react-popover";
 import { createClient } from "@/lib/supabase/client";
 import { formatPhone, thumbUrl } from "@/lib/format";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
@@ -3098,14 +3099,25 @@ export default function InstallsClient({
                             </>
                           )}
                           {!!approvalNoteHistory[inst.id]?.length && (
-                            <details className="relative">
-                              <summary className="cursor-pointer list-none rounded-lg border border-blue-200 px-2 py-1 text-xs text-blue-600">
-                                비고 {approvalNoteHistory[inst.id]!.length}
-                              </summary>
-                              <div className="absolute right-0 z-20 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
-                                <ApprovalNoteTimeline notes={approvalNoteHistory[inst.id]!} />
-                              </div>
-                            </details>
+                            <Popover.Root>
+                              <Popover.Trigger asChild>
+                                <button
+                                  type="button"
+                                  className="rounded-lg border border-blue-200 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
+                                >
+                                  비고 {approvalNoteHistory[inst.id]!.length}
+                                </button>
+                              </Popover.Trigger>
+                              <Popover.Portal>
+                                <Popover.Content
+                                  align="end"
+                                  sideOffset={6}
+                                  className="z-[80] w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
+                                >
+                                  <ApprovalNoteTimeline notes={approvalNoteHistory[inst.id]!} />
+                                </Popover.Content>
+                              </Popover.Portal>
+                            </Popover.Root>
                           )}
                           {profile.role === "tech" &&
                             inst.franchise_application_id &&
