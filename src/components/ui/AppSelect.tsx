@@ -54,7 +54,7 @@ export function AppSelect({
         <Select.Content
           position="popper"
           sideOffset={6}
-          className="z-50 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-slate-200 bg-white p-1.5 text-sm text-slate-700 shadow-lg"
+          className="z-[80] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-slate-200 bg-white p-1.5 text-sm text-slate-700 shadow-lg"
         >
           <Select.Viewport className="max-h-72">
             {options.map((option) => {
