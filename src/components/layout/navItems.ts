@@ -108,6 +108,8 @@ export function isNavItemActive(pathname: string, href: string) {
 }
 
 export function breadcrumbForPath(pathname: string) {
+  if (pathname.startsWith("/merchants/")) return ["가맹점", "통합정보"];
+
   const common = COMMON_NAV.find((item) => isNavItemActive(pathname, item.href));
   if (common) return [common.label];
 

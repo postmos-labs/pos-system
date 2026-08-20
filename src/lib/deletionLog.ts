@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export type DeletionEntityType =
-  "franchise_application" | "installation" | "change_request" | "merchant";
+  "franchise_application" | "installation" | "change_request" | "merchant" | "merchant_equipment";
 
 type Snapshot = Record<string, unknown>;
 

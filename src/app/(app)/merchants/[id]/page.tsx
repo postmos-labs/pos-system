@@ -3,20 +3,42 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
-import { ArrowLeft, MapPin, Phone } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { loadMerchant360 } from "../loadMerchant360";
+import MerchantMemoSection from "../MerchantMemoSection";
+import MerchantHistorySection from "../MerchantHistorySection";
 import {
-  STATUS_LABEL,
-  STATUS_COLOR,
-  TYPE_LABEL,
-  type TicketStatus,
-  type TicketType,
-} from "@/types";
+  MERCHANT_OPERATION_STATUS_CLASS,
+  MERCHANT_OPERATION_STATUS_LABEL,
+  type MerchantOperationStatus,
+} from "../merchant360";
+import MerchantInfoCard from "./MerchantInfoCard";
+import InstallInfoCard from "./InstallInfoCard";
+import ContractCard from "./ContractCard";
+import QuickActions from "./QuickActions";
+import InstallCompositionSection from "./InstallCompositionSection";
 
 interface Props {
   params: Promise<{ id: string }>;
 }
 
-export default async function MerchantDetailPage({ params }: Props) {
+function formatDateOnly(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  return format(date, "yyyy-MM-dd", { locale: ko });
+}
+
+function SummaryCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <p className="text-xs text-slate-400">{label}</p>
+      <p className="mt-1 text-lg font-bold text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+export default async function MerchantUnifiedPage({ params }: Props) {
   const { id } = await params;
   const supabase = await createClient();
 
@@ -25,91 +47,90 @@ export default async function MerchantDetailPage({ params }: Props) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: merchant }, { data: tickets }] = await Promise.all([
-    supabase
-      .from("merchants")
-      .select("*, sales:profiles!merchants_sales_id_fkey(name)")
-      .eq("id", id)
-      .single(),
-    supabase
-      .from("tickets")
-      .select("id, title, type, status, created_at")
-      .eq("merchant_id", id)
-      .order("created_at", { ascending: false }),
-  ]);
+  const {
+    merchant,
+    application,
+    history,
+    memos,
+    equipment,
+    equipmentCategorySummaries,
+    derivedSummary,
+  } = await loadMerchant360(supabase, id);
 
   if (!merchant) notFound();
 
+  const operationStatus: MerchantOperationStatus = merchant.operation_status ?? "active";
+  const contractMonths = derivedSummary?.contractMonths ?? null;
+
   return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto">
+    <div className="flex flex-col gap-4 p-4 md:p-6">
       <Link
         href="/merchants"
-        className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4"
+        className="inline-flex w-fit items-center gap-1 text-sm text-slate-500 hover:text-slate-700"
       >
         <ArrowLeft size={14} /> 가맹점 목록
       </Link>
 
-      <div className="bg-white rounded-xl border border-slate-200 p-5 mb-5">
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <h1 className="text-lg font-bold text-slate-900">{merchant.business_name}</h1>
-            <p className="text-xs text-slate-500 mt-0.5">{merchant.owner_name}</p>
-          </div>
-          {merchant.pos_model && (
-            <span className="text-xs bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-full">
-              {merchant.pos_model}
+      <section className="rounded-2xl border border-slate-200 bg-white px-5 py-5 md:px-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-xl font-bold text-slate-900">{merchant.business_name}</h1>
+          <span className="text-sm text-slate-400">
+            사업자번호 {merchant.business_number || "-"} · 대표자 {merchant.owner_name || "-"}
+          </span>
+          <span
+            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${MERCHANT_OPERATION_STATUS_CLASS[operationStatus]}`}
+          >
+            {MERCHANT_OPERATION_STATUS_LABEL[operationStatus]}
+          </span>
+          {application?.program && (
+            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-600">
+              {application.program}
             </span>
           )}
         </div>
 
-        <div className="flex flex-col gap-1.5 text-sm text-slate-700">
-          <span className="flex items-center gap-1.5">
-            <Phone size={13} />
-            {merchant.phone}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <MapPin size={13} />
-            {merchant.address}
-            {merchant.address_detail ? ` ${merchant.address_detail}` : ""}
-          </span>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <SummaryCard
+            label="최초 설치일"
+            value={formatDateOnly(derivedSummary?.firstInstalledAt) ?? "-"}
+          />
+          <SummaryCard
+            label="계약기간"
+            value={contractMonths !== null ? `${contractMonths}개월` : "-"}
+          />
+          <SummaryCard label="설치 구성" value={`${derivedSummary?.totalEquipmentSets ?? 0}세트`} />
+          <SummaryCard label="최근 A/S" value={formatDateOnly(derivedSummary?.lastAsAt) ?? "-"} />
         </div>
+      </section>
 
-        <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-100 text-xs text-slate-500">
-          <span>사업자번호: {merchant.business_number || "-"}</span>
-          <span>서비스 종류: {merchant.service_type || "-"}</span>
-          <span>담당 영업: {merchant.sales?.name ?? "-"}</span>
-          <span>등록일: {format(new Date(merchant.created_at), "yyyy.M.d", { locale: ko })}</span>
-        </div>
+      <InstallCompositionSection
+        merchantId={merchant.id}
+        equipment={equipment}
+        categorySummaries={equipmentCategorySummaries}
+        totalEquipmentSets={derivedSummary?.totalEquipmentSets ?? 0}
+      />
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <MerchantInfoCard merchant={merchant} programLabel={application?.program ?? null} />
+        <InstallInfoCard
+          merchant={merchant}
+          derivedSummary={derivedSummary}
+          caseType={application?.case_type ?? null}
+        />
       </div>
 
-      <h2 className="text-sm font-semibold text-slate-900 mb-2">
-        작업 내역 ({tickets?.length ?? 0})
-      </h2>
-      <div className="flex flex-col gap-2">
-        {(tickets ?? []).map((t) => (
-          <Link
-            key={t.id}
-            href={`/tickets/${t.id}`}
-            className="flex items-center justify-between bg-white rounded-lg border border-slate-200 px-3 py-2.5 hover:shadow-sm transition-shadow"
-          >
-            <div>
-              <p className="text-sm font-medium text-slate-900">{t.title}</p>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {TYPE_LABEL[t.type as TicketType]} ·{" "}
-                {format(new Date(t.created_at), "M/d", { locale: ko })}
-              </p>
-            </div>
-            <span
-              className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[t.status as TicketStatus]}`}
-            >
-              {STATUS_LABEL[t.status as TicketStatus]}
-            </span>
-          </Link>
-        ))}
-        {(!tickets || tickets.length === 0) && (
-          <p className="text-sm text-slate-400 text-center py-6">등록된 작업이 없습니다</p>
-        )}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <ContractCard
+          merchant={merchant}
+          contractMonths={contractMonths}
+          vanCompany={application?.van_company ?? null}
+          internet={application?.internet ?? null}
+        />
+        <QuickActions franchiseApplicationId={merchant.franchise_application_id} />
       </div>
+
+      <MerchantMemoSection merchantId={merchant.id} memos={memos} />
+      <MerchantHistorySection history={history} />
     </div>
   );
 }
