@@ -1922,7 +1922,6 @@ export default function InstallsClient({
         />
       )}
 
-      {}
       {notePrompt && (
         <FormModal
           title={notePrompt.title}

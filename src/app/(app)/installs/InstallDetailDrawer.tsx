@@ -7,13 +7,7 @@ import {
   computeEquipmentCategorySummaries,
   type MerchantEquipmentItem,
 } from "../merchants/merchant360";
-import {
-  STATUS_COLORS,
-  STATUS_ORDER_INSTALL,
-  STATUS_LABELS,
-  statusLabel,
-  statusOrderFor,
-} from "./installStatus";
+import { STATUS_COLORS, statusLabel, statusOrderFor } from "./installStatus";
 
 // franchise_applications를 "*"로 select한 뒤 sales/cs 조인의 name만 붙인 결과 중,
 // 이 드로어가 실제로 쓰는 필드만 추린 타입. select 컬럼 근거: InstallsClient.tsx의
@@ -50,10 +44,6 @@ interface Props {
   onClose: () => void;
 }
 
-// StageProgress(FranchiseDetailDrawer)와 같은 5단계 축. STATUS_ORDER_INSTALL의 라벨을
-// 그대로 쓴다(접수/물품준비/일정확정/이동중/완료).
-const STAGES = STATUS_ORDER_INSTALL.map((status) => STATUS_LABELS[status]);
-
 // 스테퍼 점 색상: STATUS_COLORS는 옅은 배지용 톤(bg-x-50)이라 진행선에 쓰기엔 흐리다.
 // FranchiseDetailDrawer의 tone()도 배지용 pill과 별개로 solid 색을 따로 갖고 있어, 같은
 // 방식으로 상태별 solid 톤만 별도로 둔다(배지 자체는 STATUS_COLORS를 그대로 재사용).
@@ -67,26 +57,19 @@ const STAGE_TONE: Record<string, { solid: string; border: string }> = {
 };
 const DEFAULT_STAGE_TONE = { solid: "bg-zinc-500", border: "border-zinc-500" };
 
-// delivery_type='delivery'(택배발송) 흐름은 접수→물품준비→택배발송→완료 4단계뿐이라
-// (일정확정·이동중이 없음) STAGES 5단계 축에 상태값이 그대로 대응되지 않는다. 그래서
-// statusOrderFor(deliveryType)로 해당 배송유형의 실제 상태 순서를 구한 뒤, 그 안에서
-// 현재 상태의 위치를 5단계 축에 비례 배분한다 — 택배발송(delivery_sent, 구버전 데이터의
-// in_transit 포함)은 축 뒤쪽("이동중" 위치)에 놓이고 "일정확정" 노드는 지나간 것으로만
-// 표시된다. 정확한 상태 문구는 별도 뱃지가 statusLabel()로 그대로 보여주므로, 스테퍼는
-// 대략적인 진행 위치를 보여주는 보조 요소로만 근사치를 허용했다. status가 순서에 없는
-// 값(예: rejected)이면 진행 표시를 하지 않는다(null).
-function stageIndex(status: string, deliveryType?: string) {
+// 배송유형마다 실제 상태 흐름이 다르다 — 설치는 5단계(접수→제품준비→일정확정→이동중→설치완료),
+// 택배발송은 4단계(접수→제품준비→택배발송→완료), AS는 4단계(접수→일정확정→이동중→AS완료).
+// 고정된 설치 5단계 축에 다른 유형을 비례 배분하면 뱃지와 스테퍼가 서로 다른 단계를 가리킨다
+// (예: AS 일정확정 건이 "제품준비"에 찍힘). 그래서 statusOrderFor(deliveryType)가 준 순서를
+// 그대로 축으로 그리고, 라벨도 statusLabel(deliveryType)로 해당 유형의 문구를 쓴다.
+// status가 순서에 없는 값(예: rejected)이면 진행 표시를 하지 않는다(null).
+function InstallStageProgress({ status, deliveryType }: { status: string; deliveryType?: string }) {
   const order = statusOrderFor(deliveryType);
   const position = order.indexOf(status);
-  if (position < 0) return null;
-  if (order.length <= 1) return 0;
-  return Math.round((position / (order.length - 1)) * (STAGES.length - 1));
-}
-
-function InstallStageProgress({ status, deliveryType }: { status: string; deliveryType?: string }) {
-  const stage = stageIndex(status, deliveryType);
+  const stage = position < 0 ? null : position;
   const tone = STAGE_TONE[status] ?? DEFAULT_STAGE_TONE;
-  const fraction = (index: number) => index / (STAGES.length - 1);
+  const lastIndex = Math.max(1, order.length - 1);
+  const fraction = (index: number) => index / lastIndex;
   return (
     <div className="flex w-full flex-col gap-1.5">
       <div className="relative h-2.5 w-full">
@@ -97,9 +80,9 @@ function InstallStageProgress({ status, deliveryType }: { status: string; delive
             style={{ width: `${fraction(stage) * 100}%` }}
           />
         )}
-        {STAGES.map((label, index) => (
+        {order.map((stageStatus, index) => (
           <div
-            key={label}
+            key={stageStatus}
             className={`absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 ${
               stage !== null && index < stage
                 ? `${tone.solid} ${tone.border}`
@@ -112,17 +95,17 @@ function InstallStageProgress({ status, deliveryType }: { status: string; delive
         ))}
       </div>
       <div className="relative h-3 w-full">
-        {STAGES.map((label, index) => (
+        {order.map((stageStatus, index) => (
           <span
-            key={label}
-            className={`text-muted-foreground absolute top-0 text-[9.5px] whitespace-nowrap ${index === 0 ? "left-0" : index === STAGES.length - 1 ? "right-0" : "-translate-x-1/2"}`}
+            key={stageStatus}
+            className={`text-muted-foreground absolute top-0 text-[9.5px] whitespace-nowrap ${index === 0 ? "left-0" : index === order.length - 1 ? "right-0" : "-translate-x-1/2"}`}
             style={
-              index === 0 || index === STAGES.length - 1
+              index === 0 || index === order.length - 1
                 ? undefined
                 : { left: `${fraction(index) * 100}%` }
             }
           >
-            {label}
+            {statusLabel(stageStatus, deliveryType)}
           </span>
         ))}
       </div>
