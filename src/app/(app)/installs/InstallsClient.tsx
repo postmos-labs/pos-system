@@ -177,6 +177,13 @@ interface CreateFormProps {
   onCancel: () => void;
   onClose: () => void;
   deliveryOnly?: boolean;
+  initial?: {
+    customerName: string;
+    contactName: string;
+    customerPhone: string;
+    address: string;
+    deliveryType: DeliveryType;
+  };
 }
 const CreateForm = memo(function CreateForm({
   techUsers,
@@ -185,19 +192,20 @@ const CreateForm = memo(function CreateForm({
   onCancel,
   onClose,
   deliveryOnly,
+  initial,
 }: CreateFormProps) {
   const [form, setForm] = useState({
-    customerName: "",
-    contactName: "",
-    customerPhone: "",
-    address: "",
+    customerName: initial?.customerName ?? "",
+    contactName: initial?.contactName ?? "",
+    customerPhone: initial?.customerPhone ?? "",
+    address: initial?.address ?? "",
     assignedTo: "",
     notes: "",
     scheduledDate: "",
     scheduledTime: "",
   });
   const [deliveryType, setDeliveryType] = useState<DeliveryType>(
-    deliveryOnly ? "delivery" : "install",
+    initial?.deliveryType ?? (deliveryOnly ? "delivery" : "install"),
   );
   const [cartProduct, setCartProduct] = useState(PRODUCT_CATALOG[0]);
   const [cartCustomName, setCartCustomName] = useState("");
@@ -523,6 +531,53 @@ export default function InstallsClient({
     if (target.status === "completed") setShowCompleted(true);
     document.getElementById(`install-card-${highlightId}`)?.scrollIntoView({ block: "center" });
   }, [highlightId, installs]);
+  const [createPrefill, setCreatePrefill] = useState<{
+    customerName: string;
+    contactName: string;
+    customerPhone: string;
+    address: string;
+    deliveryType: DeliveryType;
+  } | null>(null);
+  const prefillAppliedRef = useRef(false);
+  useEffect(() => {
+    if (prefillAppliedRef.current || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const newParam = params.get("new");
+    if (newParam !== "as" && newParam !== "delivery") return;
+    prefillAppliedRef.current = true;
+    const merchantId = params.get("merchantId");
+
+    async function loadPrefill() {
+      let seed = {
+        customerName: "",
+        contactName: "",
+        customerPhone: "",
+        address: "",
+        deliveryType: newParam as DeliveryType,
+      };
+      if (merchantId) {
+        const supabase = createClient();
+        const { data } = await supabase
+          .from("merchants")
+          .select("business_name, contact_name, contact_phone, phone, address, address_detail")
+          .eq("id", merchantId)
+          .maybeSingle();
+        if (data) {
+          seed = {
+            customerName: data.business_name ?? "",
+            contactName: data.contact_name ?? "",
+            customerPhone: data.contact_phone ?? data.phone ?? "",
+            address: [data.address, data.address_detail].filter(Boolean).join(" "),
+            deliveryType: newParam as DeliveryType,
+          };
+        }
+      }
+      setCreatePrefill(seed);
+      setShowForm(true);
+      router.replace(window.location.pathname);
+    }
+    loadPrefill();
+  }, [router]);
   const [sendingTransit, setSendingTransit] = useState(false);
   const [scheduleModal, setScheduleModal] = useState<{
     id: string;
@@ -2063,7 +2118,10 @@ export default function InstallsClient({
           </button>
           {canEdit && !mineOnly && (
             <button
-              onClick={() => setShowForm((v) => !v)}
+              onClick={() => {
+                setShowForm((v) => !v);
+                setCreatePrefill(null);
+              }}
               className="flex items-center gap-2 bg-blue-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-blue-700 font-semibold"
             >
               <Plus size={16} />새 설치건
@@ -2123,9 +2181,16 @@ export default function InstallsClient({
           techUsers={techUsers}
           onSubmit={handleCreate}
           submitting={submitting}
-          onCancel={() => setShowForm(false)}
-          onClose={() => setShowForm(false)}
+          onCancel={() => {
+            setShowForm(false);
+            setCreatePrefill(null);
+          }}
+          onClose={() => {
+            setShowForm(false);
+            setCreatePrefill(null);
+          }}
           deliveryOnly={deliveryOnly}
+          initial={createPrefill ?? undefined}
         />
       )}
 

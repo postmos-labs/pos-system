@@ -32,16 +32,26 @@ function ActionButton({
 }
 
 export default function QuickActions({
+  merchantId,
   franchiseApplicationId,
 }: {
+  merchantId: string;
   franchiseApplicationId?: string | null;
 }) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white px-5 py-4 md:px-6">
       <h3 className="text-sm font-bold text-slate-900">빠른 업무</h3>
       <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <ActionButton href="/installs" label="A/S 접수" icon={Wrench} />
-        <ActionButton href="/installs/delivery" label="장비 추가출고" icon={PackagePlus} />
+        <ActionButton
+          href={`/installs?new=as&merchantId=${merchantId}`}
+          label="A/S 접수"
+          icon={Wrench}
+        />
+        <ActionButton
+          href={`/installs/delivery?new=delivery&merchantId=${merchantId}`}
+          label="장비 추가출고"
+          icon={PackagePlus}
+        />
         <ActionButton href="/changes" label="변경 접수" icon={FileEdit} />
         <ActionButton
           href={franchiseApplicationId ? `/franchise?id=${franchiseApplicationId}` : "#"}

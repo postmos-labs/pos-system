@@ -399,3 +399,80 @@ UPDATE/INSERT가 되고 → 해당 가맹점이 이미 `merchants`로 이관되�
 - 사용자가 직접 확인해야 하는 것: `/franchise`에서 신규 접수를 등록/수정할 때 "사용 프로그램"
   선택이 저장되는지, 그 접수가 기술지원 이관되어 `merchants` 행이 생긴 뒤 `/merchants`,
   `/merchants/[id]` 헤더에 프로그램 뱃지로 뜨는지.
+
+## 2026-08-21 (2): 미뤄둔 항목 2 — 빠른 업무 버튼에 가맹점 정보 프리필
+
+decisions.md 2026-08-20 "빠른 업무" 절이 "프리필 쿼리 파라미터는 받는 쪽이 아직 소비하지 않으므로
+이번에 붙이지 않는다"고 범위를 좁혀뒀던 부분을 이번에 연결했다. 지시대로 A/S 접수(`/installs`)와
+장비 추가출고(`/installs/delivery`) 두 버튼만 다루고, 변경 접수(`/changes`)·접수 원본 보기
+(`/franchise?id=`)는 손대지 않았다. `handleSubmit`/`createInstallation`(설치건 생성·승인·알림톡·
+재고차감 로직)은 일절 건드리지 않았고, 폼에 초기값을 채우는 부분만 추가했다.
+
+- `QuickActions.tsx`: `merchantId: string`(필수 prop)을 추가해 A/S 접수 링크를
+  `/installs?new=as&merchantId=<id>`, 장비 추가출고 링크를
+  `/installs/delivery?new=delivery&merchantId=<id>`로 바꿨다. 두 호출부
+  (`merchants/[id]/page.tsx`, `MerchantsClient.tsx`)는 이미 `merchant.id`를 들고 있어 그대로
+  넘겼다.
+- `InstallsClient.tsx`는 URL 쿼리를 이미 `useSearchParams` 훅이 아니라 마운트 시
+  `window.location.search`를 직접 파싱하는 방식으로 다루고 있었다(`highlightId` 로직,
+  `/installs?id=` 딥링크용). 새 `useSearchParams`를 도입하지 않고 같은 관례를 그대로 따랐다 —
+  Next.js 16(이 저장소가 쓰는 버전) 문서상 `useSearchParams`는 정적 프리렌더 페이지에서
+  `Suspense` 경계 없이 쓰면 빌드가 실패할 수 있는데, `/installs`·`/installs/delivery` 두 페이지
+  모두 `createClient()`(서버, `next/headers`의 `cookies()` 사용)로 이미 완전히 동적 렌더링되므로
+  이 문제가 실제로 발생하진 않았을 것 같지만, 굳이 새 훅과 그 제약을 끌어들이는 대신 기존
+  코드와 같은 방식을 재사용하는 쪽이 "부작용 여지를 줄이라"는 지시와도 맞다고 판단했다.
+- `highlightId` 이펙트 바로 아래에 `prefillAppliedRef`로 1회만 실행되는 새 `useEffect`를
+  추가했다. `new` 쿼리가 `"as"`/`"delivery"`가 아니면 즉시 return(다른 페이지 진입 시 아무 동작
+  없음). 맞으면:
+  - `merchantId`가 있으면 `supabase.from("merchants").select("business_name, contact_name,
+contact_phone, phone, address, address_detail").eq("id", merchantId).maybeSingle()`로 직접
+    조회(기존 supabase 클라이언트 재사용, 새 서버 액션 없음).
+  - 매핑: `customerName ← business_name`, `contactName ← contact_name`,
+    `customerPhone ← contact_phone ?? phone`, `address ← [address, address_detail]`을
+    공백으로 join, `deliveryType ← new` 파라미터 값 그대로(`"as"`/`"delivery"`는 이미
+    `DeliveryType` 유니온의 유효값).
+  - 조회 실패(`data`가 null — 행 없음, 권한, 컬럼 없음 등 어떤 이유든)나 `merchantId` 자체가
+    없으면 전부 빈 문자열인 seed를 그대로 쓴다 — 별도 에러 토스트나 분기 없이 "조용히 넘어가고
+    폼만 연다"는 지시를 그대로 따랐다.
+  - 마지막에 `setShowForm(true)` + `router.replace(window.location.pathname)`로 쿼리를 제거한다.
+    조회를 먼저 끝낸 뒤에 폼을 열도록 순서를 잡았다 — `showForm`을 먼저 true로 해버리면
+    `CreateForm`이 빈 초기값으로 먼저 마운트되고, 뒤늦게 도착한 조회 결과를 반영할 방법이
+    없어진다(`CreateForm`의 `useState` 초기값은 마운트 시 한 번만 평가됨).
+- `CreateForm`(내부 컴포넌트, `handleSubmit`이 사는 곳)은 새 `initial?` prop을 받아 `form`/
+  `deliveryType` 두 `useState`의 초기값에만 사용한다. `handleSubmit`과 `onSubmit` 호출부,
+  `createInstallation` 페이로드는 전혀 건드리지 않았다 — `initial`은 "처음 렌더링될 때 입력칸에
+  뭐가 채워져 있는가"에만 관여하고 제출 로직과는 완전히 분리돼 있다.
+- **스테일 프리필 방지**: 프리필로 열린 폼을 닫은 뒤(취소/X) 사용자가 상단 "새 설치건" 버튼으로
+  다시 수동으로 폼을 열면, 이전 조회 결과(`createPrefill` state)가 남아있어 그대로 다시 채워지는
+  문제가 있었다. `CreateForm`의 `onCancel`/`onClose`와 "새 설치건" 토글 버튼 onClick 세 곳 모두
+  `setCreatePrefill(null)`을 같이 호출하도록 해서, 수동으로 연 폼은 항상 빈 폼으로 시작하게
+  했다. 등록 성공 시(`handleCreate` 내부 `setShowForm(false)`)는 `createPrefill`을 지우지
+  않는데, 어차피 다음에 폼을 여는 경로(수동 버튼 또는 새 쿼리 진입)가 매번 `createPrefill`을
+  덮어쓰거나 지우므로 문제되지 않는다.
+
+### 검증
+
+- `node_modules/.bin/tsc --noEmit`: 통과.
+- ESLint 기준치 비교: `node_modules/.bin/eslint "src/app/(app)/installs/**/*.{ts,tsx}"
+"src/app/(app)/merchants/QuickActions.tsx" "src/app/(app)/merchants/[id]/page.tsx"
+"src/app/(app)/merchants/MerchantsClient.tsx"` — 변경 전/후 동일하게 24 problems(13 errors,
+  11 warnings). `installs` 폴더 13 errors는 지시에 언급된 기존 부채(`Unexpected any` 등)와
+  일치, 새로 추가한 코드(새 `useEffect`, `initial` prop)에서 발생한 이슈 없음 —
+  `react-hooks/exhaustive-deps`나 `react-hooks/set-state-in-effect`(1번 작업에서 다른 파일에
+  이미 있던 것과 같은 룰)도 새로 뜨지 않았다.
+- `node_modules/.bin/prettier --write`(변경 파일 4개): 전부 "unchanged" — 처음부터 포맷 규칙에
+  맞게 작성됨.
+- `handleSubmit`/`createInstallation`/설치건 생성 로직 무변경 확인: `git diff`로 `handleCreate`
+  함수 본문(라인 692~732 부근)에 diff가 없음을 직접 확인했다. 표·필터·KPI·드로어·모바일뷰 관련
+  코드도 diff 없음.
+- dev Supabase 자격증명이 없어 이전 세션들과 동일하게 브라우저 직접 클릭 검증은 못 했다. 코드
+  추적으로 확인한 것:
+  - `merchantId` 없음/조회 실패 시 폼이 빈 채로 열리고 예외가 나지 않는지 — `seed` 기본값이
+    전부 빈 문자열이라 `if (data)` 분기를 안 타도 `setCreatePrefill(seed)`가 정상 호출됨.
+  - URL 정리 — `router.replace(window.location.pathname)`가 쿼리 문자열 없는 경로로 교체하므로
+    새로고침 시 폼이 다시 열리지 않음(코드상 `new` 파라미터가 사라지므로 이펙트 조건 자체가
+    거짓이 됨).
+- 사용자가 직접 확인해야 하는 것: `/merchants`(또는 `/merchants/[id]`)에서 "A/S 접수"/"장비
+  추가출고" 클릭 시 각각 `/installs`, `/installs/delivery`로 이동하며 등록 폼이 자동으로 열리고
+  상호명/고객명/전화번호/주소/구분이 채워지는지, 제출 후 실제 설치건이 정상 생성되는지(생성
+  로직 자체는 이번에 변경하지 않았지만 end-to-end로 한 번 확인 필요).

@@ -144,7 +144,10 @@ function MerchantDetailPanel({
             vanCompany={application?.van_company ?? null}
             internet={application?.internet ?? null}
           />
-          <QuickActions franchiseApplicationId={merchant.franchise_application_id} />
+          <QuickActions
+            merchantId={merchant.id}
+            franchiseApplicationId={merchant.franchise_application_id}
+          />
         </div>
 
         <MerchantMemoSection merchantId={merchant.id} memos={memos} />
