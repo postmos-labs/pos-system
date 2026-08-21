@@ -234,6 +234,7 @@ const EMPTY_FORM = {
   install_date: "",
   van_company: "",
   internet: "",
+  program: "",
   memo: "",
   sendDocNotify: false,
 };
@@ -1857,6 +1858,7 @@ export default function FranchiseClient({
         install_date: form.install_date ? formatDateText(form.install_date) : null,
         van_company: form.van_company || null,
         internet: form.internet || null,
+        program: form.program || null,
         memo: form.memo ? stampMemo(currentUserName, form.memo) : null,
         created_by: currentUserId,
       })

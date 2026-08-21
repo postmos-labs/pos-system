@@ -334,3 +334,68 @@ design.md 표를 그대로 따랐고, EQUIPMENT_CATALOG(FranchiseClient.tsx) 13�
     삭제가 `/merchants`, `/merchants/[id]`에도 즉시 반영되는지(`revalidatePath` 확인).
   - 계약기간 입력 UI에서 개월수 ↔ 종료일 상호 계산이 화면상에서 자연스러운지.
   - "최근 A/S" KPI 날짜와 관련 업무 이력 AS 탭에 실제로 같은 건이 뜨는지.
+
+## 2026-08-21: 미뤄둔 항목 1 — 가맹접수 화면에 "사용 프로그램" 입력란 추가
+
+decisions.md 2026-08-20 절이 "`사용 프로그램`은 `franchise_applications.program`에서 읽는다"고
+했지만, 이 컬럼을 채울 수 있는 화면이 `/transfers`(`case_type: "conversion"` 하드코딩)뿐이라
+`/franchise`로 들어온 신규 접수는 뱃지가 영원히 비어 있었다. 이번에 `/franchise` 쪽 입력 경로를
+추가했다.
+
+- `PROGRAMS`(`["유니온", "아임유", "토스", "플릭"]`)를 `src/app/(app)/transfers/TransfersClient.tsx`
+  로컬 상수에서 `src/types/index.ts`로 옮겼다. `EquipmentItem` 인터페이스 바로 아래,
+  `FranchiseChannel` 타입 위에 뒀다 — 장비 카탈로그(`EQUIPMENT_CATALOG`)처럼 프로그램 목록도
+  접수 관련 선택지 데이터라 같은 자리가 자연스럽다고 판단했다. `TransfersClient.tsx`는 로컬
+  선언을 지우고 `@/types`에서 import하도록 바꿨다 — 값 복사가 아니라 참조 이전이라 두 화면이
+  같은 배열을 공유한다.
+- `FranchiseCreateDialog.tsx`(신규 접수 등록): `FranchiseCreateInput`에 `program: string` 추가,
+  `initialForm()`에 `program: ""` 추가, "접수 정보" 섹션에 "사용 프로그램" `AppSelect`를 새 행으로
+  추가했다("선택 안함" 옵션 포함, 기본 빈 값). 기존 4필드 행(접수날짜/카드가맹접수일/인터넷/담당자)에
+  5번째로 욱여넣지 않고 별도 grid 행으로 뺐다 — 기존 grid가 `md:grid-cols-4`로 이미 꽉 차 있어
+  칸을 좁히면 다른 필드들 레이아웃이 깨진다.
+- `FranchiseClient.tsx`: `EMPTY_FORM`에 `program: ""` 추가, `handleCreate`의
+  `franchise_applications` insert에 `program: form.program || null` 추가. 이 파일의 `EMPTY_FORM`은
+  `FranchiseCreateDialog`가 내부적으로 관리하는 `FranchiseCreateInput`과 구조적으로 동일해야
+  하는 타입이라(둘 다 인라인 객체 리터럴 타입, 이름으로 연결되지 않고 구조적 할당 가능성으로만
+  검증됨) 두 곳 모두 고쳐야 tsc가 무결하다.
+- `FranchiseDetailDrawer.tsx`(접수 상세 수정): 새 저장 경로를 만들지 않고 기존
+  `onSave(field, value)`(→ `FranchiseClient.tsx`의 `saveField`, 이미 `keyof FranchiseApplication`
+  아무 필드나 받는 범용 함수라 `"program"`도 그대로 통과) 패턴을 그대로 따라 "사용 프로그램"
+  `AppSelect`를 추가했다. 기존 "인터넷"/"담당자" 2열 grid(`sm:grid-cols-2`)를 3열로 넓혀
+  그 사이에 끼워 넣었다 — 인터넷 옆이 원래 있던 자리라 화면 흐름상 자연스럽고, 별도 행을 새로
+  만들 필요가 없었다.
+- 두 화면 모두 program 값 없음(`""`/`null`)을 그대로 허용한다 — 별도 필수값 검증을 추가하지
+  않았다. 기존 데이터 대부분이 NULL이라는 지시사항대로다.
+
+**뱃지까지 경로 추적** (`franchise_applications.program` → `loadMerchant360` →
+`application.program` → 뱃지): `loadMerchant360.ts:282`의 select가 이미 `program`을 가져오고
+있고(113/114와 무관하게 애초부터 select 대상이었음), `loadMerchant360.ts:600`에서
+`application.program`으로 그대로 매핑한다. `MerchantsClient.tsx:99-101`,
+`merchants/[id]/page.tsx:85-87`이 `application?.program`을 뱃지로 렌더링하고,
+`MerchantInfoCard.tsx:212`도 `programLabel` prop(`application?.program ?? null`)으로 같은 값을
+"사용 프로그램" 필드에 표시한다. 이번 변경은 이 경로 자체를 건드리지 않고 값을 채우는
+입력단만 추가했으므로, `/franchise`에서 프로그램을 저장하면 `franchise_applications.program`
+UPDATE/INSERT가 되고 → 해당 가맹점이 이미 `merchants`로 이관되어 있다면 다음 `/merchants`,
+`/merchants/[id]` 로드 시 `loadMerchant360`이 최신 값을 다시 읽어와 뱃지에 그대로 반영된다
+(별도 캐시나 동기화 로직 없음, 매 로드마다 `franchise_applications`를 직접 조회하므로 즉시
+반영). 신규 접수(아직 이관 전)는 애초에 `merchants` 행이 없어 통합정보 화면 자체가 없으므로
+이관 시점 이후에만 뱃지로 나타나는 것이 정상 동작이다.
+
+### 검증
+
+- `node_modules/.bin/tsc --noEmit`: 통과.
+- ESLint 기준치 비교(변경 대상 폴더): `node_modules/.bin/eslint "src/app/(app)/franchise/**/*.{ts,tsx}" "src/app/(app)/transfers/**/*.{ts,tsx}" "src/types/**/*.{ts,tsx}"` —
+  변경 전/후 동일하게 57 problems (11 errors, 46 warnings). 전부 이번 변경과 무관한 기존 부채
+  (예: `FranchiseDetailDrawer.tsx`의 `useEffect` 내 동기 `setState`, `TransfersClient.tsx`의 미사용
+  컴포넌트 등) — `git stash`로 변경 전 상태를 같은 명령으로 lint해 동일 수치임을 확인했다.
+- `node_modules/.bin/prettier --check`(변경 파일 5개): 전부 실패로 나오지만, `git stash`로 변경 전
+  같은 파일들을 같은 명령으로 검사해도 동일하게 실패한다 — 이 저장소의 Windows 체크아웃이
+  CRLF라 prettier(LF 기준)와 항상 어긋나는 환경 문제이지 실제 포맷 깨짐이 아니다. `--write` 실행 후
+  `git diff`로 실제 콘텐츠 변경분이 없는지 확인했다(이번에 추가한 코드 블록 외에는 아무것도 안
+  바뀜, import 문 줄바꿈 스타일 하나만 재포맷됨).
+- `/transfers` 프로그램 선택·저장: `saveField`가 그대로 `PROGRAMS` import본을 쓰므로 동작 변경
+  없음 — 코드 추적으로 확인, 값 목록·저장 컬럼·onValueChange 핸들러 전부 동일하다. dev Supabase
+  자격증명이 없어 브라우저 직접 클릭 검증은 이전 세션들과 동일하게 못 했다.
+- 사용자가 직접 확인해야 하는 것: `/franchise`에서 신규 접수를 등록/수정할 때 "사용 프로그램"
+  선택이 저장되는지, 그 접수가 기술지원 이관되어 `merchants` 행이 생긴 뒤 `/merchants`,
+  `/merchants/[id]` 헤더에 프로그램 뱃지로 뜨는지.

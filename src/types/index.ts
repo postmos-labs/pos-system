@@ -131,6 +131,8 @@ export interface EquipmentItem {
   quantity: number;
 }
 
+export const PROGRAMS = ["유니온", "아임유", "토스", "플릭"] as const;
+
 export type FranchiseChannel = "direct_sales" | "toss_lead";
 export type FranchiseCaseType = "new" | "conversion" | "succession" | "name_change";
 

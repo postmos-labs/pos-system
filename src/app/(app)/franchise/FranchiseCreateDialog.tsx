@@ -10,7 +10,12 @@ import type {
   FranchiseCaseType,
   FranchisePreviousSnapshot,
 } from "@/types";
-import { APPLICANT_TYPE_LABEL, FRANCHISE_CHANNEL_LABEL, FRANCHISE_CASE_TYPE_LABEL } from "@/types";
+import {
+  APPLICANT_TYPE_LABEL,
+  FRANCHISE_CHANNEL_LABEL,
+  FRANCHISE_CASE_TYPE_LABEL,
+  PROGRAMS,
+} from "@/types";
 import { formatBusinessNumber, formatPhone } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
 import { AppSelect } from "@/components/ui/AppSelect";
@@ -61,6 +66,7 @@ export interface FranchiseCreateInput {
   install_date: string;
   van_company: string;
   internet: string;
+  program: string;
   memo: string;
   sendDocNotify: boolean;
 }
@@ -113,6 +119,7 @@ function initialForm(mode: "new" | "existing"): FranchiseCreateInput {
     install_date: "",
     van_company: "",
     internet: "",
+    program: "",
     memo: "",
     sendDocNotify: false,
   };
@@ -571,6 +578,19 @@ export default function FranchiseCreateDialog({
                               value: profile.id,
                               label: profile.name,
                             })),
+                          ]}
+                        />
+                      </Field>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3.5 md:grid-cols-4">
+                      <Field label="사용 프로그램">
+                        <AppSelect
+                          value={form.program}
+                          onValueChange={(value) => setForm({ ...form, program: value })}
+                          aria-label="사용 프로그램"
+                          options={[
+                            { value: "", label: "선택 안함" },
+                            ...PROGRAMS.map((p) => ({ value: p, label: p })),
                           ]}
                         />
                       </Field>

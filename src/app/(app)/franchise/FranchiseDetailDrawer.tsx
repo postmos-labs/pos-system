@@ -15,6 +15,7 @@ import {
   FRANCHISE_CASE_TYPE_LABEL,
   FRANCHISE_CHANNEL_LABEL,
   FRANCHISE_STATUS_LABEL,
+  PROGRAMS,
 } from "@/types";
 import { formatBusinessNumber, formatPhone } from "@/lib/format";
 import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
@@ -636,7 +637,7 @@ export default function FranchiseDetailDrawer({
                   />
                 </Field>
               </div>
-              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
                 <Field label="인터넷">
                   <AppSelect
                     value={row.internet ?? ""}
@@ -648,6 +649,17 @@ export default function FranchiseDetailDrawer({
                         value: provider,
                         label: provider,
                       })),
+                    ]}
+                  />
+                </Field>
+                <Field label="사용 프로그램">
+                  <AppSelect
+                    value={row.program ?? ""}
+                    onValueChange={(value) => onSave("program", value)}
+                    aria-label="사용 프로그램"
+                    options={[
+                      { value: "", label: "선택 안함" },
+                      ...PROGRAMS.map((p) => ({ value: p, label: p })),
                     ]}
                   />
                 </Field>

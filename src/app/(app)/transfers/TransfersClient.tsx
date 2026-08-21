@@ -23,7 +23,7 @@ import type {
   FranchiseStatus,
   Profile,
 } from "@/types";
-import { FRANCHISE_STATUS_LABEL, FRANCHISE_STATUS_COLOR } from "@/types";
+import { FRANCHISE_STATUS_LABEL, FRANCHISE_STATUS_COLOR, PROGRAMS } from "@/types";
 import { useToast } from "@/components/ui/Toast";
 import BulkDeleteActions from "@/components/ui/BulkDeleteActions";
 import FormModal from "@/components/ui/FormModal";
@@ -44,8 +44,6 @@ interface Props {
   currentUserId: string;
   linkedInstalls?: Record<string, { id: string; status: string }>;
 }
-
-const PROGRAMS = ["유니온", "아임유", "토스", "플릭"];
 
 const EMPTY_FORM = {
   owner_name: "",
