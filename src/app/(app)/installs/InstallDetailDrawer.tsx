@@ -7,6 +7,7 @@ import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { formatPhone, thumbUrl } from "@/lib/format";
 import type { Profile, EquipmentItem } from "@/types";
+import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField } from "@/components/ui/DatePickerField";
 import HistoryButton from "@/components/ui/HistoryButton";
 import { NotificationHistory } from "@/components/ui/NotificationHistory";
@@ -63,6 +64,14 @@ interface Props {
   saving: boolean;
   onSave: () => void;
   onClose: () => void;
+
+  // 담당기사 배정 / 상태 변경 / 이동중 전달 — 표·모바일카드가 쓰는 handleAssign,
+  // handleStatusChange, setTransitModal을 그대로 호출하는 콜백. 여기서 새로 구현하지 않는다
+  // (handleStatusChange에는 알림톡 발송·승인 흐름·활동로그가 엮여 있다).
+  techUsers: { id: string; name: string }[];
+  onAssign: (assignedTo: string) => void;
+  onStatusChange: (status: string) => void;
+  onTransit: () => void;
 
   // 가맹접수 원본 섹션 — 드로어가 열릴 때 InstallsClient.tsx의 openFranchiseDetail()이
   // 이미 조회를 시작한 상태로 넘어온다(쿼리 자체는 그대로, 호출 시점만 옮김).
@@ -200,6 +209,10 @@ export default function InstallDetailDrawer({
   saving,
   onSave,
   onClose,
+  techUsers,
+  onAssign,
+  onStatusChange,
+  onTransit,
   franchiseLoading,
   franchiseDetail,
   merchantId,
@@ -229,6 +242,10 @@ export default function InstallDetailDrawer({
       (profile.approval_role === "team_lead" && approval.status === "responsible_approved"));
   const showReschedule =
     canEdit && installation.status !== "completed" && installation.status !== "rejected";
+  // 표(데스크톱)에는 이 버튼과 동등한 단독 조작이 없다 — "이동중" 상태로 select를 바꾸면
+  // 같은 setTransitModal이 열리는 것으로 갈음한다. 모바일카드(mineOnly 전용, "도착시간 알림
+  // 발송" 버튼)에만 있던 조건을 그대로 옮겼다.
+  const showTransit = canEdit && installation.status !== "completed";
   const showTechReject =
     profile.role === "tech" &&
     !!installation.franchise_application_id &&
@@ -410,7 +427,38 @@ export default function InstallDetailDrawer({
                   )}
                 </Field>
                 <Field label="담당기사">
-                  <ReadValue>{installation.assignee?.name ?? "미배정"}</ReadValue>
+                  {canEdit ? (
+                    <AppSelect
+                      value={installation.assigned_to || ""}
+                      onValueChange={onAssign}
+                      aria-label="담당기사"
+                      className="w-full"
+                      options={[
+                        { value: "", label: "미배정" },
+                        ...techUsers.map((t) => ({ value: t.id, label: t.name })),
+                      ]}
+                    />
+                  ) : (
+                    <ReadValue>{installation.assignee?.name ?? "미배정"}</ReadValue>
+                  )}
+                </Field>
+                <Field label="상태 변경">
+                  {canEdit ? (
+                    <AppSelect
+                      value={installation.status}
+                      onValueChange={onStatusChange}
+                      aria-label="상태 변경"
+                      className="w-full"
+                      options={statusOrderFor(installation.delivery_type).map((s) => ({
+                        value: s,
+                        label: statusLabel(s, installation.delivery_type),
+                      }))}
+                    />
+                  ) : (
+                    <ReadValue>
+                      {statusLabel(installation.status, installation.delivery_type)}
+                    </ReadValue>
+                  )}
                 </Field>
                 <Field label="등록자">
                   <ReadValue>{installation.creator?.name ?? "-"}</ReadValue>
@@ -600,6 +648,15 @@ export default function InstallDetailDrawer({
               className="rounded-lg border border-indigo-200 px-2.5 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
             >
               일정변경
+            </button>
+          )}
+          {showTransit && (
+            <button
+              type="button"
+              onClick={onTransit}
+              className="rounded-lg border border-amber-200 px-2.5 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+            >
+              도착시간 알림 발송
             </button>
           )}
           {approval && (

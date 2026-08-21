@@ -1859,6 +1859,10 @@ export default function InstallsClient({
           onDraftChange={(patch) => setDetailDraft((d) => (d ? { ...d, ...patch } : d))}
           saving={savingRowId === activeDetailInst.id}
           onSave={() => saveRowNow(activeDetailInst.id)}
+          techUsers={techUsers}
+          onAssign={(value) => handleAssign(activeDetailInst.id, value)}
+          onStatusChange={(value) => handleStatusChange(activeDetailInst.id, value)}
+          onTransit={() => setTransitModal({ id: activeDetailInst.id, eta: "" })}
           franchiseLoading={loadingDetail}
           franchiseDetail={franchiseDetail}
           merchantId={compositionMerchantId}
