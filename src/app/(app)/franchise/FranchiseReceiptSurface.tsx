@@ -989,13 +989,16 @@ export default function FranchiseReceiptSurface(props: Props) {
                             </button>
                           )}
                         </span>
-                        {row.last_call_at && row.last_call_type && (
-                          <span
-                            className={`text-[11px] font-medium ${row.last_call_type === "completed" ? "text-green-600" : "text-red-500"}`}
-                          >
-                            최근 통화: {formatLastCallAt(row.last_call_at)}
-                          </span>
-                        )}
+                        {row.last_call_at &&
+                          row.last_call_type &&
+                          row.status !== "toss_review_done" &&
+                          row.status !== "completed" && (
+                            <span
+                              className={`text-[11px] font-medium ${row.last_call_type === "completed" ? "text-green-600" : "text-red-500"}`}
+                            >
+                              최근 통화: {formatLastCallAt(row.last_call_at)}
+                            </span>
+                          )}
                       </div>
                     </td>
                     <td className="px-2.5 py-2.5 whitespace-nowrap">
