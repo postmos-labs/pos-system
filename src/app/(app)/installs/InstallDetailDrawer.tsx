@@ -237,8 +237,7 @@ export default function InstallDetailDrawer({
   const canDecideApproval =
     !!approval &&
     approval.requested_by !== profile.id &&
-    ((approval.status === "requested" &&
-      (profile.approval_role === "tech_responsible" || profile.approval_role === "team_lead")) ||
+    ((approval.status === "requested" && profile.approval_role === "tech_responsible") ||
       (profile.approval_role === "team_lead" && approval.status === "responsible_approved"));
   const showReschedule =
     canEdit && installation.status !== "completed" && installation.status !== "rejected";

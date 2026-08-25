@@ -594,7 +594,7 @@ export async function approveInstallationCompletion(installationId: string, note
     .select("id, name, approval_role")
     .eq("id", user.id)
     .single();
-  if (!profile || !["tech_responsible", "team_lead"].includes(profile.approval_role ?? "")) {
+  if (!profile || !["tech_responsible"].includes(profile.approval_role ?? "")) {
     return { error: "승인 권한이 없습니다.", notificationError: null };
   }
 
@@ -977,8 +977,7 @@ export async function rejectInstallationStatusApproval(installationId: string, r
   if (!approval) return { error: "처리할 승인 요청이 없습니다.", notificationError: null };
   const expectedStatus = approval.status;
   const canReject =
-    (expectedStatus === "requested" &&
-      (profile?.approval_role === "tech_responsible" || profile?.approval_role === "team_lead")) ||
+    (expectedStatus === "requested" && profile?.approval_role === "tech_responsible") ||
     (expectedStatus === "responsible_approved" && profile?.approval_role === "team_lead");
   if (!canReject) return { error: "반려 권한이 없습니다.", notificationError: null };
   if (approval.requested_by === user.id)

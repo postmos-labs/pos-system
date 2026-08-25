@@ -82,10 +82,7 @@ export default async function ApprovalsPage() {
           .select(
             "installation_id, target_status, status, requested_by, requested_by_name, requested_at, approval_notes, installation:installations(id, customer_name, address)",
           )
-          .in(
-            "status",
-            p.approval_role === "team_lead" ? ["requested", "responsible_approved"] : ["requested"],
-          )
+          .in("status", p.approval_role === "team_lead" ? ["responsible_approved"] : ["requested"])
           .neq("requested_by", userId)
           .order("requested_at", { ascending: true })
           .limit(5)

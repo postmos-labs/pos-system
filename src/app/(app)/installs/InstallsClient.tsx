@@ -1239,8 +1239,7 @@ export default function InstallsClient({
     const approval = completionApprovals[id];
     if (!approval || !["requested", "responsible_approved"].includes(approval.status)) return;
     const isResponsible =
-      approval.status === "requested" &&
-      (profile.approval_role === "tech_responsible" || profile.approval_role === "team_lead");
+      approval.status === "requested" && profile.approval_role === "tech_responsible";
     const isTeamLead =
       profile.approval_role === "team_lead" && approval.status === "responsible_approved";
     if (!isResponsible && !isTeamLead) {
@@ -1344,8 +1343,7 @@ export default function InstallsClient({
     const approval = completionApprovals[id];
     if (!approval || !["requested", "responsible_approved"].includes(approval.status)) return;
     const canReject =
-      (approval.status === "requested" &&
-        (profile.approval_role === "tech_responsible" || profile.approval_role === "team_lead")) ||
+      (approval.status === "requested" && profile.approval_role === "tech_responsible") ||
       (profile.approval_role === "team_lead" && approval.status === "responsible_approved");
     if (!canReject) {
       toast.warning("현재 승인 단계의 권한이 없습니다.");
