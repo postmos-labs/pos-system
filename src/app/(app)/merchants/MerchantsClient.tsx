@@ -16,6 +16,8 @@ import type {
   MerchantOperationStatus,
   WorkHistoryItem,
 } from "./merchant360";
+import type { VanGroup } from "@/types";
+import { VAN_GROUP_LABEL } from "@/types";
 import { MERCHANT_OPERATION_STATUS_CLASS, MERCHANT_OPERATION_STATUS_LABEL } from "./merchant360";
 import MerchantInfoCard from "./MerchantInfoCard";
 import InstallInfoCard from "./InstallInfoCard";
@@ -40,6 +42,8 @@ interface Props {
   derivedSummary: MerchantDerivedSummary | null;
   page: number;
   totalPages: number;
+  van: VanGroup | "";
+  vanCounts: { all: number | null; toss: number | null; kicc: number | null };
 }
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
@@ -171,6 +175,8 @@ export default function MerchantsClient({
   equipmentCategorySummaries,
   derivedSummary,
   page,
+  van,
+  vanCounts,
 }: Props) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -193,7 +199,12 @@ export default function MerchantsClient({
     filteredMerchants.every((merchant) => selected.has(merchant.id));
 
   function selectMerchant(id: string) {
-    router.replace(`/merchants?page=${page}&id=${id}`);
+    // van을 빼먹으면 목록에서 가맹점을 고르는 순간 필터가 전체로 풀린다.
+    router.replace(`/merchants?page=${page}${van ? `&van=${van}` : ""}&id=${id}`);
+  }
+
+  function selectVan(next: VanGroup | "") {
+    router.push(next ? `/merchants?page=1&van=${next}` : `/merchants?page=1`);
   }
 
   function toggleAll() {
@@ -240,6 +251,42 @@ export default function MerchantsClient({
               className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+
+          <div className="mt-3 grid grid-cols-3 gap-1 rounded-[10px] bg-slate-100 p-[3px]">
+            {(
+              [
+                { value: "" as const, label: "전체", count: vanCounts.all },
+                { value: "toss" as const, label: VAN_GROUP_LABEL.toss, count: vanCounts.toss },
+                { value: "kicc" as const, label: VAN_GROUP_LABEL.kicc, count: vanCounts.kicc },
+              ] satisfies { value: VanGroup | ""; label: string; count: number | null }[]
+            ).map(({ value, label, count }) => {
+              const active = van === value;
+              return (
+                <button
+                  key={value || "all"}
+                  type="button"
+                  onClick={() => selectVan(value)}
+                  className={`flex flex-col items-center gap-px rounded-[7px] px-1 py-1.5 transition-colors ${
+                    active ? "bg-white shadow-sm" : "hover:bg-slate-50"
+                  }`}
+                >
+                  <span
+                    className={`text-xs ${active ? "font-bold text-slate-900" : "font-semibold text-slate-500"}`}
+                  >
+                    {label}
+                  </span>
+                  {count !== null && (
+                    <span
+                      className={`text-[11px] font-medium tabular-nums ${active ? "text-slate-500" : "text-slate-400"}`}
+                    >
+                      {count.toLocaleString()}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
           {filteredMerchants.length > 0 && (
             <label className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-400">
               <input

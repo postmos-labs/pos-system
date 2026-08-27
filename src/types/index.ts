@@ -398,6 +398,16 @@ export const FRANCHISE_CHANNEL_LABEL: Record<FranchiseChannel, string> = {
 export const VAN_COMPANIES = ["코세스2", "코세스1", "코벤", "기가맹", "KICC"] as const;
 export type VanCompany = (typeof VAN_COMPANIES)[number];
 
+// VAN사 계열. 가맹점 목록 필터와 CS 리포트가 같은 기준으로 갈라야 화면과 보고서가 어긋나지 않는다.
+// van_company는 "코세스2,코벤"처럼 쉼표로 여러 개가 들어갈 수 있어, 목록 전체를 비교하는 대신
+// "KICC가 들어 있는가"로 판정한다. KICC 외 값은 전부 토스계열이다.
+export const KICC_VAN_COMPANY = "KICC";
+export type VanGroup = "toss" | "kicc";
+export const VAN_GROUP_LABEL: Record<VanGroup, string> = {
+  toss: "토스계열",
+  kicc: "KICC",
+};
+
 export const FRANCHISE_CASE_TYPE_LABEL: Record<FranchiseCaseType, string> = {
   new: "신규",
   conversion: "전환",
