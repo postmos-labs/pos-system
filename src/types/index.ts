@@ -334,8 +334,8 @@ export const FRANCHISE_STATUS_LABEL: Record<FranchiseStatus, string> = {
   card_internet_apply_done: "카드,인터넷접수완료",
   card_done: "카드가맹완료",
   internet_done: "인터넷 가입완료",
-  toss_review_apply_done: "토스심사접수완료",
-  toss_review_done: "토스심사완료",
+  toss_review_apply_done: "심사접수완료",
+  toss_review_done: "심사완료",
   completed: "완료",
   hold: "보류",
   persistent_absence: "지속적 부재",
@@ -352,8 +352,8 @@ export const FRANCHISE_ALIMTALK_LOG_LABEL: Record<string, string> = {
   card_done: "카드가맹완료",
   internet_apply_done: "인터넷접수완료",
   internet_done: "인터넷개통완료",
-  toss_review_apply_done: "토스심사접수완료",
-  toss_review_done: "토스심사완료",
+  toss_review_apply_done: "심사접수완료",
+  toss_review_done: "심사완료",
 };
 
 export const FRANCHISE_INSTALL_LOG_LABEL: Record<string, string> = {

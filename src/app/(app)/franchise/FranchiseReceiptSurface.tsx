@@ -444,7 +444,7 @@ export default function FranchiseReceiptSurface(props: Props) {
           <div className="min-w-0 flex-[0.85]">
             <RateBadge
               title="접수 성공률"
-              description="접수 등록 건 중 카드가맹접수/토스심사접수완료 단계 이상에 도달한 비율"
+              description="접수 등록 건 중 카드가맹접수/심사접수완료 단계 이상에 도달한 비율"
               icon={PercentIcon}
               tone="fuchsia"
               variant="flat"
