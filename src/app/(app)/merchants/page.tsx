@@ -14,7 +14,7 @@ const MERCHANT_LIST_COLUMNS = `${MERCHANT_LIST_BASE_COLUMNS},van_company`;
 type VanFilter = VanGroup | "";
 
 interface Props {
-  searchParams: Promise<{ page?: string; id?: string; van?: string }>;
+  searchParams: Promise<{ page?: string; id?: string; van?: string; q?: string }>;
 }
 
 // 117번 마이그레이션이 아직 적용되지 않은 dev/기존 환경에서는 van_company 컬럼이 없어
@@ -42,10 +42,24 @@ function applyVanFilter<T extends VanFilterable<T>>(query: T, van: VanFilter): T
   return query;
 }
 
+interface SearchFilterable<T> {
+  or(filters: string): T;
+}
+
+function applySearch<T extends SearchFilterable<T>>(query: T, safe: string): T {
+  if (!safe) return query;
+  return query.or(
+    `business_name.ilike.%${safe}%,owner_name.ilike.%${safe}%,phone.ilike.%${safe}%,address.ilike.%${safe}%`,
+  );
+}
+
 export default async function MerchantsPage({ searchParams }: Props) {
   const params = await searchParams;
   const page = Math.max(1, Number(params.page) || 1);
   const van: VanFilter = params.van === "toss" || params.van === "kicc" ? params.van : "";
+  // .or() 안에서 쉼표·괄호·따옴표·백슬래시는 문법 문자라 그대로 넘기면 쿼리가 깨진다.
+  const raw = (params.q ?? "").trim().slice(0, 100);
+  const safe = raw.replace(/[,()"'\\%*]/g, "");
   const supabase = await createClient();
 
   const {
@@ -53,25 +67,28 @@ export default async function MerchantsPage({ searchParams }: Props) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const listQuery = applyVanFilter(
-    supabase
-      .from("merchants")
-      .select(MERCHANT_LIST_COLUMNS, { count: "exact" })
-      .order("created_at", { ascending: false })
-      .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1),
-    van,
+  const listQuery = applySearch(
+    applyVanFilter(
+      supabase
+        .from("merchants")
+        .select(MERCHANT_LIST_COLUMNS, { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1),
+      van,
+    ),
+    safe,
   );
-  const allCountQuery = applyVanFilter(
-    supabase.from("merchants").select("id", { count: "exact", head: true }),
-    "",
+  const allCountQuery = applySearch(
+    applyVanFilter(supabase.from("merchants").select("id", { count: "exact", head: true }), ""),
+    safe,
   );
-  const tossCountQuery = applyVanFilter(
-    supabase.from("merchants").select("id", { count: "exact", head: true }),
-    "toss",
+  const tossCountQuery = applySearch(
+    applyVanFilter(supabase.from("merchants").select("id", { count: "exact", head: true }), "toss"),
+    safe,
   );
-  const kiccCountQuery = applyVanFilter(
-    supabase.from("merchants").select("id", { count: "exact", head: true }),
-    "kicc",
+  const kiccCountQuery = applySearch(
+    applyVanFilter(supabase.from("merchants").select("id", { count: "exact", head: true }), "kicc"),
+    safe,
   );
 
   const [listResult, allCountResult, tossCountResult, kiccCountResult, profileResult] =
@@ -97,11 +114,14 @@ export default async function MerchantsPage({ searchParams }: Props) {
   let count = listResult.count;
 
   if (vanMigrationMissing && listResult.error) {
-    const fallback = await supabase
-      .from("merchants")
-      .select(MERCHANT_LIST_BASE_COLUMNS, { count: "exact" })
-      .order("created_at", { ascending: false })
-      .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+    const fallback = await applySearch(
+      supabase
+        .from("merchants")
+        .select(MERCHANT_LIST_BASE_COLUMNS, { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1),
+      safe,
+    );
     merchants = fallback.data as Merchant360Merchant[] | null;
     count = fallback.count;
   }
@@ -119,6 +139,7 @@ export default async function MerchantsPage({ searchParams }: Props) {
   const selectedId = params.id ?? merchantRows[0]?.id ?? null;
   const selected = selectedId ? await loadMerchant360(supabase, selectedId) : null;
   const vanQuery = van ? `&van=${van}` : "";
+  const searchQuery = raw ? `&q=${encodeURIComponent(raw)}` : "";
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 p-4 md:p-6">
@@ -147,12 +168,13 @@ export default async function MerchantsPage({ searchParams }: Props) {
         van={van}
         vanCounts={vanCounts}
         canDelete={canDelete}
+        q={raw}
       />
 
       {totalPages > 1 && (
         <div className="flex shrink-0 items-center justify-center gap-2">
           <Link
-            href={`/merchants?page=${Math.max(1, page - 1)}${selectedId ? `&id=${selectedId}` : ""}${vanQuery}`}
+            href={`/merchants?page=${Math.max(1, page - 1)}${selectedId ? `&id=${selectedId}` : ""}${vanQuery}${searchQuery}`}
             className={`rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium ${page <= 1 ? "pointer-events-none text-slate-300" : "text-slate-600 hover:bg-slate-50"}`}
           >
             이전
@@ -161,7 +183,7 @@ export default async function MerchantsPage({ searchParams }: Props) {
             {page} / {totalPages}
           </span>
           <Link
-            href={`/merchants?page=${Math.min(totalPages, page + 1)}${selectedId ? `&id=${selectedId}` : ""}${vanQuery}`}
+            href={`/merchants?page=${Math.min(totalPages, page + 1)}${selectedId ? `&id=${selectedId}` : ""}${vanQuery}${searchQuery}`}
             className={`rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium ${page >= totalPages ? "pointer-events-none text-slate-300" : "text-slate-600 hover:bg-slate-50"}`}
           >
             다음

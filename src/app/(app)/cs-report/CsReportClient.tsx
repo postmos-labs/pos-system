@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { VAN_COMPANIES } from "@/types";
 import { AppSelect } from "@/components/ui/AppSelect";
 import {
@@ -82,6 +83,7 @@ export default function CsReportClient({
   metrics,
 }: Props) {
   const router = useRouter();
+  const [downloading, setDownloading] = useState(false);
 
   function pushQuery(nextMonth: string, nextVan: string) {
     const query = new URLSearchParams();
@@ -102,6 +104,56 @@ export default function CsReportClient({
     metrics.prevMonthDelta === null
       ? "-"
       : `${metrics.prevMonthDelta > 0 ? "+" : ""}${metrics.prevMonthDelta.toFixed(1)}%`;
+
+  async function handleDownload() {
+    setDownloading(true);
+    try {
+      const XLSX = await import("xlsx");
+      const wb = XLSX.utils.book_new();
+
+      const summaryData = [
+        { 항목: "대상 기간", 값: month },
+        { 항목: "VAN사", 값: van || "전체" },
+        { 항목: "관리 가맹점", 값: `${managedMerchantCount}개` },
+        { 항목: "총 CS", 값: `${metrics.csTotal}건` },
+        { 항목: "원격 해결", 값: formatPercent(metrics.remoteRate) },
+        { 항목: "출장", 값: `${metrics.onsiteCount}건` },
+        { 항목: "전월 대비 장애", 값: deltaValue },
+        { 항목: "교체 필요 장비", 값: `${replacementEquipmentCount}건` },
+        { 항목: "분류 미입력", 값: `${metrics.missingCount}건` },
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryData), "요약");
+
+      const topRepeatData =
+        metrics.topRepeatIssues.length > 0
+          ? metrics.topRepeatIssues.map((entry) => ({
+              유형: MEMO_ISSUE_CATEGORY_LABEL[entry.category],
+              건수: entry.count,
+            }))
+          : [{ 유형: "해당 없음", 건수: "" }];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(topRepeatData), "반복 장애 상위");
+
+      const byIssueCategoryData = metrics.byIssueCategory.map((entry) => ({
+        유형: MEMO_ISSUE_CATEGORY_LABEL[entry.category],
+        건수: entry.count,
+      }));
+      XLSX.utils.book_append_sheet(
+        wb,
+        XLSX.utils.json_to_sheet(byIssueCategoryData),
+        "장애 유형별",
+      );
+
+      const byResolutionData = metrics.byResolution.map((entry) => ({
+        방식: MEMO_RESOLUTION_LABEL[entry.resolution],
+        건수: entry.count,
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(byResolutionData), "해결 방식별");
+
+      XLSX.writeFile(wb, `CS리포트_${month}_${van || "전체"}.xlsx`);
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
@@ -146,6 +198,18 @@ export default function CsReportClient({
             ...VAN_COMPANIES.map((v) => ({ value: v, label: v })),
           ]}
         />
+
+        {schemaReady && !loadFailed && (
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={downloading}
+            className="ml-auto flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+          >
+            <Download size={15} />
+            {downloading ? "내려받는 중..." : "엑셀 내려받기"}
+          </button>
+        )}
       </div>
 
       {loadFailed && (

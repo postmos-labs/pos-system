@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
@@ -46,6 +46,7 @@ interface Props {
   van: VanGroup | "";
   vanCounts: { all: number | null; toss: number | null; kicc: number | null };
   canDelete: boolean;
+  q: string;
 }
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
@@ -193,32 +194,40 @@ export default function MerchantsClient({
   van,
   vanCounts,
   canDelete,
+  q,
 }: Props) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(q);
   const [detailDeleteOpen, setDetailDeleteOpen] = useState(false);
   const [detailDeleting, setDetailDeleting] = useState(false);
 
-  const filteredMerchants = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return merchants;
-    return merchants.filter((merchant) =>
-      [merchant.business_name, merchant.owner_name, merchant.phone, merchant.address]
-        .filter(Boolean)
-        .some((value) => value!.toLowerCase().includes(query)),
-    );
-  }, [merchants, search]);
+  useEffect(() => {
+    if (search === q) return;
+    const handle = setTimeout(() => {
+      const query = search.trim();
+      router.replace(
+        `/merchants?page=1${van ? `&van=${van}` : ""}${query ? `&q=${encodeURIComponent(query)}` : ""}`,
+      );
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [search, q, van, router]);
+
+  // 검색은 이제 서버에서 걸러 내려온다. filteredMerchants 이름은 아래 여러 곳(전체선택,
+  // 목록 렌더, EmptyState 등)에서 그대로 참조하므로 변수만 남겨둔다.
+  const filteredMerchants = merchants;
 
   const allChecked =
     filteredMerchants.length > 0 &&
     filteredMerchants.every((merchant) => selected.has(merchant.id));
 
   function selectMerchant(id: string) {
-    // van을 빼먹으면 목록에서 가맹점을 고르는 순간 필터가 전체로 풀린다.
-    router.replace(`/merchants?page=${page}${van ? `&van=${van}` : ""}&id=${id}`);
+    // van·q를 빼먹으면 목록에서 가맹점을 고르는 순간 필터가 전체로 풀린다.
+    router.replace(
+      `/merchants?page=${page}${van ? `&van=${van}` : ""}${q ? `&q=${encodeURIComponent(q)}` : ""}&id=${id}`,
+    );
   }
 
   function selectVan(next: VanGroup | "") {

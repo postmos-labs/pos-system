@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { XIcon, SearchIcon } from "lucide-react";
 import type {
   ApplicantType,
@@ -158,12 +158,58 @@ export default function FranchiseCreateDialog({
   const [loadedMerchantLabel, setLoadedMerchantLabel] = useState("");
   const [merchantNotFound, setMerchantNotFound] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [duplicateWarning, setDuplicateWarning] = useState("");
   const vanSelected = form.van_company
     ? form.van_company
         .split(",")
         .map((value) => value.trim())
         .filter(Boolean)
     : [];
+
+  useEffect(() => {
+    const digits = form.business_number.replace(/\D/g, "");
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      // 전환·승계·명변은 기존 가맹점을 일부러 불러온 것이므로, 그 가맹점 자신이
+      // 중복으로 잡혀 경고가 뜨면 오히려 헷갈린다.
+      if (digits.length !== 10 || form.merchant_id) {
+        setDuplicateWarning("");
+        return;
+      }
+      const hyphenated = `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+      const supabase = createClient();
+      void Promise.all([
+        supabase
+          .from("franchise_applications")
+          .select("id, business_name, owner_name, status, created_at")
+          .or(`business_number.eq.${digits},business_number.eq.${hyphenated}`)
+          .limit(3),
+        supabase
+          .from("merchants")
+          .select("id, business_name, owner_name")
+          .or(`business_number.eq.${digits},business_number.eq.${hyphenated}`)
+          .limit(3),
+      ]).then(([{ data: applications }, { data: merchants }]) => {
+        if (cancelled) return;
+        const parts: string[] = [];
+        if (applications && applications.length > 0) {
+          parts.push(
+            `가맹접수: ${applications.map((a) => `${a.business_name}(${a.owner_name})`).join(", ")}`,
+          );
+        }
+        if (merchants && merchants.length > 0) {
+          parts.push(
+            `가맹점: ${merchants.map((m) => `${m.business_name}(${m.owner_name})`).join(", ")}`,
+          );
+        }
+        setDuplicateWarning(parts.join(" · "));
+      });
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [form.business_number, form.merchant_id]);
 
   async function searchMerchants() {
     const term = merchantQuery.trim();
@@ -275,14 +321,20 @@ export default function FranchiseCreateDialog({
       setStep(mode === "existing" ? "search" : "form");
       setLoadedMerchantLabel("");
       setMerchantNotFound(false);
+      setDuplicateWarning("");
       onClose();
     }
+  }
+
+  function handleClose() {
+    setDuplicateWarning("");
+    onClose();
   }
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-6"
-      onMouseDown={onClose}
+      onMouseDown={handleClose}
     >
       <div
         role="dialog"
@@ -298,7 +350,7 @@ export default function FranchiseCreateDialog({
           <button
             type="button"
             aria-label="닫기"
-            onClick={onClose}
+            onClick={handleClose}
             className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex size-9 items-center justify-center rounded-lg"
           >
             <XIcon className="size-4.5" />
@@ -468,6 +520,14 @@ export default function FranchiseCreateDialog({
                           }
                           className={inputClass}
                         />
+                        {duplicateWarning && (
+                          <p className="mt-1 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700">
+                            <span className="font-bold shrink-0">확인</span>
+                            <span>
+                              같은 사업자번호로 이미 등록된 건이 있습니다 — {duplicateWarning}
+                            </span>
+                          </p>
+                        )}
                       </Field>
                     </div>
                   </div>
