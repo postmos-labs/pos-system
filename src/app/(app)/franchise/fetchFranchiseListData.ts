@@ -5,6 +5,45 @@ import { createClient } from "@/lib/supabase/server";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
+const FRANCHISE_LIST_PAGE_SIZE = 1000;
+const FRANCHISE_LIST_MAX_ROWS = 5000;
+
+async function fetchAllApplications(supabase: SupabaseServerClient, isLargeFranchise: boolean) {
+  const runQuery = (from: number, to: number) =>
+    supabase
+      .from("franchise_applications")
+      .select(
+        "*, sales:profiles!franchise_applications_sales_id_fkey(id,name,role), cs:profiles!franchise_applications_cs_id_fkey(id,name,role), creator:profiles!franchise_applications_created_by_fkey(id,name,role), next_check:franchise_next_check_dates(next_check_date)",
+      )
+      .eq("is_large_franchise", isLargeFranchise)
+      .order("updated_at", { ascending: false })
+      .range(from, to);
+
+  type Row = NonNullable<Awaited<ReturnType<typeof runQuery>>["data"]>[number];
+
+  const rows: Row[] = [];
+  let error: Awaited<ReturnType<typeof runQuery>>["error"] = null;
+  for (let from = 0; from < FRANCHISE_LIST_MAX_ROWS; from += FRANCHISE_LIST_PAGE_SIZE) {
+    const { data, error: pageError } = await runQuery(from, from + FRANCHISE_LIST_PAGE_SIZE - 1);
+    if (pageError) {
+      // 결과가 0건일 때 PostgREST가 던지는 PGRST103은 실패가 아니라 빈 결과다.
+      if ((pageError as { code?: string }).code === "PGRST103") break;
+      error = pageError;
+      break;
+    }
+    if (!data?.length) break;
+    rows.push(...data);
+    if (data.length < FRANCHISE_LIST_PAGE_SIZE) break;
+    if (from + FRANCHISE_LIST_PAGE_SIZE >= FRANCHISE_LIST_MAX_ROWS) {
+      console.warn(
+        `fetchAllApplications: 상한 ${FRANCHISE_LIST_MAX_ROWS}행에 도달하여 이후 데이터가 잘렸을 수 있습니다 (조회된 행: ${rows.length})`,
+      );
+    }
+  }
+
+  return { data: rows, error };
+}
+
 export type TransferApproval = {
   franchise_application_id: string;
   status: "requested" | "cs_responsible_approved" | "approved" | "rejected";
@@ -43,13 +82,7 @@ export async function fetchFranchiseListData(
     { data: yesterdayCompletionLogs },
     { data: transferApprovals },
   ] = await Promise.all([
-    supabase
-      .from("franchise_applications")
-      .select(
-        "*, sales:profiles!franchise_applications_sales_id_fkey(id,name,role), cs:profiles!franchise_applications_cs_id_fkey(id,name,role), creator:profiles!franchise_applications_created_by_fkey(id,name,role), next_check:franchise_next_check_dates(next_check_date)",
-      )
-      .eq("is_large_franchise", isLargeFranchise)
-      .order("updated_at", { ascending: false }),
+    fetchAllApplications(supabase, isLargeFranchise),
     supabase
       .from("profiles")
       .select("id,name,role")
