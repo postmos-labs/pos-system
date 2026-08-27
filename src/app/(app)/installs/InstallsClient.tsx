@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, useRef, memo, Fragment } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatPhone, thumbUrl } from "@/lib/format";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
@@ -17,8 +17,8 @@ import {
   ChevronDown,
   Percent,
 } from "lucide-react";
-import type { Profile, FranchiseApplication } from "@/types";
-import { FRANCHISE_STATUS_LABEL } from "@/types";
+import type { Profile, FranchiseApplication, VanGroup } from "@/types";
+import { FRANCHISE_STATUS_LABEL, VAN_GROUP_LABEL } from "@/types";
 import { useToast } from "@/components/ui/Toast";
 import BulkConfirmDialog from "@/components/ui/BulkConfirmDialog";
 import { NotificationHistory } from "@/components/ui/NotificationHistory";
@@ -112,6 +112,8 @@ interface Props {
   initialCompletionApprovals: Record<string, CompletionApproval>;
   initialApprovalNoteHistory?: Record<string, ApprovalNote[]>;
   initialDeliveryStats?: { total: number; completed: number };
+  van?: VanGroup | "";
+  vanCounts?: { all: number | null; toss: number | null; kicc: number | null };
 }
 
 export type CompletionApproval = {
@@ -468,11 +470,21 @@ export default function InstallsClient({
   initialCompletionApprovals,
   initialApprovalNoteHistory = {},
   initialDeliveryStats = { total: 0, completed: 0 },
+  van = "",
+  vanCounts = { all: null, toss: null, kicc: null },
 }: Props) {
   const canEdit = ["tech", "cs", "admin", "master"].includes(profile.role);
   const canDelete = profile.role === "admin" || profile.role === "master" || !!profile.can_delete;
   const toast = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  function selectVan(next: VanGroup | "") {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next) params.set("van", next);
+    else params.delete("van");
+    router.push(`?${params.toString()}`);
+  }
   const [installs, setInstalls] = useState<Installation[]>(initialInstalls);
   const [deliveryStats, setDeliveryStats] = useState(initialDeliveryStats);
   const [loading, setLoading] = useState(false);
@@ -650,13 +662,19 @@ export default function InstallsClient({
 
   async function fetchInstalls() {
     setLoading(true);
-    let query = supabase
-      .from("installations")
-      .select(
-        "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name)",
-      );
+    const installsSelect = van
+      ? "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications!inner(van_company)"
+      : "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications(van_company)";
+    let query = supabase.from("installations").select(installsSelect);
     if (deliveryOnly) query = query.eq("delivery_type", "delivery");
     else query = query.neq("delivery_type", "delivery");
+    if (van === "kicc") {
+      query = query.ilike("franchise.van_company", "%KICC%");
+    } else if (van === "toss") {
+      query = query
+        .not("franchise.van_company", "is", null)
+        .not("franchise.van_company", "ilike", "%KICC%");
+    }
     const { data } = await query
       .order("sort_order", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
@@ -2306,6 +2324,45 @@ export default function InstallsClient({
           {showCompleted ? "완료건 포함" : "완료건 숨김"}
         </button>
       </div>
+
+      {/* 택배 발송·기사 페이지는 서버에서 van을 처리하지 않아 눌러도 아무 일이 없다.
+          건수를 넘겨준 화면(설치관리 본 목록)에서만 보여준다. */}
+      {vanCounts.all !== null && (
+        <div className="grid w-[330px] grid-cols-3 gap-1 rounded-[10px] bg-slate-100 p-[3px]">
+          {(
+            [
+              { value: "" as const, label: "전체", count: vanCounts.all },
+              { value: "toss" as const, label: VAN_GROUP_LABEL.toss, count: vanCounts.toss },
+              { value: "kicc" as const, label: VAN_GROUP_LABEL.kicc, count: vanCounts.kicc },
+            ] satisfies { value: VanGroup | ""; label: string; count: number | null }[]
+          ).map(({ value, label, count }) => {
+            const active = van === value;
+            return (
+              <button
+                key={value || "all"}
+                type="button"
+                onClick={() => selectVan(value)}
+                className={`flex flex-col items-center gap-px rounded-[7px] px-1 py-1.5 transition-colors ${
+                  active ? "bg-white shadow-sm" : "hover:bg-slate-50"
+                }`}
+              >
+                <span
+                  className={`text-xs ${active ? "font-bold text-slate-900" : "font-semibold text-slate-500"}`}
+                >
+                  {label}
+                </span>
+                {count !== null && (
+                  <span
+                    className={`text-[11px] font-medium tabular-nums ${active ? "text-slate-500" : "text-slate-400"}`}
+                  >
+                    {count.toLocaleString()}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {}
       <div className="flex flex-wrap gap-2">

@@ -1,20 +1,42 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import InstallsClient from "./InstallsClient";
-import type { Profile } from "@/types";
+import type { Profile, VanGroup } from "@/types";
 import type { ApprovalNote } from "@/lib/approvalNotes";
 
 interface Props {
-  searchParams: Promise<{ id?: string }>;
+  searchParams: Promise<{ id?: string; van?: string }>;
+}
+
+type VanFilter = VanGroup | "";
+
+interface VanFilterable<T> {
+  ilike(column: string, pattern: string): T;
+  not(column: string, operator: string, value: unknown): T;
+}
+
+function applyVanFilter<T extends VanFilterable<T>>(query: T, van: VanFilter): T {
+  if (van === "kicc") return query.ilike("franchise.van_company", "%KICC%");
+  if (van === "toss") {
+    return query
+      .not("franchise.van_company", "is", null)
+      .not("franchise.van_company", "ilike", "%KICC%");
+  }
+  return query;
 }
 
 export default async function InstallsPage({ searchParams }: Props) {
-  const { id } = await searchParams;
+  const { id, van: vanParam } = await searchParams;
+  const van: VanFilter = vanParam === "toss" || vanParam === "kicc" ? vanParam : "";
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  const installsSelect = van
+    ? "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications!inner(van_company)"
+    : "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications(van_company)";
 
   const [
     { data: profile },
@@ -23,17 +45,21 @@ export default async function InstallsPage({ searchParams }: Props) {
     { data: completionApprovals },
     { data: transferApprovals },
     { data: deliveryStatusRows },
+    { count: allVanCount },
+    { count: tossVanCount },
+    { count: kiccVanCount },
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).single(),
-    supabase
-      .from("installations")
-      .select(
-        "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name)",
-      )
-      .neq("delivery_type", "delivery")
-      .order("sort_order", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .limit(300),
+    applyVanFilter(
+      supabase
+        .from("installations")
+        .select(installsSelect)
+        .neq("delivery_type", "delivery")
+        .order("sort_order", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .limit(300),
+      van,
+    ),
     supabase.from("profiles").select("id, name").eq("role", "tech"),
     supabase
       .from("installation_completion_approvals")
@@ -43,7 +69,37 @@ export default async function InstallsPage({ searchParams }: Props) {
       .order("requested_at", { ascending: true }),
     supabase.from("franchise_transfer_approvals").select("franchise_application_id,approval_notes"),
     supabase.from("installations").select("status").eq("delivery_type", "delivery"),
+    supabase
+      .from("installations")
+      .select("id", { count: "exact", head: true })
+      .neq("delivery_type", "delivery"),
+    applyVanFilter(
+      supabase
+        .from("installations")
+        .select("id, franchise:franchise_applications!inner(van_company)", {
+          count: "exact",
+          head: true,
+        })
+        .neq("delivery_type", "delivery"),
+      "toss",
+    ),
+    applyVanFilter(
+      supabase
+        .from("installations")
+        .select("id, franchise:franchise_applications!inner(van_company)", {
+          count: "exact",
+          head: true,
+        })
+        .neq("delivery_type", "delivery"),
+      "kicc",
+    ),
   ]);
+
+  const vanCounts = {
+    all: allVanCount ?? 0,
+    toss: tossVanCount ?? 0,
+    kicc: kiccVanCount ?? 0,
+  };
 
   const initialDeliveryStats = {
     total: deliveryStatusRows?.length ?? 0,
@@ -99,6 +155,8 @@ export default async function InstallsPage({ searchParams }: Props) {
       )}
       initialApprovalNoteHistory={approvalNoteHistory}
       initialDeliveryStats={initialDeliveryStats}
+      van={van}
+      vanCounts={vanCounts}
     />
   );
 }

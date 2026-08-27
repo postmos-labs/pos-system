@@ -49,6 +49,7 @@ import type {
   FranchiseCaseType,
   FranchisePreviousSnapshot,
   Profile,
+  VanGroup,
 } from "@/types";
 import {
   APPLICANT_TYPE_LABEL,
@@ -60,6 +61,7 @@ import {
   FRANCHISE_INSTALL_LOG_LABEL,
   FRANCHISE_TRANSFER_LOG_LABEL,
   VAN_COMPANIES,
+  KICC_VAN_COMPANY,
 } from "@/types";
 import type { DocCase } from "@/lib/solapi";
 import { useToast } from "@/components/ui/Toast";
@@ -131,6 +133,13 @@ function parseVanList(value: string) {
         .map((s) => s.trim())
         .filter(Boolean)
     : [];
+}
+
+function vanGroupOf(value: string | null | undefined): VanGroup | null {
+  const list = parseVanList(value ?? "");
+  if (list.length === 0) return null;
+  if (list.includes(KICC_VAN_COMPANY)) return "kicc";
+  return "toss";
 }
 
 const AUTO_FORMAT: Partial<Record<keyof FranchiseApplication, (raw: string) => string>> = {
@@ -1095,6 +1104,7 @@ export default function FranchiseClient({
   const [page, setPage] = useState(1);
   const { colWidths, startResize } = useColumnWidths(COL_WIDTHS_STORAGE_KEY, DEFAULT_WIDTHS);
   const [vanFilter, setVanFilter] = useState("");
+  const [vanGroupFilter, setVanGroupFilter] = useState<VanGroup | "">("");
   const [channelFilter, setChannelFilter] = useState("");
   const [caseTypeFilter, setCaseTypeFilter] = useState("");
   const [missedCallFilter, setMissedCallFilter] = useState("");
@@ -1359,6 +1369,7 @@ export default function FranchiseClient({
       if (caseTypeFilter && row.case_type !== caseTypeFilter) return false;
       if (missedCallFilter && (row.missed_call_count ?? 0) !== Number(missedCallFilter))
         return false;
+      if (vanGroupFilter && vanGroupOf(row.van_company) !== vanGroupFilter) return false;
       if (
         vanFilter &&
         !row.van_company
@@ -1387,6 +1398,7 @@ export default function FranchiseClient({
       caseTypeFilter,
       missedCallFilter,
       vanFilter,
+      vanGroupFilter,
       dateFrom,
       dateTo,
     ],
@@ -1444,6 +1456,7 @@ export default function FranchiseClient({
     caseTypeFilter,
     missedCallFilter,
     vanFilter,
+    vanGroupFilter,
     sortBy,
     tableView,
     activeKpi,
@@ -1470,6 +1483,7 @@ export default function FranchiseClient({
     setChannelFilter("");
     setCaseTypeFilter("");
     setVanFilter("");
+    setVanGroupFilter("");
     setDateFrom("");
     setDateTo("");
     setTableView("all");
@@ -1507,6 +1521,7 @@ export default function FranchiseClient({
     !caseTypeFilter &&
     !missedCallFilter &&
     !vanFilter &&
+    !vanGroupFilter &&
     !dateFrom &&
     !dateTo &&
     tableView === "all" &&
@@ -1636,6 +1651,17 @@ export default function FranchiseClient({
     }
     return counts;
   }, [localRows, matchesFilters]);
+
+  const vanGroupCounts = useMemo(() => {
+    let toss = 0;
+    let kicc = 0;
+    for (const row of localRows) {
+      const group = vanGroupOf(row.van_company);
+      if (group === "toss") toss += 1;
+      else if (group === "kicc") kicc += 1;
+    }
+    return { all: localRows.length, toss, kicc };
+  }, [localRows]);
 
   const tableViewCounts = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -3203,6 +3229,8 @@ export default function FranchiseClient({
         caseTypeFilter={caseTypeFilter}
         missedCallFilter={missedCallFilter}
         vanFilter={vanFilter}
+        vanGroupFilter={vanGroupFilter}
+        vanGroupCounts={vanGroupCounts}
         dateFrom={dateFrom}
         dateTo={dateTo}
         sortBy={sortBy}
@@ -3230,6 +3258,7 @@ export default function FranchiseClient({
         onCaseTypeFilterChange={setCaseTypeFilter}
         onMissedCallFilterChange={setMissedCallFilter}
         onVanFilterChange={setVanFilter}
+        onVanGroupFilterChange={setVanGroupFilter}
         onDateFromChange={setDateFrom}
         onDateToChange={setDateTo}
         onSortChange={setSortBy}

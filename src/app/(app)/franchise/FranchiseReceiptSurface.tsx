@@ -31,6 +31,7 @@ import type {
   FranchiseChannel,
   FranchiseStatus,
   Profile,
+  VanGroup,
 } from "@/types";
 import {
   APPLICANT_TYPE_LABEL,
@@ -38,6 +39,7 @@ import {
   FRANCHISE_CHANNEL_LABEL,
   FRANCHISE_STATUS_LABEL,
   VAN_COMPANIES,
+  VAN_GROUP_LABEL,
 } from "@/types";
 import RateBadge from "@/components/ui/RateBadge";
 import { AppSelect } from "@/components/ui/AppSelect";
@@ -143,6 +145,8 @@ interface Props {
   caseTypeFilter: string;
   missedCallFilter: string;
   vanFilter: string;
+  vanGroupFilter: VanGroup | "";
+  vanGroupCounts: { all: number; toss: number; kicc: number };
   dateFrom: string;
   dateTo: string;
   sortBy: SortBy;
@@ -162,6 +166,7 @@ interface Props {
   onCaseTypeFilterChange: (value: string) => void;
   onMissedCallFilterChange: (value: string) => void;
   onVanFilterChange: (value: string) => void;
+  onVanGroupFilterChange: (value: VanGroup | "") => void;
   onDateFromChange: (value: string) => void;
   onDateToChange: (value: string) => void;
   onSortChange: (value: SortBy) => void;
@@ -667,6 +672,46 @@ export default function FranchiseReceiptSurface(props: Props) {
               className={`size-3 transition-transform ${advancedOpen ? "rotate-180" : ""}`}
             />
           </button>
+        </div>
+        <div className="grid w-[330px] grid-cols-3 gap-1 rounded-[10px] bg-slate-100 p-[3px]">
+          {(
+            [
+              { value: "" as const, label: "전체", count: props.vanGroupCounts.all },
+              {
+                value: "toss" as const,
+                label: VAN_GROUP_LABEL.toss,
+                count: props.vanGroupCounts.toss,
+              },
+              {
+                value: "kicc" as const,
+                label: VAN_GROUP_LABEL.kicc,
+                count: props.vanGroupCounts.kicc,
+              },
+            ] satisfies { value: VanGroup | ""; label: string; count: number }[]
+          ).map(({ value, label, count }) => {
+            const active = props.vanGroupFilter === value;
+            return (
+              <button
+                key={value || "all"}
+                type="button"
+                onClick={() => props.onVanGroupFilterChange(value)}
+                className={`flex flex-col items-center gap-px rounded-[7px] px-1 py-1.5 transition-colors ${
+                  active ? "bg-white shadow-sm" : "hover:bg-slate-50"
+                }`}
+              >
+                <span
+                  className={`text-xs ${active ? "font-bold text-slate-900" : "font-semibold text-slate-500"}`}
+                >
+                  {label}
+                </span>
+                <span
+                  className={`text-[11px] font-medium tabular-nums ${active ? "text-slate-500" : "text-slate-400"}`}
+                >
+                  {count.toLocaleString()}
+                </span>
+              </button>
+            );
+          })}
         </div>
         {advancedOpen && (
           <div className="border-border flex flex-wrap items-center gap-2 border-t pt-2.5">
