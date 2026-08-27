@@ -44,6 +44,7 @@ import {
 import RateBadge from "@/components/ui/RateBadge";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField } from "@/components/ui/DatePickerField";
+import { VanBadge } from "@/components/ui/VanBadge";
 
 const VAN_TONE = {
   all: {
@@ -1065,11 +1066,7 @@ export default function FranchiseReceiptSurface(props: Props) {
                       >
                         {row.business_name || "-"}
                       </button>
-                      {row.van_company && (
-                        <span className="block truncate text-[11px] font-medium text-slate-400">
-                          {row.van_company}
-                        </span>
-                      )}
+                      <VanBadge value={row.van_company} className="mt-0.5 max-w-full truncate" />
                     </td>
                     <td className="text-foreground px-2.5 py-2.5 whitespace-nowrap">
                       {row.owner_name || "-"}

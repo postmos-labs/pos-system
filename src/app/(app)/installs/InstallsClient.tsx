@@ -31,6 +31,7 @@ import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
 import { appendApprovalNote, type ApprovalNote } from "@/lib/approvalNotes";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField, CalendarPopoverButton } from "@/components/ui/DatePickerField";
+import { VanBadge } from "@/components/ui/VanBadge";
 import { PRODUCT_CATALOG, QtyStepper, InstallItemsEditor } from "./InstallItemsEditor";
 import {
   approveInstallationCompletion,
@@ -120,6 +121,8 @@ export interface Installation {
   created_at: string;
   assignee?: { name: string } | null;
   creator?: { name: string } | null;
+  // page.tsx / fetchInstalls에서 franchise_applications를 조인해 가져온다.
+  franchise?: { van_company: string | null } | null;
   franchise_application_id?: string;
   woo_customer_id?: string;
   address?: string;
@@ -2572,6 +2575,13 @@ export default function InstallsClient({
                             가맹이관
                           </span>
                         )}
+                        <VanBadge
+                          value={
+                            Array.isArray(inst.franchise)
+                              ? (inst.franchise as { van_company: string | null }[])[0]?.van_company
+                              : inst.franchise?.van_company
+                          }
+                        />
                         {inst.woo_customer_id && (
                           <span className="text-[10px] font-semibold bg-teal-100 text-teal-600 border border-teal-200 px-1.5 py-0.5 rounded-md shrink-0">
                             우국상이관

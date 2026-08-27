@@ -29,6 +29,7 @@ import MerchantHistorySection from "./MerchantHistorySection";
 import EmptyState from "@/components/ui/EmptyState";
 import BulkDeleteActions from "@/components/ui/BulkDeleteActions";
 import BulkConfirmDialog from "@/components/ui/BulkConfirmDialog";
+import { VanBadge } from "@/components/ui/VanBadge";
 
 interface Props {
   merchants: Merchant360Merchant[];
@@ -364,8 +365,9 @@ export default function MerchantsClient({
                       <p className="truncate text-sm font-semibold text-slate-900">
                         {merchant.business_name}
                       </p>
-                      <p className="truncate text-xs text-slate-400">
-                        {merchant.owner_name || "-"}
+                      <p className="flex min-w-0 items-center gap-1 text-xs text-slate-400">
+                        <span className="truncate">{merchant.owner_name || "-"}</span>
+                        <VanBadge value={merchant.van_company} />
                       </p>
                     </div>
                   </div>

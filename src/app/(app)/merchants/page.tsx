@@ -7,8 +7,9 @@ import type { Merchant360Merchant } from "./merchant360";
 import type { VanGroup } from "@/types";
 
 const PAGE_SIZE = 50;
-const MERCHANT_LIST_COLUMNS =
+const MERCHANT_LIST_BASE_COLUMNS =
   "id,business_name,owner_name,phone,address,address_detail,created_at,franchise_application_id";
+const MERCHANT_LIST_COLUMNS = `${MERCHANT_LIST_BASE_COLUMNS},van_company`;
 
 type VanFilter = VanGroup | "";
 
@@ -85,20 +86,22 @@ export default async function MerchantsPage({ searchParams }: Props) {
     isMissingColumnError(tossCountResult.error) ||
     isMissingColumnError(kiccCountResult.error);
 
-  let merchants = listResult.data;
+  // 폴백 조회는 van_company가 빠진 컬럼셋이라 두 결과의 추론 타입이 다르다.
+  // 어차피 아래에서 Merchant360Merchant[]로 쓰므로 여기서 한 번만 맞춰둔다.
+  let merchants = listResult.data as Merchant360Merchant[] | null;
   let count = listResult.count;
 
   if (vanMigrationMissing && listResult.error) {
     const fallback = await supabase
       .from("merchants")
-      .select(MERCHANT_LIST_COLUMNS, { count: "exact" })
+      .select(MERCHANT_LIST_BASE_COLUMNS, { count: "exact" })
       .order("created_at", { ascending: false })
       .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
-    merchants = fallback.data;
+    merchants = fallback.data as Merchant360Merchant[] | null;
     count = fallback.count;
   }
 
-  const merchantRows = (merchants ?? []) as Merchant360Merchant[];
+  const merchantRows = merchants ?? [];
   const totalCount = count ?? 0;
   const vanCounts = vanMigrationMissing
     ? { all: null, toss: null, kicc: null }
