@@ -74,12 +74,17 @@ export default async function MerchantsPage({ searchParams }: Props) {
     "kicc",
   );
 
-  const [listResult, allCountResult, tossCountResult, kiccCountResult] = await Promise.all([
-    listQuery,
-    allCountQuery,
-    tossCountQuery,
-    kiccCountQuery,
-  ]);
+  const [listResult, allCountResult, tossCountResult, kiccCountResult, profileResult] =
+    await Promise.all([
+      listQuery,
+      allCountQuery,
+      tossCountQuery,
+      kiccCountQuery,
+      supabase.from("profiles").select("role, can_delete").eq("id", user.id).single(),
+    ]);
+  const profile = profileResult.data;
+  const canDelete =
+    profile?.role === "admin" || profile?.role === "master" || !!profile?.can_delete;
 
   const vanMigrationMissing =
     isMissingColumnError(listResult.error) ||
@@ -141,6 +146,7 @@ export default async function MerchantsPage({ searchParams }: Props) {
         totalPages={totalPages}
         van={van}
         vanCounts={vanCounts}
+        canDelete={canDelete}
       />
 
       {totalPages > 1 && (

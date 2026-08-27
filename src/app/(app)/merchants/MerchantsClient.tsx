@@ -45,6 +45,7 @@ interface Props {
   totalPages: number;
   van: VanGroup | "";
   vanCounts: { all: number | null; toss: number | null; kicc: number | null };
+  canDelete: boolean;
 }
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
@@ -71,6 +72,8 @@ function MerchantDetailPanel({
   equipment,
   equipmentCategorySummaries,
   derivedSummary,
+  canDelete,
+  onRequestDelete,
 }: {
   merchant: Merchant360Merchant | null;
   application: Merchant360Application | null;
@@ -79,6 +82,8 @@ function MerchantDetailPanel({
   equipment: MerchantEquipmentItem[];
   equipmentCategorySummaries: MerchantEquipmentCategorySummary[];
   derivedSummary: MerchantDerivedSummary | null;
+  canDelete: boolean;
+  onRequestDelete: () => void;
 }) {
   if (!merchant) {
     return (
@@ -105,6 +110,15 @@ function MerchantDetailPanel({
             <span className="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-600">
               {application.program}
             </span>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={onRequestDelete}
+              className="ml-auto shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+            >
+              삭제
+            </button>
           )}
         </div>
         <p className="mt-1 truncate text-xs text-slate-400">
@@ -178,12 +192,15 @@ export default function MerchantsClient({
   page,
   van,
   vanCounts,
+  canDelete,
 }: Props) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [detailDeleteOpen, setDetailDeleteOpen] = useState(false);
+  const [detailDeleting, setDetailDeleting] = useState(false);
 
   const filteredMerchants = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -235,6 +252,21 @@ export default function MerchantsClient({
       return;
     }
     setSelected(new Set());
+    router.refresh();
+  }
+
+  async function confirmDetailDelete() {
+    if (!selectedMerchant) return;
+    setDetailDeleting(true);
+    const result = await deleteMerchants([selectedMerchant.id]);
+    setDetailDeleting(false);
+    setDetailDeleteOpen(false);
+    if (result.error) {
+      alert("삭제 실패: " + result.error);
+      return;
+    }
+    // 지운 가맹점이 URL에 남아 있으면 빈 상세가 뜬다. id를 떼고 목록 첫 화면으로 보낸다.
+    router.replace(`/merchants?page=1${van ? `&van=${van}` : ""}`);
     router.refresh();
   }
 
@@ -387,6 +419,8 @@ export default function MerchantsClient({
         equipment={equipment}
         equipmentCategorySummaries={equipmentCategorySummaries}
         derivedSummary={derivedSummary}
+        canDelete={canDelete}
+        onRequestDelete={() => setDetailDeleteOpen(true)}
       />
 
       <BulkConfirmDialog
@@ -400,6 +434,23 @@ export default function MerchantsClient({
           .map((merchant) => ({ id: merchant.id, label: merchant.business_name }))}
         onCancel={() => setDeleteConfirmOpen(false)}
         onConfirm={confirmDelete}
+      />
+
+      <BulkConfirmDialog
+        open={detailDeleteOpen}
+        title="가맹점 삭제"
+        subtitle="메모와 장비 이력도 함께 삭제됩니다. 되돌릴 수 없습니다."
+        busy={detailDeleting}
+        confirmText="삭제"
+        confirmColor="red"
+        confirmQuestion="정말 삭제하시겠습니까?"
+        items={
+          selectedMerchant
+            ? [{ id: selectedMerchant.id, label: selectedMerchant.business_name }]
+            : []
+        }
+        onCancel={() => setDetailDeleteOpen(false)}
+        onConfirm={confirmDetailDelete}
       />
     </div>
   );
