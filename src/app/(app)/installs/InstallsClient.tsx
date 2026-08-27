@@ -2361,7 +2361,7 @@ export default function InstallsClient({
       {/* 택배 발송·기사 페이지는 서버에서 van을 처리하지 않아 눌러도 아무 일이 없다.
           건수를 넘겨준 화면(설치관리 본 목록)에서만 보여준다. */}
       {vanCounts.all !== null && (
-        <div className="flex flex-wrap gap-2.5">
+        <div className="grid grid-cols-3 gap-2.5">
           {(
             [
               { value: "" as const, label: "전체", count: vanCounts.all, tone: "all" as const },
@@ -2390,7 +2390,7 @@ export default function InstallsClient({
                 key={value || "all"}
                 type="button"
                 onClick={() => selectVan(value)}
-                className={`flex w-[190px] flex-col gap-1 rounded-xl border-2 px-4 py-3 text-left transition-colors ${VAN_TONE[tone][active ? "activeBox" : "idleBox"]}`}
+                className={`flex flex-col gap-1 rounded-xl border-2 px-4 py-3 text-left transition-colors ${VAN_TONE[tone][active ? "activeBox" : "idleBox"]}`}
               >
                 <span
                   className={`inline-flex items-center gap-1.5 text-[13px] font-semibold ${VAN_TONE[tone][active ? "activeLabel" : "idleLabel"]}`}

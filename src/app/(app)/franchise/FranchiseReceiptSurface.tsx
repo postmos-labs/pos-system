@@ -704,7 +704,7 @@ export default function FranchiseReceiptSurface(props: Props) {
             />
           </button>
         </div>
-        <div className="flex flex-wrap gap-2.5">
+        <div className="grid grid-cols-3 gap-2.5">
           {(
             [
               {
@@ -738,7 +738,7 @@ export default function FranchiseReceiptSurface(props: Props) {
                 key={value || "all"}
                 type="button"
                 onClick={() => props.onVanGroupFilterChange(value)}
-                className={`flex w-[190px] flex-col gap-1 rounded-xl border-2 px-4 py-3 text-left transition-colors ${VAN_TONE[tone][active ? "activeBox" : "idleBox"]}`}
+                className={`flex flex-col gap-1 rounded-xl border-2 px-4 py-3 text-left transition-colors ${VAN_TONE[tone][active ? "activeBox" : "idleBox"]}`}
               >
                 <span
                   className={`inline-flex items-center gap-1.5 text-[13px] font-semibold ${VAN_TONE[tone][active ? "activeLabel" : "idleLabel"]}`}
