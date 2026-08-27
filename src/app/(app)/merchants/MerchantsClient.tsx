@@ -261,23 +261,37 @@ export default function MerchantsClient({
               ] satisfies { value: VanGroup | ""; label: string; count: number | null }[]
             ).map(({ value, label, count }) => {
               const active = van === value;
+              const tone = value === "toss" ? "toss" : value === "kicc" ? "kicc" : "all";
+              const activeBg =
+                tone === "toss"
+                  ? "bg-blue-600 shadow-sm"
+                  : tone === "kicc"
+                    ? "bg-emerald-600 shadow-sm"
+                    : "bg-white shadow-sm";
+              const activeLabelColor = tone === "all" ? "text-slate-900" : "text-white";
+              const activeValueColor = tone === "all" ? "text-slate-500" : "text-white";
               return (
                 <button
                   key={value || "all"}
                   type="button"
                   onClick={() => selectVan(value)}
                   className={`flex flex-col items-center gap-px rounded-[7px] px-1 py-1.5 transition-colors ${
-                    active ? "bg-white shadow-sm" : "hover:bg-slate-50"
+                    active ? activeBg : "hover:bg-slate-50"
                   }`}
                 >
                   <span
-                    className={`text-xs ${active ? "font-bold text-slate-900" : "font-semibold text-slate-500"}`}
+                    className={`inline-flex items-center gap-1 text-xs ${active ? `font-bold ${activeLabelColor}` : "font-semibold text-slate-500"}`}
                   >
+                    {!active && tone !== "all" && (
+                      <span
+                        className={`size-1.5 shrink-0 rounded-full ${tone === "toss" ? "bg-blue-600" : "bg-emerald-600"}`}
+                      />
+                    )}
                     {label}
                   </span>
                   {count !== null && (
                     <span
-                      className={`text-[11px] font-medium tabular-nums ${active ? "text-slate-500" : "text-slate-400"}`}
+                      className={`text-[11px] font-medium tabular-nums ${active ? activeValueColor : "text-slate-400"}`}
                     >
                       {count.toLocaleString()}
                     </span>
