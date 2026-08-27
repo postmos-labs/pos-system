@@ -6,7 +6,14 @@ import { requireDeletePermission } from "@/lib/auth/require-admin";
 import { createClient } from "@/lib/supabase/server";
 import { isAsChecklistComplete, type MerchantMemoEntryType } from "@/lib/asChecklist";
 import { fetchRowsForDeletion, recordDeletions } from "@/lib/deletionLog";
-import type { MerchantEquipmentCategory, MerchantOperationStatus } from "./merchant360";
+import {
+  MEMO_ISSUE_CATEGORIES,
+  MEMO_RESOLUTIONS,
+  type MemoIssueCategory,
+  type MemoResolution,
+  type MerchantEquipmentCategory,
+  type MerchantOperationStatus,
+} from "./merchant360";
 
 const CHUNK_SIZE = 100;
 
@@ -24,6 +31,9 @@ export async function addMerchantMemo(
   content: string,
   entryType: MerchantMemoEntryType = "general",
   checklist: Record<string, boolean> | null = null,
+  issueCategory: MemoIssueCategory | null = null,
+  resolution: MemoResolution | null = null,
+  isRepeat: boolean | null = null,
 ) {
   const supabase = await createClient();
   const {
@@ -44,15 +54,32 @@ export async function addMerchantMemo(
   if (entryType === "as" && !isAsChecklistComplete(checklist)) {
     return { error: "AS 체크리스트를 모두 확인해야 저장할 수 있습니다.", skipped: false };
   }
+  if (issueCategory !== null && !MEMO_ISSUE_CATEGORIES.includes(issueCategory)) {
+    return { error: "잘못된 문제 유형입니다.", skipped: false };
+  }
+  if (resolution !== null && !MEMO_RESOLUTIONS.includes(resolution)) {
+    return { error: "잘못된 해결 방식입니다.", skipped: false };
+  }
 
   const admin = createAdminClient();
-  const { error } = await admin.from("merchant_memo_entries").insert({
+  const baseValues = {
     merchant_id: merchantId,
     content: trimmedContent,
     entry_type: entryType,
     checklist: entryType === "as" ? checklist : null,
     created_by: user.id,
-  });
+  };
+  const extendedValues = {
+    ...baseValues,
+    issue_category: issueCategory,
+    resolution: resolution,
+    is_repeat: isRepeat,
+  };
+
+  let { error } = await admin.from("merchant_memo_entries").insert(extendedValues);
+  if (error && isMissingColumnError(error)) {
+    ({ error } = await admin.from("merchant_memo_entries").insert(baseValues));
+  }
   if (error) {
     if (isMissingMerchantMemoEntriesTable(error)) {
       return { error: null, skipped: true };
@@ -95,6 +122,7 @@ export async function updateMerchantInfo(
     contactName?: string;
     contactPhone?: string;
     operationStatus?: MerchantOperationStatus;
+    vanCompany?: string;
   },
 ) {
   const supabase = await createClient();
@@ -127,8 +155,15 @@ export async function updateMerchantInfo(
     operation_status: input.operationStatus ?? "active",
     contract_started_at: input.contractStartedAt?.trim() || null,
   };
+  const fullValues = {
+    ...extendedValues,
+    van_company: input.vanCompany?.trim() || null,
+  };
 
-  let { error } = await admin.from("merchants").update(extendedValues).eq("id", merchantId);
+  let { error } = await admin.from("merchants").update(fullValues).eq("id", merchantId);
+  if (error && isMissingColumnError(error)) {
+    ({ error } = await admin.from("merchants").update(extendedValues).eq("id", merchantId));
+  }
   if (error && isMissingColumnError(error)) {
     ({ error } = await admin.from("merchants").update(baseValues).eq("id", merchantId));
   }

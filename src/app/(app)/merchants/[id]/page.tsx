@@ -111,7 +111,11 @@ export default async function MerchantUnifiedPage({ params }: Props) {
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <MerchantInfoCard merchant={merchant} programLabel={application?.program ?? null} />
+        <MerchantInfoCard
+          merchant={merchant}
+          programLabel={application?.program ?? null}
+          applicationVanCompany={application?.van_company ?? null}
+        />
         <InstallInfoCard
           merchant={merchant}
           derivedSummary={derivedSummary}
@@ -123,7 +127,6 @@ export default async function MerchantUnifiedPage({ params }: Props) {
         <ContractCard
           merchant={merchant}
           contractMonths={contractMonths}
-          vanCompany={application?.van_company ?? null}
           internet={application?.internet ?? null}
         />
         <QuickActions

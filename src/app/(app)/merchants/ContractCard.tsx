@@ -36,12 +36,10 @@ function addMonthsToDate(startValue: string, months: number): string | null {
 export default function ContractCard({
   merchant,
   contractMonths,
-  vanCompany,
   internet,
 }: {
   merchant: Merchant360Merchant;
   contractMonths: number | null;
-  vanCompany: string | null;
   internet: string | null;
 }) {
   const router = useRouter();
@@ -114,6 +112,7 @@ export default function ContractCard({
       addressDetail: merchant.address_detail ?? "",
       businessNumber: merchant.business_number ?? "",
       brand: merchant.brand ?? "",
+      vanCompany: merchant.van_company ?? "",
       contactName: merchant.contact_name ?? "",
       contactPhone: merchant.contact_phone ?? "",
       operationStatus: (merchant.operation_status ?? "active") as MerchantOperationStatus,
@@ -212,7 +211,6 @@ export default function ContractCard({
             value={contractMonths !== null ? `${contractMonths}개월` : null}
           />
           <DetailField label="토스 가맹점번호" value={merchant.toss_merchant_no} />
-          <DetailField label="VAN사" value={vanCompany} />
           <DetailField label="인터넷" value={internet} />
         </div>
       )}

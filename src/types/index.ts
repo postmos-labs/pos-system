@@ -393,6 +393,11 @@ export const FRANCHISE_CHANNEL_LABEL: Record<FranchiseChannel, string> = {
   toss_lead: "토스 리드",
 };
 
+// VAN사 목록. 가맹접수(목록/등록/상세)와 가맹점 화면이 같은 값을 써야 하므로 여기서만 관리한다.
+// DB의 van_company는 TEXT라 값 추가에 마이그레이션이 필요 없다.
+export const VAN_COMPANIES = ["코세스2", "코세스1", "코벤", "기가맹", "KICC"] as const;
+export type VanCompany = (typeof VAN_COMPANIES)[number];
+
 export const FRANCHISE_CASE_TYPE_LABEL: Record<FranchiseCaseType, string> = {
   new: "신규",
   conversion: "전환",

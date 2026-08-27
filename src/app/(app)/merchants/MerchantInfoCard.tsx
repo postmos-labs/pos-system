@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AppSelect } from "@/components/ui/AppSelect";
+import { VAN_COMPANIES } from "@/types";
 import { updateMerchantInfo } from "./actions";
 import {
   MERCHANT_OPERATION_STATUS_LABEL,
@@ -25,13 +26,23 @@ const OPERATION_STATUS_OPTIONS = (
   Object.keys(MERCHANT_OPERATION_STATUS_LABEL) as MerchantOperationStatus[]
 ).map((value) => ({ value, label: MERCHANT_OPERATION_STATUS_LABEL[value] }));
 
+const VAN_COMPANY_OPTIONS = [
+  { value: "", label: "선택 안 함" },
+  ...VAN_COMPANIES.map((value) => ({ value, label: value })),
+];
+
 export default function MerchantInfoCard({
   merchant,
   programLabel,
+  applicationVanCompany,
 }: {
   merchant: Merchant360Merchant;
   programLabel: string | null;
+  // 가맹점 자체 값(merchants.van_company)이 비어 있으면 연결된 가맹접수 값을 대신 보여준다.
+  // 덕분에 117번 마이그레이션 후 백필 UPDATE 없이도 기존 가맹점의 VAN사가 그대로 보인다.
+  applicationVanCompany: string | null;
 }) {
+  const effectiveVanCompany = merchant.van_company || applicationVanCompany;
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -49,6 +60,7 @@ export default function MerchantInfoCard({
     contractExpiresAt: merchant.contract_expires_at ?? "",
     contractStartedAt: merchant.contract_started_at ?? "",
     brand: merchant.brand ?? "",
+    vanCompany: merchant.van_company ?? applicationVanCompany ?? "",
   });
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -158,6 +170,16 @@ export default function MerchantInfoCard({
               />
             </label>
             <label className="block text-xs">
+              <span className="mb-1 block font-semibold text-slate-500">VAN사</span>
+              <AppSelect
+                value={draft.vanCompany}
+                onValueChange={(value) => setDraft((p) => ({ ...p, vanCompany: value }))}
+                options={VAN_COMPANY_OPTIONS}
+                className="h-9 w-full text-sm"
+                aria-label="VAN사"
+              />
+            </label>
+            <label className="block text-xs">
               <span className="mb-1 block font-semibold text-slate-500">소속 브랜드</span>
               <input
                 value={draft.brand}
@@ -210,6 +232,7 @@ export default function MerchantInfoCard({
             }
           />
           <DetailField label="사용 프로그램" value={programLabel} />
+          <DetailField label="VAN사" value={effectiveVanCompany} />
         </div>
       )}
     </section>

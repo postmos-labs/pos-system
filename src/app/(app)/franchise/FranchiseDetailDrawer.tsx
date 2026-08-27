@@ -16,6 +16,7 @@ import {
   FRANCHISE_CHANNEL_LABEL,
   FRANCHISE_STATUS_LABEL,
   PROGRAMS,
+  VAN_COMPANIES,
 } from "@/types";
 import { formatBusinessNumber, formatPhone } from "@/lib/format";
 import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
@@ -40,7 +41,6 @@ const EQUIPMENT_CATALOG = [
   "보조배터리",
   "원격",
 ];
-const VAN_COMPANIES = ["코세스2", "코세스1", "코벤", "기가맹"];
 const INTERNET_PROVIDERS = ["3S", "백메가"];
 const HIDDEN_STATUSES: FranchiseStatus[] = [
   "internet_apply_done",

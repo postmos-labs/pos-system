@@ -52,6 +52,13 @@ function isMissingColumnError(error: { code?: string; message?: string } | null)
 const BASE_MERCHANT_COLUMNS =
   "id,business_name,owner_name,phone,address,address_detail,business_number,open_date,toss_merchant_no,contract_expires_at,brand,created_at,franchise_application_id";
 const EXTENDED_MERCHANT_COLUMNS = `${BASE_MERCHANT_COLUMNS},operation_status,contract_started_at,contact_name,contact_phone,install_note`;
+// 117번 마이그레이션 적용 전에는 select에서 빠질 수 있어 EXTENDED에서 한 단 더 폴백한다.
+const FULL_MERCHANT_COLUMNS = `${EXTENDED_MERCHANT_COLUMNS},van_company`;
+
+const MEMO_ENTRY_BASE_COLUMNS =
+  "id,content,created_at,created_by,entry_type,checklist,author:profiles(name)";
+// 117번 마이그레이션 적용 전에는 select에서 빠질 수 있어 폴백한다.
+const MEMO_ENTRY_FULL_COLUMNS = `${MEMO_ENTRY_BASE_COLUMNS},issue_category,resolution,is_repeat`;
 
 const BASE_EQUIPMENT_COLUMNS = "id,name,serial_number,status,installed_date,notes,created_at";
 const EXTENDED_EQUIPMENT_COLUMNS = `${BASE_EQUIPMENT_COLUMNS},category,quantity,components,manufacturer,supplier,location,source`;
@@ -81,6 +88,10 @@ type MerchantMemoEntryRow = {
   author: { name: string }[];
   entry_type: "as" | "claim" | "general" | "etc" | null;
   checklist: Record<string, boolean> | null;
+  // 117번 마이그레이션 적용 전에는 select에서 빠질 수 있어 옵셔널로 둔다.
+  issue_category?: MerchantMemoEntry["issue_category"];
+  resolution?: MerchantMemoEntry["resolution"];
+  is_repeat?: MerchantMemoEntry["is_repeat"];
 };
 
 type AsTicketRow = {
@@ -203,6 +214,13 @@ async function fetchMerchantRow(
   supabase: Awaited<ReturnType<typeof createClient>>,
   merchantId: string,
 ) {
+  const full = await supabase
+    .from("merchants")
+    .select(FULL_MERCHANT_COLUMNS)
+    .eq("id", merchantId)
+    .maybeSingle();
+  if (!full.error || !isMissingColumnError(full.error)) return full;
+
   const extended = await supabase
     .from("merchants")
     .select(EXTENDED_MERCHANT_COLUMNS)
@@ -216,6 +234,25 @@ async function fetchMerchantRow(
       .maybeSingle();
   }
   return extended;
+}
+
+async function fetchMemoEntries(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  merchantId: string,
+) {
+  const full = await supabase
+    .from("merchant_memo_entries")
+    .select(MEMO_ENTRY_FULL_COLUMNS)
+    .eq("merchant_id", merchantId)
+    .order("created_at", { ascending: false });
+  if (full.error && isMissingColumnError(full.error)) {
+    return supabase
+      .from("merchant_memo_entries")
+      .select(MEMO_ENTRY_BASE_COLUMNS)
+      .eq("merchant_id", merchantId)
+      .order("created_at", { ascending: false });
+  }
+  return full;
 }
 
 async function fetchEquipmentRows(
@@ -307,11 +344,7 @@ export async function loadMerchant360(
           .eq("franchise_application_id", franchiseApplicationId)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
-    supabase
-      .from("merchant_memo_entries")
-      .select("id,content,created_at,created_by,entry_type,checklist,author:profiles(name)")
-      .eq("merchant_id", merchantId)
-      .order("created_at", { ascending: false }),
+    fetchMemoEntries(supabase, merchantId),
     fetchEquipmentRows(supabase, merchantId),
     supabase
       .from("tickets")
@@ -454,6 +487,9 @@ export async function loadMerchant360(
     stage: classifyMemo(memo.created_at, installations, firstCompletionAt),
     entry_type: memo.entry_type ?? "general",
     checklist: memo.checklist,
+    issue_category: memo.issue_category ?? null,
+    resolution: memo.resolution ?? null,
+    is_repeat: memo.is_repeat ?? null,
   }));
 
   const history: WorkHistoryItem[] = [];

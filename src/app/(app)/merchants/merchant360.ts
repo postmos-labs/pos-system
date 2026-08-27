@@ -14,6 +14,36 @@ export interface WorkHistoryItem {
   actorName?: string | null;
 }
 
+// CS 이력 집계용 분류. 월간 보고서(장애 유형별 건수, 원격 해결률, 출장 건수, 반복 장애)를
+// 뽑기 위한 값이라 자유 텍스트가 아니라 고정 목록으로 받는다.
+export type MemoIssueCategory = "payment" | "pos" | "device" | "install" | "usage" | "etc";
+
+export const MEMO_ISSUE_CATEGORY_LABEL: Record<MemoIssueCategory, string> = {
+  payment: "결제",
+  pos: "포스",
+  device: "장비",
+  install: "설치오류",
+  usage: "사용법",
+  etc: "기타",
+};
+
+export const MEMO_ISSUE_CATEGORIES = Object.keys(MEMO_ISSUE_CATEGORY_LABEL) as MemoIssueCategory[];
+
+export type MemoResolution = "phone" | "guide" | "remote" | "onsite" | "unresolved";
+
+export const MEMO_RESOLUTION_LABEL: Record<MemoResolution, string> = {
+  phone: "전화",
+  guide: "가이드",
+  remote: "원격",
+  onsite: "출장",
+  unresolved: "미해결",
+};
+
+export const MEMO_RESOLUTIONS = Object.keys(MEMO_RESOLUTION_LABEL) as MemoResolution[];
+
+// "원격 해결률"에 포함하는 값 — 현장 출동 없이 끝난 건.
+export const REMOTE_RESOLUTIONS: MemoResolution[] = ["phone", "guide", "remote"];
+
 export interface MerchantMemoEntry {
   id: string;
   content: string;
@@ -23,6 +53,10 @@ export interface MerchantMemoEntry {
   stage: MerchantMemoStage;
   entry_type: "as" | "claim" | "general" | "etc";
   checklist: Record<string, boolean> | null;
+  // 117번 마이그레이션 적용 전에는 select에서 빠질 수 있어 옵셔널로 둔다.
+  issue_category?: MemoIssueCategory | null;
+  resolution?: MemoResolution | null;
+  is_repeat?: boolean | null;
 }
 
 export type MerchantEquipmentStatus = "installed" | "as" | "removed";
@@ -96,6 +130,8 @@ export interface Merchant360Merchant {
   contact_name?: string | null;
   contact_phone?: string | null;
   install_note?: string | null;
+  // 117번 마이그레이션 적용 전에는 select에서 빠질 수 있어 옵셔널로 둔다.
+  van_company?: string | null;
 }
 
 export interface Merchant360Application {

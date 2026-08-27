@@ -129,7 +129,11 @@ function MerchantDetailPanel({
         />
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <MerchantInfoCard merchant={merchant} programLabel={application?.program ?? null} />
+          <MerchantInfoCard
+            merchant={merchant}
+            programLabel={application?.program ?? null}
+            applicationVanCompany={application?.van_company ?? null}
+          />
           <InstallInfoCard
             merchant={merchant}
             derivedSummary={derivedSummary}
@@ -141,7 +145,6 @@ function MerchantDetailPanel({
           <ContractCard
             merchant={merchant}
             contractMonths={contractMonths}
-            vanCompany={application?.van_company ?? null}
             internet={application?.internet ?? null}
           />
           <QuickActions

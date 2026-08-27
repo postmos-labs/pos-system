@@ -59,6 +59,7 @@ import {
   FRANCHISE_ALIMTALK_LOG_LABEL,
   FRANCHISE_INSTALL_LOG_LABEL,
   FRANCHISE_TRANSFER_LOG_LABEL,
+  VAN_COMPANIES,
 } from "@/types";
 import type { DocCase } from "@/lib/solapi";
 import { useToast } from "@/components/ui/Toast";
@@ -121,7 +122,6 @@ const EQUIPMENT_CATALOG = [
   "보조배터리",
   "원격",
 ];
-const VAN_COMPANIES = ["코세스2", "코세스1", "코벤", "기가맹"];
 const INTERNET_PROVIDERS = ["3S", "백메가"];
 
 function parseVanList(value: string) {
@@ -244,6 +244,7 @@ function defaultCreateForm() {
 }
 
 const STATUS_DROPDOWN_HIDDEN: FranchiseStatus[] = [
+  "info_input",
   "internet_apply_done",
   "internet_done",
   "card_internet_apply_done",
@@ -3201,6 +3202,7 @@ export default function FranchiseClient({
         channelFilter={channelFilter}
         caseTypeFilter={caseTypeFilter}
         missedCallFilter={missedCallFilter}
+        vanFilter={vanFilter}
         dateFrom={dateFrom}
         dateTo={dateTo}
         sortBy={sortBy}
@@ -3227,6 +3229,7 @@ export default function FranchiseClient({
         onChannelFilterChange={setChannelFilter}
         onCaseTypeFilterChange={setCaseTypeFilter}
         onMissedCallFilterChange={setMissedCallFilter}
+        onVanFilterChange={setVanFilter}
         onDateFromChange={setDateFrom}
         onDateToChange={setDateTo}
         onSortChange={setSortBy}

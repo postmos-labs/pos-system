@@ -37,6 +37,7 @@ import {
   FRANCHISE_CASE_TYPE_LABEL,
   FRANCHISE_CHANNEL_LABEL,
   FRANCHISE_STATUS_LABEL,
+  VAN_COMPANIES,
 } from "@/types";
 import RateBadge from "@/components/ui/RateBadge";
 import { AppSelect } from "@/components/ui/AppSelect";
@@ -141,6 +142,7 @@ interface Props {
   channelFilter: string;
   caseTypeFilter: string;
   missedCallFilter: string;
+  vanFilter: string;
   dateFrom: string;
   dateTo: string;
   sortBy: SortBy;
@@ -159,6 +161,7 @@ interface Props {
   onChannelFilterChange: (value: string) => void;
   onCaseTypeFilterChange: (value: string) => void;
   onMissedCallFilterChange: (value: string) => void;
+  onVanFilterChange: (value: string) => void;
   onDateFromChange: (value: string) => void;
   onDateToChange: (value: string) => void;
   onSortChange: (value: SortBy) => void;
@@ -749,6 +752,17 @@ export default function FranchiseReceiptSurface(props: Props) {
                 ]}
               />
             </div>
+            <div className="w-32">
+              <AppSelect
+                aria-label="VAN사"
+                value={props.vanFilter}
+                onValueChange={props.onVanFilterChange}
+                options={[
+                  { value: "", label: "VAN사 전체" },
+                  ...VAN_COMPANIES.map((v) => ({ value: v, label: v })),
+                ]}
+              />
+            </div>
             <div className="flex items-center gap-1">
               <DatePickerField
                 ariaLabel="접수일 시작"
@@ -963,6 +977,11 @@ export default function FranchiseReceiptSurface(props: Props) {
                       >
                         {row.business_name || "-"}
                       </button>
+                      {row.van_company && (
+                        <span className="block truncate text-[11px] font-medium text-slate-400">
+                          {row.van_company}
+                        </span>
+                      )}
                     </td>
                     <td className="text-foreground px-2.5 py-2.5 whitespace-nowrap">
                       {row.owner_name || "-"}
