@@ -17,6 +17,15 @@ import {
 
 const CHUNK_SIZE = 100;
 
+// 23503 = 다른 표가 이 가맹점을 참조 중이라 Postgres가 삭제를 막은 경우.
+// 원문은 영어라 직원이 알아볼 수 없으므로 한글로 바꿔 준다.
+function describeMerchantDeleteError(error: { code?: string; message?: string }) {
+  if (error.code === "23503") {
+    return "다른 기록(변경관리·설치 후 메모 등)이 이 가맹점을 참조하고 있어 삭제할 수 없습니다. 해당 기록을 먼저 정리해주세요.";
+  }
+  return error.message ?? "삭제에 실패했습니다.";
+}
+
 function isMissingMerchantMemoEntriesTable(error: { code?: string; message?: string } | null) {
   if (!error) return false;
   return (
@@ -382,16 +391,20 @@ export async function deleteMerchantEquipment(id: string) {
 
 export async function deleteMerchants(ids: string[]) {
   const authError = await requireDeletePermission();
-  if (authError) return { error: authError };
-  if (!ids.length) return { error: null };
+  if (authError) return { error: authError, deletedCount: 0 };
+  if (!ids.length) return { error: null, deletedCount: 0 };
   const supabase = createAdminClient();
+  // 묶음 중간에 실패하면 앞 묶음은 이미 지워진 상태다. 몇 건이 지워졌는지 함께 돌려줘
+  // 호출부가 "일부만 지워졌다"고 알리고 목록도 새로 고칠 수 있게 한다.
+  let deletedCount = 0;
   for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
     const chunk = ids.slice(i, i + CHUNK_SIZE);
     // 가맹점을 지우면 메모·장비 등 연결 데이터도 CASCADE로 사라지므로 삭제 전에 스냅샷을 남긴다
     const snapshots = await fetchRowsForDeletion("merchants", chunk);
     const { error } = await supabase.from("merchants").delete().in("id", chunk);
-    if (error) return { error: error.message };
+    if (error) return { error: describeMerchantDeleteError(error), deletedCount };
+    deletedCount += chunk.length;
     await recordDeletions("merchant", snapshots);
   }
-  return { error: null };
+  return { error: null, deletedCount };
 }

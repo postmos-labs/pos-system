@@ -253,11 +253,18 @@ export default function MerchantsClient({
 
   async function confirmDelete() {
     setDeleting(true);
-    const { error } = await deleteMerchants([...selected]);
+    const { error, deletedCount } = await deleteMerchants([...selected]);
     setDeleting(false);
     setDeleteConfirmOpen(false);
     if (error) {
-      alert("삭제 실패: " + error);
+      // 앞 묶음이 이미 지워졌을 수 있다. 몇 건이 지워졌는지 알리고 목록도 새로 고친다.
+      alert(
+        deletedCount > 0 ? `${deletedCount}건만 삭제됐습니다.\n\n${error}` : "삭제 실패: " + error,
+      );
+      if (deletedCount > 0) {
+        setSelected(new Set());
+        router.refresh();
+      }
       return;
     }
     setSelected(new Set());
