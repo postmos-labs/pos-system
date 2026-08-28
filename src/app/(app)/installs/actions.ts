@@ -463,6 +463,22 @@ export async function requestInstallationStatusApproval(input: {
     ...parseApprovalNotes(transferApproval?.approval_notes),
     ...parseApprovalNotes(previousApproval?.approval_notes),
   ].filter((note, index, notes) => notes.findIndex((item) => item.id === note.id) === index);
+  // 같은 설치건에 대기 중 요청이 이미 있으면 새로 만들지 않는다.
+  // 중복 행이 생기면 승인 조회(.single())가 에러를 내 승인 자체가 막힌다.
+  const { data: pendingApproval } = await admin
+    .from("installation_completion_approvals")
+    .select("id")
+    .eq("installation_id", input.installationId)
+    .in("status", ["requested", "responsible_approved"])
+    .limit(1)
+    .maybeSingle();
+  if (pendingApproval) {
+    return {
+      error: "이미 승인 대기 중인 요청이 있습니다.",
+      approvalId: null,
+      approvalStatus: null,
+    };
+  }
   const { data: approval, error: approvalError } = await admin
     .from("installation_completion_approvals")
     .insert({
@@ -604,7 +620,9 @@ export async function approveInstallationCompletion(installationId: string, note
     .select("id, requested_by, target_status, approval_notes")
     .eq("installation_id", installationId)
     .eq("status", "requested")
-    .single();
+    .order("requested_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
   if (!approval) return { error: "처리할 승인 요청이 없습니다.", notificationError: null };
   if (approval.requested_by === user.id) {
     return { error: "요청자는 직접 승인할 수 없습니다.", notificationError: null };
@@ -710,7 +728,9 @@ export async function approveInstallationStatusByTeamLead(installationId: string
     .select("id, requested_by, target_status, request_payload, approval_notes")
     .eq("installation_id", installationId)
     .eq("status", "responsible_approved")
-    .single();
+    .order("requested_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
   if (!approval) return { error: "처리할 최종 승인 요청이 없습니다.", notificationError: null };
   if (approval.requested_by === user.id)
     return { error: "요청자는 직접 승인할 수 없습니다.", notificationError: null };

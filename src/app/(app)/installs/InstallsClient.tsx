@@ -918,6 +918,16 @@ export default function InstallsClient({
       ? "팀장에게 전달할 비고를 입력해주세요."
       : "기술지원책임에게 전달할 비고를 입력해주세요.";
 
+  // 승인요청(requestInstallationStatusApproval/requestInstallationCompletion)으로 이어지는 상태는
+  // 서버가 tech/admin/master만 허용하므로, CS에게는 드롭다운에서부터 노출하지 않는다.
+  const canRequestApproval = ["tech", "admin", "master"].includes(profile.role);
+  const approvalOnlyStatuses = new Set([...APPROVAL_TARGETS, "completed"]);
+  function statusOptionsFor(deliveryType?: string) {
+    return statusOrderFor(deliveryType)
+      .filter((s) => canRequestApproval || !approvalOnlyStatuses.has(s))
+      .map((s) => ({ value: s, label: statusLabel(s, deliveryType) }));
+  }
+
   async function requestStepApproval(id: string, targetStatus: string) {
     const note = await promptNote(approvalRequestPrompt);
     if (note === null) return false;
@@ -1183,11 +1193,16 @@ export default function InstallsClient({
       photoUrls.push(publicUrl);
     }
 
+    // 반려 후 사진 없이 재제출해도 기존 완료사진이 사라지지 않도록 기존 값 뒤에 새 사진을 이어붙인다.
+    const mergedPhotoUrls = Array.from(
+      new Set([...(prevInst?.completion_photo_urls ?? []), ...photoUrls]),
+    );
+
     const { error } = await supabase
       .from("installations")
       .update({
         notes: saveValue,
-        completion_photo_urls: photoUrls,
+        completion_photo_urls: mergedPhotoUrls,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
@@ -1226,7 +1241,9 @@ export default function InstallsClient({
     );
     setInstalls((prev) =>
       prev.map((i) =>
-        i.id === id ? { ...i, notes: saveValue ?? undefined, completion_photo_urls: photoUrls } : i,
+        i.id === id
+          ? { ...i, notes: saveValue ?? undefined, completion_photo_urls: mergedPhotoUrls }
+          : i,
       ),
     );
     setCompletionApprovals((prev) => ({ ...prev, [id]: approval }));
@@ -2693,10 +2710,7 @@ export default function InstallsClient({
                               .split(" ")
                               .map((c) => `!${c}`)
                               .join(" ")}`}
-                            options={statusOrderFor(inst.delivery_type).map((s) => ({
-                              value: s,
-                              label: statusLabel(s, inst.delivery_type),
-                            }))}
+                            options={statusOptionsFor(inst.delivery_type)}
                           />
                           {!!approvalNoteHistory[inst.id]?.length && (
                             <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3">
@@ -2966,10 +2980,7 @@ export default function InstallsClient({
                               .split(" ")
                               .map((c) => `!${c}`)
                               .join(" ")}`}
-                            options={statusOrderFor(inst.delivery_type).map((s) => ({
-                              value: s,
-                              label: statusLabel(s, inst.delivery_type),
-                            }))}
+                            options={statusOptionsFor(inst.delivery_type)}
                           />
                         ) : (
                           <span

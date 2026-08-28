@@ -20,7 +20,13 @@ import {
   computeEquipmentCategorySummaries,
   type MerchantEquipmentItem,
 } from "../merchants/merchant360";
-import { STATUS_COLORS, STATUS_LABELS, statusLabel, statusOrderFor } from "./installStatus";
+import {
+  APPROVAL_TARGETS,
+  STATUS_COLORS,
+  STATUS_LABELS,
+  statusLabel,
+  statusOrderFor,
+} from "./installStatus";
 import type { Installation, CompletionApproval } from "./InstallsClient";
 
 // franchise_applications를 "*"로 select한 뒤 sales/cs 조인의 name만 붙인 결과 중,
@@ -257,6 +263,17 @@ export default function InstallDetailDrawer({
   const franchiseLoaded =
     !franchiseLoading && !!franchiseDetail && Object.keys(franchiseDetail).length > 0;
 
+  // 승인요청(requestInstallationStatusApproval/requestInstallationCompletion)으로 이어지는 상태는
+  // 서버가 tech/admin/master만 허용하므로, CS에게는 드롭다운에서부터 노출하지 않는다.
+  const canRequestApproval = ["tech", "admin", "master"].includes(profile.role);
+  const approvalOnlyStatuses = new Set([...APPROVAL_TARGETS, "completed"]);
+  const statusOptions = statusOrderFor(installation.delivery_type)
+    .filter((s) => canRequestApproval || !approvalOnlyStatuses.has(s))
+    .map((s) => ({
+      value: s,
+      label: statusLabel(s, installation.delivery_type),
+    }));
+
   return (
     <div className="fixed inset-0 z-40 bg-slate-900/35" onMouseDown={onClose}>
       <aside
@@ -448,10 +465,7 @@ export default function InstallDetailDrawer({
                       onValueChange={onStatusChange}
                       aria-label="상태 변경"
                       className="w-full"
-                      options={statusOrderFor(installation.delivery_type).map((s) => ({
-                        value: s,
-                        label: statusLabel(s, installation.delivery_type),
-                      }))}
+                      options={statusOptions}
                     />
                   ) : (
                     <ReadValue>
