@@ -2476,7 +2476,9 @@ export default function InstallsClient({
             fn: () => {
               const now = new Date();
               const mon = new Date(now);
-              mon.setDate(now.getDate() - now.getDay() + 1);
+              // getDay()는 일요일이 0이라 그대로 +1 하면 다음 주 월요일이 잡힌다.
+              // 일요일도 "이번주"(지나간 월~일)로 취급한다.
+              mon.setDate(now.getDate() - (now.getDay() === 0 ? 7 : now.getDay()) + 1);
               const sun = new Date(mon);
               sun.setDate(mon.getDate() + 6);
               setDateFrom(kstDate(mon));
