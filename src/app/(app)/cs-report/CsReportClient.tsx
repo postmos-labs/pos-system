@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, ChevronLeft, ChevronRight, Download } from "lucide-react";
-import { VAN_COMPANIES } from "@/types";
+import { VAN_GROUP_LABEL, type VanGroup } from "@/types";
 import { AppSelect } from "@/components/ui/AppSelect";
 import {
   MEMO_ISSUE_CATEGORY_LABEL,
@@ -113,7 +113,7 @@ export default function CsReportClient({
 
       const summaryData = [
         { 항목: "대상 기간", 값: month },
-        { 항목: "VAN사", 값: van || "전체" },
+        { 항목: "VAN사", 값: VAN_GROUP_LABEL[van as VanGroup] ?? van },
         { 항목: "관리 가맹점", 값: `${managedMerchantCount}개` },
         { 항목: "총 CS", 값: `${metrics.csTotal}건` },
         { 항목: "원격 해결", 값: formatPercent(metrics.remoteRate) },
@@ -149,7 +149,7 @@ export default function CsReportClient({
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(byResolutionData), "해결 방식별");
 
-      XLSX.writeFile(wb, `CS리포트_${month}_${van || "전체"}.xlsx`);
+      XLSX.writeFile(wb, `CS리포트_${month}_${VAN_GROUP_LABEL[van as VanGroup] ?? van}.xlsx`);
     } finally {
       setDownloading(false);
     }
@@ -194,8 +194,8 @@ export default function CsReportClient({
           aria-label="VAN사"
           className="w-40"
           options={[
-            { value: "", label: "전체 VAN사" },
-            ...VAN_COMPANIES.map((v) => ({ value: v, label: v })),
+            { value: "toss", label: VAN_GROUP_LABEL.toss },
+            { value: "kicc", label: VAN_GROUP_LABEL.kicc },
           ]}
         />
 

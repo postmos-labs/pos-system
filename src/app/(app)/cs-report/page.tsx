@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { VAN_COMPANIES } from "@/types";
+import { KICC_VAN_COMPANY, type VanGroup } from "@/types";
 import { computeCsReportMetrics, type CsReportMemoInput } from "@/lib/csReport";
 import CsReportClient from "./CsReportClient";
 
@@ -150,8 +150,8 @@ export default async function CsReportPage({ searchParams }: Props) {
 
   const kstToday = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
   const month = isValidMonth(params.month) ? params.month : kstToday.slice(0, 7);
-  const van =
-    params.van && (VAN_COMPANIES as readonly string[]).includes(params.van) ? params.van : "";
+  // 리포트는 개별 VAN사가 아니라 계열(토스계열/KICC) 단위로만 본다. 기본은 토스계열.
+  const van: VanGroup = params.van === "kicc" ? "kicc" : "toss";
 
   const { startIso, endIso } = monthRangeKst(month);
   const { startIso: prevStartIso, endIso: prevEndIso } = monthRangeKst(shiftMonth(month, -1));
@@ -212,8 +212,16 @@ export default async function CsReportPage({ searchParams }: Props) {
     return parseVanList(own || fallback || "");
   }
 
+  // 가맹점 탭의 계열 필터와 같은 정의 — kicc: KICC 포함 / toss: VAN사가 있고 KICC 미포함.
+  const isKiccList = (list: string[]) =>
+    list.some((v) => v.toUpperCase().includes(KICC_VAN_COMPANY));
   const matchingMerchantIds = new Set(
-    merchants.filter((m) => !van || effectiveVanList(m).includes(van)).map((m) => m.id),
+    merchants
+      .filter((m) => {
+        const list = effectiveVanList(m);
+        return van === "kicc" ? isKiccList(list) : list.length > 0 && !isKiccList(list);
+      })
+      .map((m) => m.id),
   );
   const brandByMerchantId = new Map(merchants.map((m) => [m.id, m.brand ?? null]));
 
