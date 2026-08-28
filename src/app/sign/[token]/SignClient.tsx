@@ -270,12 +270,10 @@ export default function SignClient({ contract, previewImageDataUrl }: Props) {
     fetch("/api/contracts/notify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      // 로그인이 없는 화면이라 서명 토큰으로 확인한다. 수신번호는 서버가 DB에서 읽는다.
       body: JSON.stringify({
         type: "sign_complete",
-        signerPhone: contract.signer_phone ?? "",
-        signerName: contract.signer_name,
-        contractTitle: contract.title,
-        contractId: contract.id,
+        signToken: contract.sign_token,
       }),
     })
       .then(async (res) => {

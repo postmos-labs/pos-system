@@ -224,12 +224,9 @@ export default function ZoneEditor({ contract }: Props) {
       const res = await fetch("/api/contracts/notify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // 수신번호·이름은 서버가 DB에서 읽는다. 여기서 보내면 임의 번호로 발송될 수 있다.
         body: JSON.stringify({
           type: "sign_request",
-          signerPhone: contract.signer_phone,
-          signerName: contract.signer_name,
-          contractTitle: contract.title,
-          signToken: contract.sign_token,
           contractId: contract.id,
         }),
       });
