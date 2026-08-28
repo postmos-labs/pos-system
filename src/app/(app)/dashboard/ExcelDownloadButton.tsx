@@ -239,6 +239,9 @@ export default function ExcelDownloadButton() {
         completed: "설치완료",
         rejected: "반려",
       };
+      const franchiseVanCompanyById = new Map<string, string>(
+        (franchiseRows ?? []).map((r) => [r.id, r.van_company ?? ""]),
+      );
       const installData = (installRows ?? []).map((i: any) => ({
         상호명: i.customer_name ?? "",
         고객명: i.contact_name ?? "",
@@ -247,6 +250,7 @@ export default function ExcelDownloadButton() {
         상태: STATUS_KO[i.status] ?? i.status,
         담당기사: i.assignee?.name ?? "",
         주소: i.address ?? "",
+        VAN사: franchiseVanCompanyById.get(i.franchise_application_id) ?? "",
         비고: i.notes ?? "",
         등록일: i.created_at
           ? format(new Date(i.created_at), "yyyy-MM-dd HH:mm", { locale: ko })
@@ -275,6 +279,7 @@ export default function ExcelDownloadButton() {
         대표자: m.owner_name ?? "",
         전화번호: m.phone ?? "",
         주소: m.address ?? "",
+        VAN사: m.van_company ?? "",
         POS모델: m.pos_model ?? "",
         담당영업: m.sales?.name ?? "",
         메모: m.memo ?? "",

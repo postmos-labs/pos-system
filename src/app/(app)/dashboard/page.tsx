@@ -5,6 +5,7 @@ import {
   FRANCHISE_STATUS_COLOR,
   type FranchiseStatus,
   type Profile,
+  type VanGroup,
 } from "@/types";
 import Link from "next/link";
 import { format } from "date-fns";
@@ -22,8 +23,30 @@ import {
 import ExcelDownloadButton from "./ExcelDownloadButton";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
+import VanGroupTabs from "./VanGroupTabs";
 
-export default async function DashboardPage() {
+type VanFilter = VanGroup | "";
+
+interface VanFilterable<T> {
+  ilike(column: string, pattern: string): T;
+  not(column: string, operator: string, value: unknown): T;
+}
+
+function applyVanFilter<T extends VanFilterable<T>>(query: T, van: VanFilter): T {
+  if (van === "kicc") return query.ilike("van_company", "%KICC%");
+  if (van === "toss") {
+    return query.not("van_company", "is", null).not("van_company", "ilike", "%KICC%");
+  }
+  return query;
+}
+
+interface Props {
+  searchParams: Promise<{ van?: string }>;
+}
+
+export default async function DashboardPage({ searchParams }: Props) {
+  const params = await searchParams;
+  const van: VanFilter = params.van === "toss" || params.van === "kicc" ? params.van : "";
   const supabase = await createClient();
 
   const {
@@ -39,12 +62,15 @@ export default async function DashboardPage() {
 
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 
-  let franchiseQuery = supabase
-    .from("franchise_applications")
-    .select(
-      "*, sales:profiles!franchise_applications_sales_id_fkey(name), cs:profiles!franchise_applications_cs_id_fkey(name)",
-    )
-    .order("updated_at", { ascending: false });
+  let franchiseQuery = applyVanFilter(
+    supabase
+      .from("franchise_applications")
+      .select(
+        "*, sales:profiles!franchise_applications_sales_id_fkey(name), cs:profiles!franchise_applications_cs_id_fkey(name)",
+      )
+      .order("updated_at", { ascending: false }),
+    van,
+  );
   if (p.role === "sales") franchiseQuery = franchiseQuery.eq("sales_id", userId);
   if (p.role === "cs") franchiseQuery = franchiseQuery.eq("cs_id", userId);
 
@@ -55,20 +81,26 @@ export default async function DashboardPage() {
     "toss_review_done",
   ];
   function buildCountQuery(status: FranchiseStatus) {
-    let q = supabase
-      .from("franchise_applications")
-      .select("id", { count: "exact", head: true })
-      .eq("status", status);
+    let q = applyVanFilter(
+      supabase
+        .from("franchise_applications")
+        .select("id", { count: "exact", head: true })
+        .eq("status", status),
+      van,
+    );
     if (p.role === "sales") q = q.eq("sales_id", userId);
     if (p.role === "cs") q = q.eq("cs_id", userId);
     return q;
   }
 
-  const unassignedFranchiseQuery = supabase
-    .from("franchise_applications")
-    .select("id", { count: "exact", head: true })
-    .is("cs_id", null)
-    .not("status", "in", "(card_done,internet_done)");
+  const unassignedFranchiseQuery = applyVanFilter(
+    supabase
+      .from("franchise_applications")
+      .select("id", { count: "exact", head: true })
+      .is("cs_id", null)
+      .not("status", "in", "(card_done,internet_done)"),
+    van,
+  );
 
   const unassignedInstallQuery = supabase
     .from("installations")
@@ -88,33 +120,59 @@ export default async function DashboardPage() {
 
   const todayFranchiseQuery =
     p.role === "tech"
-      ? supabase
-          .from("franchise_applications")
-          .select("id, business_name, owner_name, address")
-          .eq("install_date", today)
+      ? applyVanFilter(
+          supabase
+            .from("franchise_applications")
+            .select("id, business_name, owner_name, address")
+            .eq("install_date", today),
+          van,
+        )
       : null;
 
   const staleDate = new Date(Date.now() - 7 * 86400000).toISOString();
-  let staleQuery = supabase
-    .from("franchise_applications")
-    .select("id", { count: "exact", head: true })
-    .lt("updated_at", staleDate)
-    .not("status", "in", "(card_done,internet_done)");
+  let staleQuery = applyVanFilter(
+    supabase
+      .from("franchise_applications")
+      .select("id", { count: "exact", head: true })
+      .lt("updated_at", staleDate)
+      .not("status", "in", "(card_done,internet_done)"),
+    van,
+  );
   if (p.role === "sales") staleQuery = staleQuery.eq("sales_id", userId);
   if (p.role === "cs") staleQuery = staleQuery.eq("cs_id", userId);
+
+  function buildVanGroupCountQuery(vanGroup: VanFilter) {
+    let q = applyVanFilter(
+      supabase.from("franchise_applications").select("id", { count: "exact", head: true }),
+      vanGroup,
+    );
+    if (p.role === "sales") q = q.eq("sales_id", userId);
+    if (p.role === "cs") q = q.eq("cs_id", userId);
+    return q;
+  }
 
   const [{ data: applications }, ...countResults] = await Promise.all([
     franchiseQuery.limit(8),
     ...countStatuses.map(buildCountQuery),
   ]);
 
+  const [{ count: vanAllCount }, { count: vanTossCount }, { count: vanKiccCount }] =
+    await Promise.all([
+      buildVanGroupCountQuery(""),
+      buildVanGroupCountQuery("toss"),
+      buildVanGroupCountQuery("kicc"),
+    ]);
+
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
   sixMonthsAgo.setDate(1);
-  const monthlyFranchiseQuery = supabase
-    .from("franchise_applications")
-    .select("created_at, status")
-    .gte("created_at", sixMonthsAgo.toISOString());
+  const monthlyFranchiseQuery = applyVanFilter(
+    supabase
+      .from("franchise_applications")
+      .select("created_at, status")
+      .gte("created_at", sixMonthsAgo.toISOString()),
+    van,
+  );
 
   const avgDaysQuery = supabase
     .from("installations")
@@ -223,6 +281,16 @@ export default async function DashboardPage() {
         </div>
         {(p.role === "admin" || p.role === "master" || p.role === "cs") && <ExcelDownloadButton />}
       </div>
+
+      {}
+      <VanGroupTabs
+        van={van}
+        counts={{
+          all: vanAllCount ?? 0,
+          toss: vanTossCount ?? 0,
+          kicc: vanKiccCount ?? 0,
+        }}
+      />
 
       {}
       {(p.role === "admin" || p.role === "master") &&
