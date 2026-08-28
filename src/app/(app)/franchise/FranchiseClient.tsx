@@ -1795,8 +1795,10 @@ export default function FranchiseClient({
 
     if (form.sendDocNotify && form.phone) {
       const docCase = docCaseOf(form.owner_name, form.business_name);
+      // 발송 실패를 삼키면 직원은 안내가 나간 줄 알고 고객은 서류 안내를 못 받는다.
+      // 등록 자체는 이미 끝났으므로 실패해도 등록은 유지하고 알림만 띄운다.
       try {
-        await fetch("/api/franchise/notify", {
+        const res = await fetch("/api/franchise/notify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1808,7 +1810,15 @@ export default function FranchiseClient({
             docCase,
           }),
         });
-      } catch {}
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          toast.error(
+            `서류 안내 발송 실패: ${json.error ?? res.status} (접수는 등록됨 — 고객에게 직접 안내해주세요)`,
+          );
+        }
+      } catch {
+        toast.error("서류 안내 발송에 실패했습니다. (접수는 등록됨 — 고객에게 직접 안내해주세요)");
+      }
     }
     setShowForm(false);
     const sales = form.sales_id

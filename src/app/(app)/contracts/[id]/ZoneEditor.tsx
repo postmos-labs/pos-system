@@ -219,7 +219,16 @@ export default function ZoneEditor({ contract }: Props) {
       return;
     }
     setSending(true);
-    await supabase.from("contracts").update({ signature_zones: zones }).eq("id", contract.id);
+    // 저장이 실패한 채 발송하면 고객은 DB에 남은 옛 서명 위치로 서명하게 된다. 실패 시 발송을 중단한다.
+    const { error: saveError } = await supabase
+      .from("contracts")
+      .update({ signature_zones: zones })
+      .eq("id", contract.id);
+    if (saveError) {
+      alert("서명 위치 저장에 실패해 발송을 중단했습니다: " + saveError.message);
+      setSending(false);
+      return;
+    }
     try {
       const res = await fetch("/api/contracts/notify", {
         method: "POST",
