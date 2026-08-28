@@ -87,6 +87,11 @@ export default async function MerchantUnifiedPage({ params }: Props) {
               {application.program}
             </span>
           )}
+          {application?.channel_label && (
+            <span className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-600">
+              {application.channel_label}
+            </span>
+          )}
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -115,6 +120,7 @@ export default async function MerchantUnifiedPage({ params }: Props) {
           merchant={merchant}
           programLabel={application?.program ?? null}
           applicationVanCompany={application?.van_company ?? null}
+          channelLabel={application?.channel_label ?? null}
         />
         <InstallInfoCard
           merchant={merchant}

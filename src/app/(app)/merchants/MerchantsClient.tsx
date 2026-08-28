@@ -112,6 +112,11 @@ function MerchantDetailPanel({
               {application.program}
             </span>
           )}
+          {application?.channel_label && (
+            <span className="shrink-0 rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-600">
+              {application.channel_label}
+            </span>
+          )}
           {canDelete && (
             <button
               type="button"
@@ -153,6 +158,7 @@ function MerchantDetailPanel({
             merchant={merchant}
             programLabel={application?.program ?? null}
             applicationVanCompany={application?.van_company ?? null}
+            channelLabel={application?.channel_label ?? null}
           />
           <InstallInfoCard
             merchant={merchant}

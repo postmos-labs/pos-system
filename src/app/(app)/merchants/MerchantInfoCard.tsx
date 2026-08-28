@@ -35,12 +35,15 @@ export default function MerchantInfoCard({
   merchant,
   programLabel,
   applicationVanCompany,
+  channelLabel,
 }: {
   merchant: Merchant360Merchant;
   programLabel: string | null;
   // 가맹점 자체 값(merchants.van_company)이 비어 있으면 연결된 가맹접수 값을 대신 보여준다.
   // 덕분에 117번 마이그레이션 후 백필 UPDATE 없이도 기존 가맹점의 VAN사가 그대로 보인다.
   applicationVanCompany: string | null;
+  // 인입경로 — 연결된 가맹접수의 channel. 가맹접수 소속 값이라 여기서는 표시만 하고 수정은 받지 않는다.
+  channelLabel: string | null;
 }) {
   const effectiveVanCompany = merchant.van_company || applicationVanCompany;
   const router = useRouter();
@@ -233,6 +236,7 @@ export default function MerchantInfoCard({
           />
           <DetailField label="사용 프로그램" value={programLabel} />
           <DetailField label="VAN사" value={effectiveVanCompany} />
+          <DetailField label="인입경로" value={channelLabel} />
         </div>
       )}
     </section>

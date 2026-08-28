@@ -133,7 +133,8 @@ export interface EquipmentItem {
 
 export const PROGRAMS = ["유니온", "아임유", "토스", "플릭"] as const;
 
-export type FranchiseChannel = "direct_sales" | "toss_lead";
+// 값을 추가할 땐 franchise_applications_channel_check 제약도 함께 넓혀야 저장이 된다 (supabase/122 참고).
+export type FranchiseChannel = "direct_sales" | "toss_lead" | "toss_premium_lead";
 export type FranchiseCaseType = "new" | "conversion" | "succession" | "name_change";
 
 export interface FranchisePreviousSnapshot {
@@ -391,6 +392,7 @@ export const FRANCHISE_STATUS_COLOR: Record<FranchiseStatus, string> = {
 export const FRANCHISE_CHANNEL_LABEL: Record<FranchiseChannel, string> = {
   direct_sales: "직접 영업",
   toss_lead: "토스 리드",
+  toss_premium_lead: "토스 프리미엄 리드",
 };
 
 // VAN사 목록. 가맹접수(목록/등록/상세)와 가맹점 화면이 같은 값을 써야 하므로 여기서만 관리한다.
