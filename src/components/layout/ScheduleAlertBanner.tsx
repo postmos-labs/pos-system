@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarClock, X } from "lucide-react";
+import { kstToday } from "@/lib/date";
 
 interface ScheduleAlert {
   ticketId: string;
@@ -15,7 +16,7 @@ const DISMISS_KEY = "schedule_alert_dismissed";
 const RECHECK_INTERVAL = 2 * 60 * 60 * 1000;
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  return kstToday();
 }
 
 function daysUntil(date: string) {

@@ -60,6 +60,7 @@ import {
   DELIVERY_TYPE_SOLID_COLORS,
   deliveryTypeOf,
 } from "./installStatus";
+import { kstToday, kstDate } from "@/lib/date";
 
 // merchants/loadMerchant360.ts의 fetchEquipmentRows와 같은 컬럼 세트. 114번 마이그레이션 미적용
 // 환경(카테고리/수량 등 컬럼 없음)에서도 가맹접수 원본 정보 드로어가 깨지지 않도록 기본 컬럼으로
@@ -1643,7 +1644,7 @@ export default function InstallsClient({
   }
 
   useEffect(() => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = kstToday();
     const lastCheck = localStorage.getItem("install_schedule_check");
     if (lastCheck === today) return;
     async function checkToday() {
@@ -2464,7 +2465,7 @@ export default function InstallsClient({
           {
             label: "오늘",
             fn: () => {
-              const d = new Date().toISOString().slice(0, 10);
+              const d = kstToday();
               setDateFrom(d);
               setDateTo(d);
               setPage(1);
@@ -2478,8 +2479,8 @@ export default function InstallsClient({
               mon.setDate(now.getDate() - now.getDay() + 1);
               const sun = new Date(mon);
               sun.setDate(mon.getDate() + 6);
-              setDateFrom(mon.toISOString().slice(0, 10));
-              setDateTo(sun.toISOString().slice(0, 10));
+              setDateFrom(kstDate(mon));
+              setDateTo(kstDate(sun));
               setPage(1);
             },
           },

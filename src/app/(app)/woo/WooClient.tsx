@@ -27,6 +27,7 @@ import MemoHistoryPanel from "@/components/ui/MemoHistoryPanel";
 import KpiCard from "@/components/ui/KpiCard";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { CalendarPopoverButton } from "@/components/ui/DatePickerField";
+import { kstDate } from "@/lib/date";
 
 interface Props {
   rows: WooCustomer[];
@@ -424,10 +425,10 @@ export default function WooClient({
 
   const kpis = useMemo(() => {
     const now = new Date();
-    const todayStr = now.toISOString().slice(0, 10);
+    const todayStr = kstDate(now);
     const in7 = new Date(now);
     in7.setDate(in7.getDate() + 7);
-    const in7Str = in7.toISOString().slice(0, 10);
+    const in7Str = kstDate(in7);
     return {
       today: localRows.filter((r) => r.received_date === todayStr).length,
       openSoon: localRows.filter(

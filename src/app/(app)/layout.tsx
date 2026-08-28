@@ -8,6 +8,7 @@ import ScheduleAlertBanner from "@/components/layout/ScheduleAlertBanner";
 import CsTabBar from "@/components/layout/CsTabBar";
 import { ToastProvider } from "@/components/ui/Toast";
 import type { Profile } from "@/types";
+import { kstToday } from "@/lib/date";
 
 const SCHEDULE_FIELDS = [
   { key: "scheduled_at", label: "일정" },
@@ -33,13 +34,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   if (!profile) redirect("/login");
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const limitStr = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+  const todayStr = kstToday();
+  const limitStr = kstToday(3);
   const oneHourAgoStr = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   // 정확한 경계 판정은 아래 JS 필터가 그대로 담당하므로, DB 조회는 하루 여유를 둔 넓은 범위로만 걸러
   // 오래된/먼 미래 티켓·가맹접수를 테이블에서 미리 제외한다 (테이블이 커질수록 효과 큼).
-  const queryFromStr = new Date(Date.now() - 1 * 86400000).toISOString().slice(0, 10);
-  const queryToStr = new Date(Date.now() + 4 * 86400000).toISOString().slice(0, 10);
+  const queryFromStr = kstToday(-1);
+  const queryToStr = kstToday(4);
   const ticketDateRangeOr = SCHEDULE_FIELDS.map(
     (f) => `and(${f.key}.gte.${queryFromStr},${f.key}.lte.${queryToStr})`,
   ).join(",");

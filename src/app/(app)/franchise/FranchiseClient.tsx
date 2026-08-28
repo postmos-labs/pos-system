@@ -90,6 +90,7 @@ import {
   applyFranchiseStatusSideEffects,
   notifyAndLogFranchiseStatus,
 } from "@/lib/franchiseStatusEffects";
+import { kstToday } from "@/lib/date";
 
 const DOC_CASE_LABEL: Record<DocCase, string> = {
   both: "대표자명+상호명",
@@ -249,7 +250,7 @@ const EMPTY_FORM = {
 };
 
 function defaultCreateForm() {
-  return { ...EMPTY_FORM, reception_date: new Date().toISOString().slice(0, 10) };
+  return { ...EMPTY_FORM, reception_date: kstToday() };
 }
 
 const STATUS_DROPDOWN_HIDDEN: FranchiseStatus[] = [
@@ -1174,7 +1175,7 @@ export default function FranchiseClient({
   }, []);
 
   useEffect(() => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = kstToday();
     const key = `reject_renotify_${currentUserId}_${today}`;
     if (localStorage.getItem(key)) return;
 

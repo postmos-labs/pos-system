@@ -42,6 +42,7 @@ import MemoHistoryPanel from "@/components/ui/MemoHistoryPanel";
 import KpiCard from "@/components/ui/KpiCard";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField } from "@/components/ui/DatePickerField";
+import { kstToday } from "@/lib/date";
 
 const PAGE_SIZE = 50;
 
@@ -62,7 +63,7 @@ function defaultCreateForm() {
     business_number: "",
     applicant_type: "individual" as ChangeApplicantType,
     change_type: "bank" as ChangeType,
-    reception_date: new Date().toISOString().slice(0, 10),
+    reception_date: kstToday(),
     payment_received: false,
     cs_id: "",
     memo: "",
@@ -245,7 +246,7 @@ export default function ChangesClient({
   const pagedRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const kpis = useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = kstToday();
     return {
       today: localRows.filter((r) => r.reception_date === todayStr).length,
       waitingDocs: localRows.filter((r) => r.status === "waiting_docs").length,

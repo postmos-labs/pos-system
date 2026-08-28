@@ -10,6 +10,7 @@ import FormModal from "@/components/ui/FormModal";
 import HistoryButton from "@/components/ui/HistoryButton";
 import MemoHistoryPanel from "@/components/ui/MemoHistoryPanel";
 import { AppSelect } from "@/components/ui/AppSelect";
+import { kstToday } from "@/lib/date";
 
 const CATEGORY_TREE: Record<string, Record<string, string[]>> = {
   포스장비: {
@@ -155,7 +156,7 @@ export default function InventoryClient({
         min_quantity: form.min_quantity,
         location: form.location || null,
         notes: form.notes || null,
-        last_checked: new Date().toISOString().slice(0, 10),
+        last_checked: kstToday(),
       })
       .select("*")
       .single();
@@ -191,9 +192,7 @@ export default function InventoryClient({
 
     setItems((prev) =>
       prev.map((i) =>
-        i.id === item.id
-          ? { ...i, quantity: newQty, last_checked: new Date().toISOString().slice(0, 10) }
-          : i,
+        i.id === item.id ? { ...i, quantity: newQty, last_checked: kstToday() } : i,
       ),
     );
     setLogs((prev) => [
@@ -233,9 +232,7 @@ export default function InventoryClient({
     if (logError) toast.error("변동 이력 기록 실패: " + logError.message);
     setItems((prev) =>
       prev.map((i) =>
-        i.id === item.id
-          ? { ...i, quantity: newQty, last_checked: new Date().toISOString().slice(0, 10) }
-          : i,
+        i.id === item.id ? { ...i, quantity: newQty, last_checked: kstToday() } : i,
       ),
     );
   }
