@@ -243,7 +243,7 @@ const CreateForm = memo(function CreateForm({
             onValueChange={(value) => setForm({ ...form, status: value as FranchiseStatus })}
             aria-label="상태"
             className="w-32"
-            options={(Object.keys(FRANCHISE_STATUS_LABEL) as FranchiseStatus[]).map((s) => ({
+            options={WRITABLE_STATUSES.map((s) => ({
               value: s,
               label: FRANCHISE_STATUS_LABEL[s],
             }))}
@@ -305,6 +305,19 @@ const CreateForm = memo(function CreateForm({
     </FormModal>
   );
 });
+
+// 저장 select에서 숨길 상태 — info_input은 DB CHECK 제약에서 빠져 고르면 저장이 실패하고,
+// 인터넷 3종은 가맹접수 드롭다운과 동일하게 폐기됐다. 상태 "필터"에는 적용하지 않는다
+// (옛 데이터가 그 상태를 아직 갖고 있어 찾을 수 있어야 한다).
+const WRITE_HIDDEN_STATUSES: FranchiseStatus[] = [
+  "info_input",
+  "internet_apply_done",
+  "internet_done",
+  "card_internet_apply_done",
+];
+const WRITABLE_STATUSES = (Object.keys(FRANCHISE_STATUS_LABEL) as FranchiseStatus[]).filter(
+  (s) => !WRITE_HIDDEN_STATUSES.includes(s),
+);
 
 export default function TransfersClient({
   rows,
@@ -795,12 +808,10 @@ export default function TransfersClient({
                       onValueChange={(value) => changeStatus(row, value as FranchiseStatus)}
                       aria-label="상태"
                       className={`h-auto rounded-full pl-2.5 pr-1.5 py-1 text-xs font-medium ${FRANCHISE_STATUS_COLOR[row.status]}`}
-                      options={(Object.keys(FRANCHISE_STATUS_LABEL) as FranchiseStatus[]).map(
-                        (s) => ({
-                          value: s,
-                          label: FRANCHISE_STATUS_LABEL[s],
-                        }),
-                      )}
+                      options={WRITABLE_STATUSES.map((s) => ({
+                        value: s,
+                        label: FRANCHISE_STATUS_LABEL[s],
+                      }))}
                     />
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>

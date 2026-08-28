@@ -229,6 +229,7 @@ interface Props {
 }
 
 const HIDDEN_STATUSES: FranchiseStatus[] = [
+  "info_input",
   "internet_apply_done",
   "internet_done",
   "card_internet_apply_done",
