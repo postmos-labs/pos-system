@@ -422,6 +422,11 @@ export default function MerchantsClient({
                       <p className="flex min-w-0 items-center gap-1 text-xs text-slate-400">
                         <span className="truncate">{merchant.owner_name || "-"}</span>
                         <VanBadge value={merchant.van_company} />
+                        {merchant.channel_label && (
+                          <span className="shrink-0 rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600">
+                            {merchant.channel_label}
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>

@@ -4,7 +4,8 @@ import Link from "next/link";
 import MerchantsClient from "./MerchantsClient";
 import { loadMerchant360 } from "./loadMerchant360";
 import type { Merchant360Merchant } from "./merchant360";
-import type { VanGroup } from "@/types";
+import type { FranchiseChannel, VanGroup } from "@/types";
+import { FRANCHISE_CHANNEL_LABEL } from "@/types";
 
 const PAGE_SIZE = 50;
 const MERCHANT_LIST_BASE_COLUMNS =
@@ -126,8 +127,33 @@ export default async function MerchantsPage({ searchParams }: Props) {
     count = fallback.count;
   }
 
-  const merchantRows = merchants ?? [];
+  let merchantRows = merchants ?? [];
   const totalCount = count ?? 0;
+
+  // 목록 행에 인입경로 뱃지를 띄우기 위해 연결된 가맹접수의 channel만 한 번에 가져온다.
+  const channelAppIds = merchantRows
+    .map((m) => m.franchise_application_id)
+    .filter((v): v is string => !!v);
+  if (channelAppIds.length) {
+    const { data: channelRows } = await supabase
+      .from("franchise_applications")
+      .select("id,channel")
+      .in("id", channelAppIds);
+    const channelByAppId = new Map(
+      (channelRows ?? []).map((row) => [row.id, row.channel as string | null]),
+    );
+    merchantRows = merchantRows.map((m) => {
+      const channel = m.franchise_application_id
+        ? (channelByAppId.get(m.franchise_application_id) ?? null)
+        : null;
+      return {
+        ...m,
+        channel_label: channel
+          ? (FRANCHISE_CHANNEL_LABEL[channel as FranchiseChannel] ?? channel)
+          : null,
+      };
+    });
+  }
   const vanCounts = vanMigrationMissing
     ? { all: null, toss: null, kicc: null }
     : {

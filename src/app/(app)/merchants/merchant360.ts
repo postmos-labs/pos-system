@@ -124,6 +124,8 @@ export interface Merchant360Merchant {
   brand?: string | null;
   created_at: string;
   franchise_application_id?: string | null;
+  // 목록 화면 전용 파생 필드 — 연결된 가맹접수의 channel 라벨 (merchants/page.tsx에서 채움)
+  channel_label?: string | null;
   // 113번 마이그레이션 적용 전에는 select에서 이 컬럼들이 빠질 수 있어 옵셔널로 둔다.
   operation_status?: MerchantOperationStatus;
   contract_started_at?: string | null;
