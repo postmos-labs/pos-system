@@ -115,6 +115,8 @@ export default async function OverviewPage({ searchParams }: { searchParams: Sea
       .select("id, customer_name, created_at, items, status")
       .gte("created_at", `${rangeFrom}T00:00:00+09:00`)
       .lt("created_at", `${nextDate(rangeTo)}T00:00:00+09:00`)
+      // 반려건은 실제로 나가지 않으므로 출고 수량·수수료 예상액에서 제외한다.
+      .neq("status", "rejected")
       .order("created_at", { ascending: false }),
     supabase
       .from("settlement_promotions")

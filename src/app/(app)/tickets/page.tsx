@@ -6,7 +6,7 @@ import { STATUS_LABEL, type TicketStatus, type Profile } from "@/types";
 import TicketsClient from "./TicketsClient";
 
 interface Props {
-  searchParams: Promise<{ status?: string; tab?: string; page?: string }>;
+  searchParams: Promise<{ status?: string; tab?: string; page?: string; q?: string }>;
 }
 
 const PAGE_SIZE = 50;
@@ -44,6 +44,27 @@ export default async function TicketsPage({ searchParams }: Props) {
   const p = profile as Profile;
   const userId = user.id;
 
+  // 검색은 서버에서 전체 범위로 수행한다 — 클라이언트에서 현재 페이지 50건만 거르면
+  // 다른 페이지의 티켓이 검색되지 않는다. 가맹점명·기사명은 조인 테이블이라 or()에
+  // 직접 걸 수 없어, 매칭되는 id를 먼저 뽑아 in 조건으로 합친다.
+  const searchTerm = (params.q ?? "").trim();
+  const searchEscaped = searchTerm.replace(/[\\%_]/g, (m) => "\\" + m).replace(/"/g, '\\"');
+  const searchPattern = `"%${searchEscaped}%"`;
+  let searchMerchantIds: string[] = [];
+  let searchTechIds: string[] = [];
+  if (searchTerm) {
+    const [{ data: merchantRows }, { data: techRows }] = await Promise.all([
+      supabase
+        .from("merchants")
+        .select("id")
+        .or(`business_name.ilike.${searchPattern},phone.ilike.${searchPattern}`)
+        .limit(200),
+      supabase.from("profiles").select("id").ilike("name", `%${searchEscaped}%`).limit(50),
+    ]);
+    searchMerchantIds = (merchantRows ?? []).map((r) => r.id);
+    searchTechIds = (techRows ?? []).map((r) => r.id);
+  }
+
   function buildQuery() {
     let q = supabase
       .from("tickets")
@@ -62,6 +83,13 @@ export default async function TicketsPage({ searchParams }: Props) {
       q = q.eq("status", params.status);
     } else if (tab !== "all") {
       q = q.in("status", TAB_STATUSES[tab] ?? []);
+    }
+
+    if (searchTerm) {
+      const orParts = [`title.ilike.${searchPattern}`];
+      if (searchMerchantIds.length) orParts.push(`merchant_id.in.(${searchMerchantIds.join(",")})`);
+      if (searchTechIds.length) orParts.push(`tech_id.in.(${searchTechIds.join(",")})`);
+      q = q.or(orParts.join(","));
     }
 
     return q;
@@ -93,6 +121,9 @@ export default async function TicketsPage({ searchParams }: Props) {
             { key: "all", label: "전체" },
             { key: "tech", label: "진행중" },
           ];
+
+  // 탭·상태·페이지 이동 시 검색어가 풀리지 않도록 모든 링크에 q를 유지한다.
+  const qParam = searchTerm ? `&q=${encodeURIComponent(searchTerm)}` : "";
 
   const statusFilters: TicketStatus[] =
     tab === "all"
@@ -140,7 +171,7 @@ export default async function TicketsPage({ searchParams }: Props) {
         {TABS.map((t) => (
           <Link
             key={t.key}
-            href={`/tickets?tab=${t.key}`}
+            href={`/tickets?tab=${t.key}${qParam}`}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
               tab === t.key
                 ? "bg-white text-slate-900 shadow-sm ring-1 ring-black/5"
@@ -156,7 +187,7 @@ export default async function TicketsPage({ searchParams }: Props) {
       {statusFilters.length > 0 && (
         <div className="flex gap-1 overflow-x-auto pb-2 mb-5">
           <Link
-            href={`/tickets?tab=${tab}`}
+            href={`/tickets?tab=${tab}${qParam}`}
             className={`whitespace-nowrap text-xs px-3 py-1.5 rounded-md font-medium transition-colors ${!params.status ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"}`}
           >
             전체
@@ -164,7 +195,7 @@ export default async function TicketsPage({ searchParams }: Props) {
           {statusFilters.map((s) => (
             <Link
               key={s}
-              href={`/tickets?tab=${tab}&status=${s}`}
+              href={`/tickets?tab=${tab}&status=${s}${qParam}`}
               className={`whitespace-nowrap text-xs px-3 py-1.5 rounded-md font-medium transition-colors ${params.status === s ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"}`}
             >
               {STATUS_LABEL[s]}
@@ -174,13 +205,13 @@ export default async function TicketsPage({ searchParams }: Props) {
       )}
 
       {}
-      <TicketsClient tickets={(tickets ?? []) as any} />
+      <TicketsClient tickets={(tickets ?? []) as any} initialSearch={searchTerm} />
 
       {}
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2 mt-6">
           <Link
-            href={`/tickets?tab=${tab}${params.status ? `&status=${params.status}` : ""}&page=${Math.max(1, page - 1)}`}
+            href={`/tickets?tab=${tab}${params.status ? `&status=${params.status}` : ""}${qParam}&page=${Math.max(1, page - 1)}`}
             className={`text-sm px-3 py-1.5 rounded-lg border border-slate-200 font-medium ${page <= 1 ? "text-slate-300 pointer-events-none" : "text-slate-600 hover:bg-slate-50"}`}
           >
             이전
@@ -189,7 +220,7 @@ export default async function TicketsPage({ searchParams }: Props) {
             {page} / {totalPages}
           </span>
           <Link
-            href={`/tickets?tab=${tab}${params.status ? `&status=${params.status}` : ""}&page=${Math.min(totalPages, page + 1)}`}
+            href={`/tickets?tab=${tab}${params.status ? `&status=${params.status}` : ""}${qParam}&page=${Math.min(totalPages, page + 1)}`}
             className={`text-sm px-3 py-1.5 rounded-lg border border-slate-200 font-medium ${page >= totalPages ? "text-slate-300 pointer-events-none" : "text-slate-600 hover:bg-slate-50"}`}
           >
             다음

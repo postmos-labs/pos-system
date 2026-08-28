@@ -1798,8 +1798,14 @@ export default function InstallsClient({
       const next = [...installs];
       const [moved] = next.splice(from, 1);
       next.splice(to, 0, moved);
+      const prevOrder = installs;
       setInstalls(next);
       const n = next.length;
+      const revert = () => {
+        // 저장되지 않은 순서가 화면에 남으면 새로고침 때 어긋난다 — 원래 순서로 되돌린다.
+        setInstalls(prevOrder);
+        toast.error("순서 저장에 실패했습니다.");
+      };
       Promise.all(
         next.map((r, i) =>
           supabase
@@ -1807,7 +1813,12 @@ export default function InstallsClient({
             .update({ sort_order: (n - i) * 1000 })
             .eq("id", r.id),
         ),
-      ).catch(() => toast.error("순서 저장에 실패했습니다."));
+      )
+        // supabase-js는 DB 오류 시 reject하지 않고 {error}로 resolve하므로 결과를 직접 확인한다.
+        .then((results) => {
+          if (results.some((res) => res.error)) revert();
+        })
+        .catch(revert);
     },
     [installs, supabase, toast],
   );

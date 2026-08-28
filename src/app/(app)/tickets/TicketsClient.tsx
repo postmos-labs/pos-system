@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { ChevronRight, Search } from "lucide-react";
@@ -34,20 +34,45 @@ interface Ticket {
   tech?: { name: string } | null;
 }
 
-export default function TicketsClient({ tickets }: { tickets: Ticket[] }) {
+export default function TicketsClient({
+  tickets,
+  initialSearch = "",
+}: {
+  tickets: Ticket[];
+  initialSearch?: string;
+}) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
+
+  // 검색은 서버가 전체 범위에서 수행한다(현재 페이지 50건만 걸러지는 문제 방지).
+  // 입력 후 400ms 지나면 q 파라미터로 반영하고 1페이지부터 다시 본다.
+  useEffect(() => {
+    const current = (searchParams.get("q") ?? "").trim();
+    if (search.trim() === current) return;
+    const timer = setTimeout(() => {
+      const next = new URLSearchParams(searchParams.toString());
+      if (search.trim()) next.set("q", search.trim());
+      else next.delete("q");
+      next.delete("page");
+      router.replace(`/tickets?${next.toString()}`);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search, searchParams, router]);
 
   const filteredTickets = search.trim()
     ? tickets.filter((t) => {
         const q = search.trim().toLowerCase();
+        // 서버(q 파라미터)가 거르는 필드와 같은 범위여야 한다 — 전화번호가 빠지면
+        // 서버가 찾아준 행을 여기서 도로 숨긴다.
         return (
           t.title?.toLowerCase().includes(q) ||
           t.merchant?.business_name?.toLowerCase().includes(q) ||
+          t.merchant?.phone?.toLowerCase().includes(q) ||
           t.tech?.name?.toLowerCase().includes(q)
         );
       })
