@@ -267,8 +267,9 @@ export default function InstallDetailDrawer({
   // 서버가 tech/admin/master만 허용하므로, CS에게는 드롭다운에서부터 노출하지 않는다.
   const canRequestApproval = ["tech", "admin", "master"].includes(profile.role);
   const approvalOnlyStatuses = new Set([...APPROVAL_TARGETS, "completed"]);
+  // 현재 상태는 항상 옵션에 남긴다 — 현재 값이 목록에 없으면 select가 빈 칸으로 표시된다.
   const statusOptions = statusOrderFor(installation.delivery_type)
-    .filter((s) => canRequestApproval || !approvalOnlyStatuses.has(s))
+    .filter((s) => canRequestApproval || !approvalOnlyStatuses.has(s) || s === installation.status)
     .map((s) => ({
       value: s,
       label: statusLabel(s, installation.delivery_type),

@@ -922,9 +922,10 @@ export default function InstallsClient({
   // 서버가 tech/admin/master만 허용하므로, CS에게는 드롭다운에서부터 노출하지 않는다.
   const canRequestApproval = ["tech", "admin", "master"].includes(profile.role);
   const approvalOnlyStatuses = new Set([...APPROVAL_TARGETS, "completed"]);
-  function statusOptionsFor(deliveryType?: string) {
+  // currentStatus는 항상 옵션에 남긴다 — 현재 값이 목록에 없으면 select가 빈 칸으로 표시된다.
+  function statusOptionsFor(deliveryType?: string, currentStatus?: string) {
     return statusOrderFor(deliveryType)
-      .filter((s) => canRequestApproval || !approvalOnlyStatuses.has(s))
+      .filter((s) => canRequestApproval || !approvalOnlyStatuses.has(s) || s === currentStatus)
       .map((s) => ({ value: s, label: statusLabel(s, deliveryType) }));
   }
 
@@ -2710,7 +2711,7 @@ export default function InstallsClient({
                               .split(" ")
                               .map((c) => `!${c}`)
                               .join(" ")}`}
-                            options={statusOptionsFor(inst.delivery_type)}
+                            options={statusOptionsFor(inst.delivery_type, inst.status)}
                           />
                           {!!approvalNoteHistory[inst.id]?.length && (
                             <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3">
@@ -2980,7 +2981,7 @@ export default function InstallsClient({
                               .split(" ")
                               .map((c) => `!${c}`)
                               .join(" ")}`}
-                            options={statusOptionsFor(inst.delivery_type)}
+                            options={statusOptionsFor(inst.delivery_type, inst.status)}
                           />
                         ) : (
                           <span
