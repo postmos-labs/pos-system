@@ -22,8 +22,8 @@ interface Props {
     row: FranchiseApplication,
     note?: string,
     cancelReason?: string,
-  ) => void | Promise<void>;
-  onRecordCompleted: (row: FranchiseApplication, note?: string) => void | Promise<void>;
+  ) => boolean | Promise<boolean>;
+  onRecordCompleted: (row: FranchiseApplication, note?: string) => boolean | Promise<boolean>;
   onCancel: (row: FranchiseApplication, reason: string) => void | Promise<void>;
 }
 
@@ -89,16 +89,18 @@ export default function FranchiseCallDrawer({
     setSubmitting(true);
     try {
       const trimmedNote = note.trim() || undefined;
+      let ok: boolean;
       if (aboutToCancel) {
         const reason = window.prompt(
           "이번 통화 부재로 3회가 되어 접수가 자동으로 취소됩니다. 취소 사유를 입력해주세요 (선택).",
         );
         if (reason === null) return;
-        await onRecordMissed(row, trimmedNote, reason || undefined);
+        ok = await onRecordMissed(row, trimmedNote, reason || undefined);
       } else {
         if (!confirm("통화 부재를 기록하시겠습니까?")) return;
-        await onRecordMissed(row, trimmedNote);
+        ok = await onRecordMissed(row, trimmedNote);
       }
+      if (!ok) return;
       setLogs((prev) => [
         {
           id: `local-${Date.now()}`,
@@ -120,7 +122,8 @@ export default function FranchiseCallDrawer({
     setSubmitting(true);
     try {
       const trimmedNote = note.trim() || undefined;
-      await onRecordCompleted(row, trimmedNote);
+      const ok = await onRecordCompleted(row, trimmedNote);
+      if (!ok) return;
       setLogs((prev) => [
         {
           id: `local-${Date.now()}`,

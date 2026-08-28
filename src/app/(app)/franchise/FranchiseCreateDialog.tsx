@@ -216,10 +216,14 @@ export default function FranchiseCreateDialog({
     if (!term) return;
     setMerchantSearching(true);
     const supabase = createClient();
+    // PostgREST or() 값에 쉼표·괄호가 들어가면 필터 문법이 깨진다. 큰따옴표로 감싸고
+    // LIKE 와일드카드(%·_)와 따옴표·역슬래시를 이스케이프해 문자 그대로 검색되게 한다.
+    const escaped = term.replace(/[\\%_]/g, (m) => `\\${m}`).replace(/"/g, '\\"');
+    const pattern = `"%${escaped}%"`;
     const { data } = await supabase
       .from("merchants")
       .select("id, business_name, owner_name, phone")
-      .or(`business_name.ilike.%${term}%,owner_name.ilike.%${term}%,phone.ilike.%${term}%`)
+      .or(`business_name.ilike.${pattern},owner_name.ilike.${pattern},phone.ilike.${pattern}`)
       .limit(10);
     setMerchantResults(data ?? []);
     setMerchantSearching(false);

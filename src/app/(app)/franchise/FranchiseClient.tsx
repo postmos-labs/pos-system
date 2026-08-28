@@ -465,17 +465,29 @@ function stripPin(text: string): { pinned: boolean; pinnedAt: string | null; tex
 }
 
 function stampMemo(user: string, text: string): string {
-  const stamp = `[${user} ${new Date().toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })}]`;
+  // 연도를 포함해 저장한다 (해가 바뀐 뒤에도 옛 메모의 날짜가 틀리지 않도록).
+  const stamp = `[${user} ${new Date().toLocaleString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })}]`;
   return `${stamp} ${text}`;
 }
 
-// 스탬프(`[이름 MM. DD. HH:mm]`)가 붙은 항목뿐 아니라, 스탬프 도입 전에 저장된 맨 텍스트도 하나의 항목으로 살려서 반환한다
+// 스탬프(`[이름 YYYY. MM. DD. HH:mm]`, 연도 도입 전 옛 형식은 `[이름 MM. DD. HH:mm]`)가 붙은 항목뿐
+// 아니라, 스탬프 도입 전에 저장된 맨 텍스트도 하나의 항목으로 살려서 반환한다
+const MEMO_STAMP_RE = /\[(.+?) (?:(\d{4})\. )?(\d{2})\. (\d{2})\. (\d{2}):(\d{2})\]/g;
+
+// 옛 형식(연도 없음) 스탬프의 연도를 추정한다. 일단 올해로 채워보고, 그 결과가 오늘보다
+// 미래면 작년으로 본다 (예: 작년 12월에 쓴 메모를 올해 1월에 볼 때 올해 12월로 잘못 읽히는 것을 방지).
+function resolveLegacyYear(month: number, day: number, hour: number, minute: number): number {
+  const now = new Date();
+  const guess = new Date(now.getFullYear(), month - 1, day, hour, minute);
+  return guess.getTime() > now.getTime() ? now.getFullYear() - 1 : now.getFullYear();
+}
+
 function parseMemoEntries(
   memo: string | undefined,
   fallbackAt: string,
 ): { at: string; user: string; text: string; pinned: boolean; pinnedAt: string | null }[] {
   if (!memo?.trim()) return [];
-  const re = /\[(.+?) (\d{2})\. (\d{2})\. (\d{2}):(\d{2})\]/g;
+  const re = MEMO_STAMP_RE;
   const matches = [...memo.matchAll(re)];
   if (matches.length === 0) {
     const { pinned, pinnedAt, text } = stripPin(memo.trim());
@@ -494,15 +506,17 @@ function parseMemoEntries(
     entries.push({ at: fallbackAt, user: "-", text, pinned, pinnedAt });
   }
   matches.forEach((m, i) => {
-    const [, userRaw, month, day, hour, minute] = m;
+    const [, userRaw, yearStr, month, day, hour, minute] = m;
     const { pinned, pinnedAt, text: user } = stripPin(userRaw);
     const start = m.index! + m[0].length;
     const end = i + 1 < matches.length ? matches[i + 1].index! : memo.length;
     const text = memo.slice(start, end).trim();
     if (!text) return;
-    const now = new Date();
+    const year = yearStr
+      ? Number(yearStr)
+      : resolveLegacyYear(Number(month), Number(day), Number(hour), Number(minute));
     const at = new Date(
-      now.getFullYear(),
+      year,
       Number(month) - 1,
       Number(day),
       Number(hour),
@@ -516,7 +530,7 @@ function parseMemoEntries(
 // parseMemoEntries와 동일한 순서로 원본 텍스트(스탬프 포함)를 블록 단위로 쪼갠다.
 function splitMemoBlocks(memo: string | undefined | null): string[] {
   if (!memo?.trim()) return [];
-  const re = /\[(.+?) (\d{2})\. (\d{2})\. (\d{2}):(\d{2})\]/g;
+  const re = MEMO_STAMP_RE;
   const matches = [...memo.matchAll(re)];
   if (matches.length === 0) return [memo.trim()];
   const blocks: string[] = [];
@@ -1152,7 +1166,12 @@ export default function FranchiseClient({
 
   useEffect(() => {
     setLocalRows((prev) => mergeRowsPreservingIdentity(prev, rows));
-    setSelected(new Set());
+    setSelected((prev) => {
+      // 갱신으로 사라진 행만 선택에서 빼고, 남아 있는 행의 선택은 유지한다.
+      const ids = new Set(rows.map((r) => r.id));
+      const next = new Set([...prev].filter((id) => ids.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
   }, [rows]);
 
   useEffect(() => {
@@ -2546,7 +2565,7 @@ export default function FranchiseClient({
               : newStatus === "doc_waiting"
                 ? `'${APPLICANT_TYPE_LABEL[row.applicant_type]}' 서류 안내 메시지가 고객에게 발송됩니다. 아래에서 보낼 템플릿이 맞는지 확인 후 진행하세요.`
                 : newStatus === "toss_review_done"
-                  ? `심사완료로 변경하면 고객에게 메시지가 발송되고, 입력된 정보로 설치 작업이 자동 생성됩니다.`
+                  ? `심사완료로 변경하면 고객에게 메시지가 발송됩니다. 설치 작업은 '기술지원 이관' 승인이 끝나야 생성되니 이관 요청을 잊지 마세요.`
                   : `'${FRANCHISE_STATUS_LABEL[newStatus]}'(으)로 변경하면 고객에게 메시지가 발송됩니다.`;
     setStatusConfirm({
       row,
@@ -2561,7 +2580,11 @@ export default function FranchiseClient({
     });
   }
 
-  async function recordMissedCall(row: FranchiseApplication, note?: string, cancelReason?: string) {
+  async function recordMissedCall(
+    row: FranchiseApplication,
+    note?: string,
+    cancelReason?: string,
+  ): Promise<boolean> {
     const supabase = createClient();
     const { data, error } = await supabase.rpc("record_franchise_missed_call", {
       p_application_id: row.id,
@@ -2571,7 +2594,7 @@ export default function FranchiseClient({
     });
     if (error) {
       toast.error("통화 기록 실패: " + error.message);
-      return;
+      return false;
     }
     const updated = (Array.isArray(data) ? data[0] : data) as FranchiseApplication;
     setLocalRows((prev) =>
@@ -2588,9 +2611,10 @@ export default function FranchiseClient({
           : r,
       ),
     );
+    return true;
   }
 
-  async function recordCompletedCall(row: FranchiseApplication, note?: string) {
+  async function recordCompletedCall(row: FranchiseApplication, note?: string): Promise<boolean> {
     const supabase = createClient();
     const { data, error } = await supabase.rpc("record_franchise_completed_call", {
       p_application_id: row.id,
@@ -2599,7 +2623,7 @@ export default function FranchiseClient({
     });
     if (error) {
       toast.error("통화 기록 실패: " + error.message);
-      return;
+      return false;
     }
     const updated = (Array.isArray(data) ? data[0] : data) as FranchiseApplication;
     setLocalRows((prev) =>
@@ -2614,6 +2638,7 @@ export default function FranchiseClient({
           : r,
       ),
     );
+    return true;
   }
 
   async function toggleExpand(row: FranchiseApplication) {

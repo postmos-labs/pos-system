@@ -350,7 +350,12 @@ export default function TransfersClient({
 
   useEffect(() => {
     setLocalRows((prev) => mergeRowsPreservingIdentity(prev, rows));
-    setSelected(new Set());
+    setSelected((prev) => {
+      // 갱신으로 사라진 행만 선택에서 빼고, 남아 있는 행의 선택은 유지한다.
+      const ids = new Set(rows.map((r) => r.id));
+      const next = new Set([...prev].filter((id) => ids.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
   }, [rows]);
 
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

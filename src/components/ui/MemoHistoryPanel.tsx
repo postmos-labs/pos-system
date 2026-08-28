@@ -34,13 +34,24 @@ type FranchiseLog = {
   details: { delivery_type?: string } | null;
 };
 
-// 스탬프(`[이름 MM. DD. HH:mm]`)가 붙은 항목뿐 아니라, 스탬프 도입 전에 저장된 맨 텍스트도 하나의 항목으로 살려서 반환한다
+// 스탬프(`[이름 YYYY. MM. DD. HH:mm]`, 연도 도입 전 옛 형식은 `[이름 MM. DD. HH:mm]`)가 붙은 항목뿐
+// 아니라, 스탬프 도입 전에 저장된 맨 텍스트도 하나의 항목으로 살려서 반환한다
+const MEMO_STAMP_RE = /\[(.+?) (?:(\d{4})\. )?(\d{2})\. (\d{2})\. (\d{2}):(\d{2})\]/g;
+
+// 옛 형식(연도 없음) 스탬프의 연도를 추정한다. 일단 올해로 채워보고, 그 결과가 오늘보다
+// 미래면 작년으로 본다 (예: 작년 12월에 쓴 메모를 올해 1월에 볼 때 올해 12월로 잘못 읽히는 것을 방지).
+function resolveLegacyYear(month: number, day: number, hour: number, minute: number): number {
+  const now = new Date();
+  const guess = new Date(now.getFullYear(), month - 1, day, hour, minute);
+  return guess.getTime() > now.getTime() ? now.getFullYear() - 1 : now.getFullYear();
+}
+
 export function parseMemoEntries(
   memo: string | undefined | null,
   fallbackAt: string,
 ): { at: string; user: string; text: string }[] {
   if (!memo?.trim()) return [];
-  const re = /\[(.+?) (\d{2})\. (\d{2})\. (\d{2}):(\d{2})\]/g;
+  const re = MEMO_STAMP_RE;
   const matches = [...memo.matchAll(re)];
   if (matches.length === 0) {
     return [{ at: fallbackAt, user: "-", text: memo.trim() }];
@@ -49,14 +60,16 @@ export function parseMemoEntries(
   const leading = memo.slice(0, matches[0].index).trim();
   if (leading) entries.push({ at: fallbackAt, user: "-", text: leading });
   matches.forEach((m, i) => {
-    const [, user, month, day, hour, minute] = m;
+    const [, user, yearStr, month, day, hour, minute] = m;
     const start = m.index! + m[0].length;
     const end = i + 1 < matches.length ? matches[i + 1].index! : memo.length;
     const text = memo.slice(start, end).trim();
     if (!text) return;
-    const now = new Date();
+    const year = yearStr
+      ? Number(yearStr)
+      : resolveLegacyYear(Number(month), Number(day), Number(hour), Number(minute));
     const at = new Date(
-      now.getFullYear(),
+      year,
       Number(month) - 1,
       Number(day),
       Number(hour),
@@ -71,7 +84,7 @@ export function parseMemoEntries(
 // 특정 인덱스를 제외하고 다시 합치면 해당 메모 항목만 삭제된 원본 메모 문자열을 얻을 수 있다.
 function splitMemoBlocks(memo: string | undefined | null): string[] {
   if (!memo?.trim()) return [];
-  const re = /\[(.+?) (\d{2})\. (\d{2})\. (\d{2}):(\d{2})\]/g;
+  const re = MEMO_STAMP_RE;
   const matches = [...memo.matchAll(re)];
   if (matches.length === 0) return [memo.trim()];
   const blocks: string[] = [];
