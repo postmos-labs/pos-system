@@ -37,6 +37,7 @@ export default function RealtimeNotification({ userId }: Props) {
       sinceRef.current = data[data.length - 1].created_at;
 
       let hasScheduleNotice = false;
+      const popups: { title: string; body?: string; href?: string }[] = [];
       for (const row of data) {
         if ((row.type as string)?.startsWith("schedule_")) {
           hasScheduleNotice = true;
@@ -49,7 +50,17 @@ export default function RealtimeNotification({ userId }: Props) {
             : row.ticket_id
               ? `/tickets/${row.ticket_id}`
               : "/notifications";
-        setModal({ title: row.title, body: row.body ?? undefined, href });
+        popups.push({ title: row.title, body: row.body ?? undefined, href });
+      }
+      // 폴링 한 번에 여러 건이 오면 마지막 것만 남지 않도록, 2건 이상이면 묶음 모달 하나로 안내한다.
+      if (popups.length === 1) {
+        setModal(popups[0]);
+      } else if (popups.length > 1) {
+        setModal({
+          title: `새 알림 ${popups.length}건`,
+          body: `${popups[0].title} 외 ${popups.length - 1}건`,
+          href: "/notifications",
+        });
       }
       if (hasScheduleNotice) router.refresh();
     }

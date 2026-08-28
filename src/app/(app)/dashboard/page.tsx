@@ -98,7 +98,9 @@ export default async function DashboardPage({ searchParams }: Props) {
       .from("franchise_applications")
       .select("id", { count: "exact", head: true })
       .is("cs_id", null)
-      .not("status", "in", "(card_done,internet_done)"),
+      // 크론(franchise-alerts)의 NOT_STALE_STATUSES와 동일한 목록. toss_review_done(심사완료)은
+      // 이관 요청이 남아 있을 수 있어 제외하지 않는다.
+      .not("status", "in", "(card_done,internet_done,completed,canceled,hold,persistent_absence)"),
     van,
   );
 
@@ -135,7 +137,9 @@ export default async function DashboardPage({ searchParams }: Props) {
       .from("franchise_applications")
       .select("id", { count: "exact", head: true })
       .lt("updated_at", staleDate)
-      .not("status", "in", "(card_done,internet_done)"),
+      // 크론(franchise-alerts)의 NOT_STALE_STATUSES와 동일한 목록. toss_review_done(심사완료)은
+      // 이관 요청이 남아 있을 수 있어 제외하지 않는다.
+      .not("status", "in", "(card_done,internet_done,completed,canceled,hold,persistent_absence)"),
     van,
   );
   if (p.role === "sales") staleQuery = staleQuery.eq("sales_id", userId);

@@ -2,7 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { requireAdmin, requireDeletePermission } from "@/lib/auth/require-admin";
+import { requireAdmin, requireAdminOrCs, requireDeletePermission } from "@/lib/auth/require-admin";
 
 const CHUNK_SIZE = 100;
 
@@ -29,7 +29,9 @@ export async function deleteTickets(ids: string[]) {
 }
 
 export async function restoreTickets(ids: string[]) {
-  const authError = await requireDeletePermission();
+  // 복구는 파괴적이지 않으므로 휴지통을 볼 수 있는 사람(admin/master/cs/can_delete)이면 허용한다.
+  // 삭제·영구삭제는 기존대로 requireDeletePermission을 유지한다.
+  const authError = await requireAdminOrCs();
   if (authError) return { error: authError };
   if (!ids.length) return { error: null };
 

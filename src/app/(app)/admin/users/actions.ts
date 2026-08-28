@@ -258,11 +258,13 @@ export async function setUserTeam(userId: string, team: string) {
 export async function setUserApprovalRole(userId: string, approvalRole: string) {
   const authError = await requireAdmin();
   if (authError) return { error: authError };
-  if (!APPROVAL_ROLES.includes(approvalRole)) return { error: "올바른 승인 직책이 아닙니다." };
+  // 빈 값은 해제를 뜻한다 — APPROVAL_ROLES 검증을 건너뛰고 null로 저장한다.
+  if (approvalRole !== "" && !APPROVAL_ROLES.includes(approvalRole))
+    return { error: "올바른 승인 직책이 아닙니다." };
   const supabase = createAdminClient();
   const { error } = await supabase
     .from("profiles")
-    .update({ approval_role: approvalRole })
+    .update({ approval_role: approvalRole === "" ? null : approvalRole })
     .eq("id", userId);
   if (error) return { error: error.message };
   revalidatePath("/admin/users");

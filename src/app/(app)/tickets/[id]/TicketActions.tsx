@@ -45,7 +45,9 @@ export default function TicketActions({ ticket, profile, techUsers, csUsers }: P
     )
       targets.push(ticket.cs_id);
 
-    for (const uid of targets) {
+    // cs_pending 전환 시 첫 번째·다섯 번째 조건이 동시에 참일 수 있어 같은 cs_id가 중복 push되는 경우가 있다 — 중복 제거 후 발송
+    const uniqueTargets = [...new Set(targets)];
+    for (const uid of uniqueTargets) {
       const isRejected =
         (newStatus === "sales" && ticket.status === "cs_pending") ||
         (newStatus === "cs_pending" &&

@@ -36,10 +36,6 @@ export default function ApprovalRoleSelect({
         const previous = role;
         setRole(next);
         startTransition(async () => {
-          if (!next) {
-            setRole(previous);
-            return;
-          }
           const { error } = await setUserApprovalRole(userId, next);
           if (error) {
             toast.error("승인 직책 변경 실패: " + error);

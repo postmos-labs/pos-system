@@ -85,7 +85,7 @@ type MerchantMemoEntryRow = {
   content: string;
   created_at: string;
   created_by: string | null;
-  author: { name: string }[];
+  author: { name: string | null }[] | { name: string | null } | null;
   entry_type: "as" | "claim" | "general" | "etc" | null;
   checklist: Record<string, boolean> | null;
   // 117번 마이그레이션 적용 전에는 select에서 빠질 수 있어 옵셔널로 둔다.
@@ -483,7 +483,7 @@ export async function loadMerchant360(
     content: memo.content,
     created_at: memo.created_at,
     created_by: memo.created_by,
-    author_name: memo.author[0]?.name ?? null,
+    author_name: profileName(memo.author),
     stage: classifyMemo(memo.created_at, installations, firstCompletionAt),
     entry_type: memo.entry_type ?? "general",
     checklist: memo.checklist,
