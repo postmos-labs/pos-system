@@ -8,9 +8,12 @@ import {
   TYPE_LABEL,
   PRIORITY_LABEL,
   PRIORITY_COLOR,
+  TEAM_LABEL,
+  TEAM_COLOR,
   type TicketStatus,
   type TicketType,
   type Priority,
+  type TicketTeam,
   type Profile,
 } from "@/types";
 import TicketActions from "./TicketActions";
@@ -78,6 +81,13 @@ export default async function TicketDetailPage({ params }: Props) {
           >
             {PRIORITY_LABEL[ticket.priority as Priority]}
           </span>
+          {ticket.team && TEAM_LABEL[ticket.team as TicketTeam] && (
+            <span
+              className={`text-xs px-2 py-0.5 rounded-full font-medium ${TEAM_COLOR[ticket.team as TicketTeam]}`}
+            >
+              {TEAM_LABEL[ticket.team as TicketTeam]}
+            </span>
+          )}
           <span className="text-xs text-gray-500">{TYPE_LABEL[ticket.type as TicketType]}</span>
         </div>
         <h1 className="text-xl font-bold text-gray-900">{ticket.title}</h1>

@@ -4,72 +4,54 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { AppSelect } from "@/components/ui/AppSelect";
-import { DatePickerField } from "@/components/ui/DatePickerField";
+import { TEAM_LABEL, type TicketTeam } from "@/types";
 
 interface Props {
   salesId: string;
   role: string;
 }
 
-const RECEPTION_CHANNELS = ["전화", "카카오톡", "문자", "방문", "온라인", "기타"];
-const DOCUMENT_STATUSES = ["미접수", "일부접수", "완료"];
-const VAN_COMPANIES = ["KIS", "NICE", "KCP", "KSNET", "한국정보통신", "스마트로", "JTNET", "기타"];
-const SIMPLE_PAYMENTS = [
-  "카카오페이",
-  "네이버페이",
-  "페이코",
-  "삼성페이",
-  "SSG페이",
-  "L페이",
-  "기타",
-  "없음",
-];
+const TEAMS: TicketTeam[] = ["cs", "tech"];
+
+// 123번 마이그레이션(tickets.team)이 아직 적용되지 않은 환경에서 team을 insert하면
+// "column does not exist"(42703) 에러가 난다. 등록 자체를 막지 않고 team만 빼고 재시도한다.
+// src/app/(app)/merchants/actions.ts의 isMissingColumnError와 같은 패턴.
+function isMissingColumnError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /column .* does not exist/i.test(error.message ?? "")
+  );
+}
 
 export default function NewTicketForm({ salesId, role }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
-    merchant_id: "",
-    title: "",
-    type: "install",
-    priority: "normal",
-    memo: "",
-    business_type: "개인",
-    reception_channel: "",
-    progress_note: "",
-    document_status: "미접수",
-    internet: "",
-    product: "",
-    card_apply_date: "",
-    van_company: "",
-    baemin_apply: false,
-    simple_payment: "",
-  });
-  const [merchantForm, setMerchantForm] = useState({
+  const [form, setForm] = useState<{
+    business_name: string;
+    phone: string;
+    team: TicketTeam | "";
+  }>({
     business_name: "",
-    owner_name: "",
-    business_number: "",
     phone: "",
-    address: "",
-    address_detail: "",
-    pos_model: "",
-    service_type: "",
+    team: "",
   });
-
-  function set(key: string, val: string | boolean) {
-    setForm((f) => ({ ...f, [key]: val }));
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!form.team) return;
     setLoading(true);
     const supabase = createClient();
 
+    // merchants.owner_name은 NOT NULL이라 값을 넘겨야 한다. 대표자명은 받지 않으므로
+    // 빈 값으로 두고 가맹점 360에서 채운다.
     const { data: merchantData, error: merchantError } = await supabase
       .from("merchants")
       .insert({
-        ...merchantForm,
+        business_name: form.business_name,
+        owner_name: "",
+        phone: form.phone,
         sales_id: salesId,
       })
       .select("id")
@@ -83,30 +65,30 @@ export default function NewTicketForm({ salesId, role }: Props) {
 
     const merchantId = merchantData.id;
 
-    const { data: ticket, error } = await supabase
+    // tickets.title은 NOT NULL이라 상호명을 그대로 제목으로 쓴다.
+    const ticketPayload = {
+      merchant_id: merchantId,
+      title: form.business_name,
+      type: "install",
+      priority: "normal",
+      sales_id: role === "sales" ? salesId : null,
+      cs_id: role === "cs" ? salesId : null,
+      status: role === "cs" ? "cs_pending" : "sales",
+    };
+
+    let { data: ticket, error } = await supabase
       .from("tickets")
-      .insert({
-        merchant_id: merchantId,
-        title: form.title,
-        type: form.type,
-        priority: form.priority,
-        memo: form.memo,
-        sales_id: role === "sales" ? salesId : null,
-        cs_id: role === "cs" ? salesId : null,
-        status: role === "cs" ? "cs_pending" : "sales",
-        business_type: form.business_type,
-        reception_channel: form.reception_channel || null,
-        progress_note: form.progress_note || null,
-        document_status: form.document_status,
-        internet: form.internet || null,
-        product: form.product || null,
-        card_apply_date: form.card_apply_date || null,
-        van_company: form.van_company || null,
-        baemin_apply: form.baemin_apply,
-        simple_payment: form.simple_payment || null,
-      })
+      .insert({ ...ticketPayload, team: form.team })
       .select("id")
       .single();
+
+    if (isMissingColumnError(error)) {
+      ({ data: ticket, error } = await supabase
+        .from("tickets")
+        .insert(ticketPayload)
+        .select("id")
+        .single());
+    }
 
     if (error || !ticket) {
       await supabase.from("merchants").delete().eq("id", merchantId);
@@ -119,10 +101,10 @@ export default function NewTicketForm({ salesId, role }: Props) {
       ticket_id: ticket.id,
       user_id: salesId,
       to_status: role === "cs" ? "cs_pending" : "sales",
-      message: "신규 작업 등록",
+      message: "신규 인입내역 등록",
     });
     if (logError) {
-      alert("작업은 등록되었지만 이력 기록에 실패했습니다: " + logError.message);
+      alert("인입내역은 등록되었지만 이력 기록에 실패했습니다: " + logError.message);
     }
 
     router.push(`/tickets/${ticket.id}`);
@@ -130,224 +112,49 @@ export default function NewTicketForm({ salesId, role }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {}
-      <Section title="가맹점 정보">
-        <div className="grid grid-cols-2 gap-3">
-          {(
-            [
-              ["business_name", "상호명 *", true],
-              ["owner_name", "대표자명 *", true],
-              ["phone", "연락처 *", true],
-              ["business_number", "사업자번호", false],
-              ["pos_model", "포스 기종", false],
-              ["service_type", "서비스 종류", false],
-            ] as [string, string, boolean][]
-          ).map(([key, label, required]) => (
-            <div key={key}>
-              <Label>{label}</Label>
-              <input
-                type="text"
-                required={required}
-                value={merchantForm[key as keyof typeof merchantForm]}
-                onChange={(e) => setMerchantForm((f) => ({ ...f, [key]: e.target.value }))}
-                className={INPUT}
-              />
-            </div>
-          ))}
-          <div className="col-span-2">
-            <Label>주소</Label>
-            <input
-              value={merchantForm.address}
-              onChange={(e) => setMerchantForm((f) => ({ ...f, address: e.target.value }))}
-              className={INPUT + " mb-2"}
-              placeholder="기본 주소"
-            />
-            <input
-              value={merchantForm.address_detail}
-              onChange={(e) => setMerchantForm((f) => ({ ...f, address_detail: e.target.value }))}
-              className={INPUT}
-              placeholder="상세 주소"
-            />
-          </div>
-        </div>
-      </Section>
-
-      {}
-      <Section title="기본 정보">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2">
-            <Label>작업 제목 *</Label>
-            <input
-              required
-              value={form.title}
-              onChange={(e) => set("title", e.target.value)}
-              placeholder="예: 신규 포스 설치"
-              className={INPUT}
-            />
-          </div>
-
-          <div>
-            <Label>사업자 구분</Label>
-            <AppSelect
-              value={form.business_type}
-              onValueChange={(value) => set("business_type", value)}
-              aria-label="사업자 구분"
-              options={[
-                { value: "개인", label: "개인사업자" },
-                { value: "법인", label: "법인사업자" },
-              ]}
-            />
-          </div>
-
-          <div>
-            <Label>접수 채널</Label>
-            <AppSelect
-              value={form.reception_channel}
-              onValueChange={(value) => set("reception_channel", value)}
-              aria-label="접수 채널"
-              options={[
-                { value: "", label: "선택" },
-                ...RECEPTION_CHANNELS.map((c) => ({ value: c, label: c })),
-              ]}
-            />
-          </div>
-
-          <div>
-            <Label>작업 유형</Label>
-            <AppSelect
-              value={form.type}
-              onValueChange={(value) => set("type", value)}
-              aria-label="작업 유형"
-              options={[
-                { value: "install", label: "신규 설치" },
-                { value: "as", label: "A/S" },
-                { value: "consult", label: "상담" },
-                { value: "other", label: "기타" },
-              ]}
-            />
-          </div>
-
-          <div>
-            <Label>우선순위</Label>
-            <AppSelect
-              value={form.priority}
-              onValueChange={(value) => set("priority", value)}
-              aria-label="우선순위"
-              options={[
-                { value: "low", label: "낮음" },
-                { value: "normal", label: "보통" },
-                { value: "high", label: "높음" },
-                { value: "urgent", label: "긴급" },
-              ]}
-            />
-          </div>
-        </div>
-      </Section>
-
-      {}
-      <Section title="CS 처리 정보">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label>서류 접수 상태</Label>
-            <AppSelect
-              value={form.document_status}
-              onValueChange={(value) => set("document_status", value)}
-              aria-label="서류 접수 상태"
-              options={DOCUMENT_STATUSES.map((s) => ({ value: s, label: s }))}
-            />
-          </div>
-
-          <div>
-            <Label>상품</Label>
-            <input
-              value={form.product}
-              onChange={(e) => set("product", e.target.value)}
-              className={INPUT}
-              placeholder="예: 포스 단말기"
-            />
-          </div>
-
-          <div>
-            <Label>VAN사</Label>
-            <AppSelect
-              value={form.van_company}
-              onValueChange={(value) => set("van_company", value)}
-              aria-label="VAN사"
-              options={[
-                { value: "", label: "선택" },
-                ...VAN_COMPANIES.map((v) => ({ value: v, label: v })),
-              ]}
-            />
-          </div>
-
-          <div>
-            <Label>인터넷</Label>
-            <input
-              value={form.internet}
-              onChange={(e) => set("internet", e.target.value)}
-              className={INPUT}
-              placeholder="예: KT, SKT"
-            />
-          </div>
-
-          <div>
-            <Label>카드가맹 접수일</Label>
-            <DatePickerField
-              value={form.card_apply_date}
-              onChange={(value) => set("card_apply_date", value)}
-              ariaLabel="카드가맹 접수일"
-            />
-          </div>
-
-          <div>
-            <Label>간편결제</Label>
-            <AppSelect
-              value={form.simple_payment}
-              onValueChange={(value) => set("simple_payment", value)}
-              aria-label="간편결제"
-              options={[
-                { value: "", label: "선택" },
-                ...SIMPLE_PAYMENTS.map((p) => ({ value: p, label: p })),
-              ]}
-            />
-          </div>
-
-          <div className="col-span-2 flex items-center gap-3 py-1">
-            <input
-              type="checkbox"
-              id="baemin"
-              checked={form.baemin_apply}
-              onChange={(e) => set("baemin_apply", e.target.checked)}
-              className="w-4 h-4 accent-blue-600 cursor-pointer"
-            />
-            <label htmlFor="baemin" className="text-sm text-gray-700 cursor-pointer select-none">
-              배민 접수
-            </label>
-          </div>
-        </div>
-      </Section>
-
-      {}
-      <Section title="메모 / 비고">
+      <Section title="인입 정보">
         <div className="space-y-3">
           <div>
-            <Label>진행 상황</Label>
-            <textarea
-              value={form.progress_note}
-              onChange={(e) => set("progress_note", e.target.value)}
-              rows={2}
-              className={INPUT + " resize-none"}
-              placeholder="현재 진행 상황을 입력하세요"
+            <Label>상호명 *</Label>
+            <input
+              type="text"
+              required
+              value={form.business_name}
+              onChange={(e) => setForm((f) => ({ ...f, business_name: e.target.value }))}
+              className={INPUT}
             />
           </div>
+
           <div>
-            <Label>비고</Label>
-            <textarea
-              value={form.memo}
-              onChange={(e) => set("memo", e.target.value)}
-              rows={2}
-              className={INPUT + " resize-none"}
+            <Label>연락처 *</Label>
+            <input
+              type="text"
+              required
+              value={form.phone}
+              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+              className={INPUT}
             />
+          </div>
+
+          <div>
+            <Label>담당팀 *</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {TEAMS.map((team) => (
+                <button
+                  key={team}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, team }))}
+                  aria-pressed={form.team === team}
+                  className={`py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                    form.team === team
+                      ? "border-blue-600 bg-blue-50 text-blue-700"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {TEAM_LABEL[team]}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </Section>
@@ -361,10 +168,10 @@ export default function NewTicketForm({ salesId, role }: Props) {
         </Link>
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !form.team}
           className="flex-1 bg-blue-600 text-white py-3 rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
         >
-          {loading ? "등록 중..." : "작업 등록"}
+          {loading ? "등록 중..." : "인입내역 등록"}
         </button>
       </div>
     </form>

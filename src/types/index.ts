@@ -20,6 +20,7 @@ export type TicketStatus =
   | "canceled";
 
 export type TicketType = "install" | "as" | "consult" | "other";
+export type TicketTeam = "cs" | "tech";
 export type Priority = "low" | "normal" | "high" | "urgent";
 
 export type FranchiseStatus =
@@ -82,6 +83,7 @@ export interface Ticket {
   sales_id?: string;
   cs_id?: string;
   tech_id?: string;
+  team?: TicketTeam;
   memo?: string;
 
   business_type?: string;
@@ -303,6 +305,16 @@ export const STATUS_COLOR: Record<TicketStatus, string> = {
   in_progress: "bg-purple-100 text-purple-700",
   done: "bg-green-100 text-green-700",
   canceled: "bg-red-100 text-red-700",
+};
+
+export const TEAM_LABEL: Record<TicketTeam, string> = {
+  cs: "CS팀",
+  tech: "기술지원팀",
+};
+
+export const TEAM_COLOR: Record<TicketTeam, string> = {
+  cs: "bg-sky-100 text-sky-700",
+  tech: "bg-teal-100 text-teal-700",
 };
 
 export const TYPE_LABEL: Record<TicketType, string> = {

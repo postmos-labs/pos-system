@@ -13,9 +13,12 @@ import {
   TYPE_LABEL,
   PRIORITY_COLOR,
   PRIORITY_LABEL,
+  TEAM_LABEL,
+  TEAM_COLOR,
   type TicketStatus,
   type TicketType,
   type Priority,
+  type TicketTeam,
 } from "@/types";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
@@ -28,6 +31,7 @@ interface Ticket {
   type: string;
   status: string;
   priority: string;
+  team?: TicketTeam | null;
   scheduled_at?: string;
   created_at: string;
   merchant?: { business_name: string; phone: string } | null;
@@ -172,6 +176,9 @@ export default function TicketsClient({
                   <Badge colorClass={PRIORITY_COLOR[ticket.priority as Priority]}>
                     {PRIORITY_LABEL[ticket.priority as Priority]}
                   </Badge>
+                  {ticket.team && TEAM_LABEL[ticket.team] && (
+                    <Badge colorClass={TEAM_COLOR[ticket.team]}>{TEAM_LABEL[ticket.team]}</Badge>
+                  )}
                   <span className="text-xs text-slate-600 font-medium">
                     {TYPE_LABEL[ticket.type as TicketType]}
                   </span>
