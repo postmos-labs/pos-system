@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { TEAM_LABEL, type TicketTeam } from "@/types";
+import { TEAM_LABEL, TICKET_CATEGORIES, type TicketTeam } from "@/types";
 
 interface Props {
   salesId: string;
@@ -12,11 +12,11 @@ interface Props {
 }
 
 const TEAMS: TicketTeam[] = ["cs", "tech"];
-const CHANNELS = ["카카오톡", "유선"];
+const CHANNELS = ["채널톡", "유선"];
 
-// 123번 마이그레이션(tickets.team)이 아직 적용되지 않은 환경에서 team을 insert하면
-// "column does not exist"(42703) 에러가 난다. 등록 자체를 막지 않고 team만 빼고 재시도한다.
-// src/app/(app)/merchants/actions.ts의 isMissingColumnError와 같은 패턴.
+// 123/124번 마이그레이션(tickets.team / tickets.category)이 아직 적용되지 않은 환경에서
+// 해당 컬럼을 insert하면 "column does not exist"(42703) 에러가 난다. 등록 자체를 막지 않고
+// 새 컬럼을 하나씩 빼며 재시도한다. src/app/(app)/merchants/actions.ts의 isMissingColumnError와 같은 패턴.
 function isMissingColumnError(error: { code?: string; message?: string } | null) {
   if (!error) return false;
   return (
@@ -34,16 +34,22 @@ export default function NewTicketForm({ salesId, role }: Props) {
     phone: string;
     team: TicketTeam | "";
     reception_channel: string;
+    category: string;
+    inquiry: string;
+    answer: string;
   }>({
     business_name: "",
     phone: "",
     team: "",
     reception_channel: "",
+    category: "",
+    inquiry: "",
+    answer: "",
   });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.team || !form.reception_channel) return;
+    if (!form.team || !form.reception_channel || !form.category) return;
     setLoading(true);
     const supabase = createClient();
 
@@ -68,24 +74,34 @@ export default function NewTicketForm({ salesId, role }: Props) {
 
     const merchantId = merchantData.id;
 
-    // tickets.title은 NOT NULL이라 상호명을 그대로 제목으로 쓴다.
     // 처리를 다 끝낸 뒤 기록하는 로그이므로 상태는 바로 "완료"로 저장한다.
+    // 문의내용이 목록 제목(title) 역할을 하고, 답변내용은 progress_note를 재사용한다.
     const ticketPayload = {
       merchant_id: merchantId,
-      title: form.business_name,
+      title: form.inquiry,
       type: "install",
       priority: "normal",
       reception_channel: form.reception_channel,
+      progress_note: form.answer || null,
       sales_id: role === "sales" ? salesId : null,
       cs_id: role === "cs" ? salesId : null,
       status: "done",
     };
 
+    // category(124) → team(123) 순으로 최신 컬럼부터 하나씩 빼며 재시도한다.
     let { data: ticket, error } = await supabase
       .from("tickets")
-      .insert({ ...ticketPayload, team: form.team })
+      .insert({ ...ticketPayload, team: form.team, category: form.category })
       .select("id")
       .single();
+
+    if (isMissingColumnError(error)) {
+      ({ data: ticket, error } = await supabase
+        .from("tickets")
+        .insert({ ...ticketPayload, team: form.team })
+        .select("id")
+        .single());
+    }
 
     if (isMissingColumnError(error)) {
       ({ data: ticket, error } = await supabase
@@ -131,10 +147,9 @@ export default function NewTicketForm({ salesId, role }: Props) {
           </div>
 
           <div>
-            <Label>연락처 *</Label>
+            <Label>연락처</Label>
             <input
               type="text"
-              required
               value={form.phone}
               onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
               className={INPUT}
@@ -163,6 +178,27 @@ export default function NewTicketForm({ salesId, role }: Props) {
           </div>
 
           <div>
+            <Label>분류 *</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {TICKET_CATEGORIES.map((category) => (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, category }))}
+                  aria-pressed={form.category === category}
+                  className={`py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                    form.category === category
+                      ? "border-blue-600 bg-blue-50 text-blue-700"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
             <Label>담당팀 *</Label>
             <div className="grid grid-cols-2 gap-2">
               {TEAMS.map((team) => (
@@ -182,6 +218,29 @@ export default function NewTicketForm({ salesId, role }: Props) {
               ))}
             </div>
           </div>
+
+          <div>
+            <Label>문의내용 *</Label>
+            <textarea
+              required
+              value={form.inquiry}
+              onChange={(e) => setForm((f) => ({ ...f, inquiry: e.target.value }))}
+              rows={2}
+              className={INPUT + " resize-none"}
+              placeholder="예: 메뉴수정 요청"
+            />
+          </div>
+
+          <div>
+            <Label>답변내용</Label>
+            <textarea
+              value={form.answer}
+              onChange={(e) => setForm((f) => ({ ...f, answer: e.target.value }))}
+              rows={2}
+              className={INPUT + " resize-none"}
+              placeholder="처리한 내용을 입력하세요 (선택)"
+            />
+          </div>
         </div>
       </Section>
 
@@ -194,7 +253,7 @@ export default function NewTicketForm({ salesId, role }: Props) {
         </Link>
         <button
           type="submit"
-          disabled={loading || !form.team || !form.reception_channel}
+          disabled={loading || !form.team || !form.reception_channel || !form.category}
           className="flex-1 bg-blue-600 text-white py-3 rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
         >
           {loading ? "등록 중..." : "인입내역 등록"}

@@ -32,6 +32,7 @@ interface Ticket {
   status: string;
   priority: string;
   team?: TicketTeam | null;
+  category?: string | null;
   reception_channel?: string | null;
   scheduled_at?: string;
   created_at: string;
@@ -179,6 +180,9 @@ export default function TicketsClient({
                   </Badge>
                   {ticket.team && TEAM_LABEL[ticket.team] && (
                     <Badge colorClass={TEAM_COLOR[ticket.team]}>{TEAM_LABEL[ticket.team]}</Badge>
+                  )}
+                  {ticket.category && (
+                    <Badge colorClass="bg-slate-100 text-slate-600">{ticket.category}</Badge>
                   )}
                   <span className="text-xs text-slate-600 font-medium">
                     {TYPE_LABEL[ticket.type as TicketType]}

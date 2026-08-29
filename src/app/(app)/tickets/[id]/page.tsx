@@ -81,6 +81,11 @@ export default async function TicketDetailPage({ params }: Props) {
           >
             {PRIORITY_LABEL[ticket.priority as Priority]}
           </span>
+          {ticket.category && (
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-100 text-slate-600">
+              {ticket.category}
+            </span>
+          )}
           {ticket.team && TEAM_LABEL[ticket.team as TicketTeam] && (
             <span
               className={`text-xs px-2 py-0.5 rounded-full font-medium ${TEAM_COLOR[ticket.team as TicketTeam]}`}

@@ -4,9 +4,10 @@ import { useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Ticket } from "@/types";
 import { AppSelect } from "@/components/ui/AppSelect";
+import { TICKET_CATEGORIES } from "@/types";
 import { DatePickerField } from "@/components/ui/DatePickerField";
 
-const RECEPTION_CHANNELS = ["전화", "유선", "카카오톡", "문자", "방문", "온라인", "기타"];
+const RECEPTION_CHANNELS = ["채널톡", "유선", "전화", "카카오톡", "문자", "방문", "온라인", "기타"];
 const DOCUMENT_STATUSES = ["미접수", "일부접수", "완료"];
 const VAN_COMPANIES = ["KIS", "NICE", "KCP", "KSNET", "한국정보통신", "스마트로", "JTNET", "기타"];
 const SIMPLE_PAYMENTS = [
@@ -28,6 +29,7 @@ interface Props {
 export default function TicketInfoEdit({ ticket, canEdit }: Props) {
   const [form, setForm] = useState({
     business_type: ticket.business_type ?? "개인",
+    category: ticket.category ?? "",
     reception_channel: ticket.reception_channel ?? "",
     progress_note: ticket.progress_note ?? "",
     document_status: ticket.document_status ?? "미접수",
@@ -104,6 +106,26 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
             options={[
               { value: "개인", label: "개인사업자" },
               { value: "법인", label: "법인사업자" },
+            ]}
+          />
+        </div>
+
+        {}
+        <div>
+          <p className="text-xs text-gray-400 mb-1">
+            분류 <StatusDot field="category" />
+          </p>
+          <AppSelect
+            value={form.category}
+            disabled={!canEdit}
+            onValueChange={(value) => {
+              handleChange("category", value);
+              save("category", value);
+            }}
+            aria-label="분류"
+            options={[
+              { value: "", label: "선택" },
+              ...TICKET_CATEGORIES.map((c) => ({ value: c, label: c })),
             ]}
           />
         </div>
@@ -257,7 +279,7 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
       {}
       <div className="mt-4 pt-4 border-t border-gray-100">
         <p className="text-xs text-gray-400 mb-1">
-          진행 상황 <StatusDot field="progress_note" />
+          답변내용 <StatusDot field="progress_note" />
         </p>
         <textarea
           value={form.progress_note}
@@ -266,7 +288,7 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
           onChange={(e) => handleChange("progress_note", e.target.value)}
           onBlur={() => handleBlur("progress_note")}
           className="w-full border-0 border-b border-slate-200 bg-transparent px-0 py-1 text-sm text-slate-900 focus:outline-none focus:border-blue-400 transition-colors resize-none"
-          placeholder="현재 진행 상황"
+          placeholder="답변내용"
         />
       </div>
 

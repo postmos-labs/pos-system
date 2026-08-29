@@ -21,6 +21,16 @@ export type TicketStatus =
 
 export type TicketType = "install" | "as" | "consult" | "other";
 export type TicketTeam = "cs" | "tech";
+
+// 인입내역 분류 — supabase/124_tickets_category_migration.sql의 CHECK 제약과 일치해야 한다.
+export const TICKET_CATEGORIES = [
+  "기타문의",
+  "메뉴수정",
+  "A/S",
+  "용지요청",
+  "가입문의",
+  "일정문의",
+] as const;
 export type Priority = "low" | "normal" | "high" | "urgent";
 
 export type FranchiseStatus =
@@ -84,6 +94,7 @@ export interface Ticket {
   cs_id?: string;
   tech_id?: string;
   team?: TicketTeam;
+  category?: string;
   memo?: string;
 
   business_type?: string;
