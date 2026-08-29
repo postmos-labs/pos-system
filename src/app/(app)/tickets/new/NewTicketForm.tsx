@@ -125,6 +125,11 @@ export default function NewTicketForm({ salesId, role }: Props) {
     return () => clearTimeout(timer);
   }, [form.business_name, linkedMerchant]);
 
+  // 상호명 안내 문구용 — 동일 상호명이 제안에 있으면 등록 시 그 가맹점에 자동 연결된다.
+  const trimmedName = form.business_name.trim();
+  const exactNameMatch =
+    !linkedMerchant && !!trimmedName && suggestions.some((m) => m.business_name === trimmedName);
+
   // 기술지원팀 인입은 AS 구분 3종을 모두 선택해야 등록할 수 있다.
   const asIncomplete =
     form.team === "tech" && (!form.issue_category || !form.resolution || form.is_repeat === null);
@@ -311,6 +316,17 @@ export default function NewTicketForm({ salesId, role }: Props) {
                     ))}
                   </ul>
                 )}
+                {trimmedName &&
+                  (exactNameMatch ? (
+                    <p className="mt-1 text-[11px] text-blue-600">
+                      동일 상호명 가맹점이 있어 등록 시 그 가맹점에 연결됩니다.
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-gray-400">
+                      일치하는 가맹점이 없으면 등록 시 새 가맹점이 함께 등록됩니다. 기존 가맹점이면
+                      목록에서 선택해 연결하세요.
+                    </p>
+                  ))}
               </div>
 
               <div>
