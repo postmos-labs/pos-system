@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -18,6 +18,13 @@ interface Props {
 }
 
 const TEAMS: TicketTeam[] = ["cs", "tech"];
+
+interface MerchantSuggestion {
+  id: string;
+  business_name: string;
+  phone: string | null;
+  address: string | null;
+}
 const CHANNELS = ["채널톡", "유선"];
 
 // 마이그레이션(123 team / 124 AS 구분 / 125 reception_channel·progress_note)이 아직 적용되지
@@ -68,6 +75,34 @@ export default function NewTicketForm({ salesId, role }: Props) {
     is_repeat: null,
   });
 
+  // 같은 가게의 인입마다 가맹점이 새로 생기지 않도록, 상호명 입력 시 기존 가맹점을
+  // 검색해 연결할 수 있게 한다. 연결하면 merchants insert를 건너뛴다.
+  const [linkedMerchant, setLinkedMerchant] = useState<MerchantSuggestion | null>(null);
+  const [suggestions, setSuggestions] = useState<MerchantSuggestion[]>([]);
+
+  useEffect(() => {
+    if (linkedMerchant) return;
+    const term = form.business_name.trim();
+    const timer = setTimeout(async () => {
+      if (!term) {
+        setSuggestions([]);
+        return;
+      }
+      const supabase = createClient();
+      // tickets/page.tsx의 검색과 같은 이스케이프 — ilike 와일드카드와 따옴표를 막는다.
+      const escaped = term.replace(/[\\%_]/g, (m) => "\\" + m).replace(/"/g, '\\"');
+      const pattern = `"%${escaped}%"`;
+      const { data } = await supabase
+        .from("merchants")
+        .select("id,business_name,phone,address")
+        .or(`business_name.ilike.${pattern},phone.ilike.${pattern}`)
+        .order("created_at", { ascending: false })
+        .limit(8);
+      setSuggestions((data as MerchantSuggestion[]) ?? []);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [form.business_name, linkedMerchant]);
+
   // 기술지원팀 인입은 AS 구분 3종을 모두 선택해야 등록할 수 있다.
   const asIncomplete =
     form.team === "tech" && (!form.issue_category || !form.resolution || form.is_repeat === null);
@@ -78,26 +113,30 @@ export default function NewTicketForm({ salesId, role }: Props) {
     setLoading(true);
     const supabase = createClient();
 
-    // merchants.owner_name은 NOT NULL이라 값을 넘겨야 한다. 대표자명은 받지 않으므로
-    // 빈 값으로 두고 가맹점 360에서 채운다.
-    const { data: merchantData, error: merchantError } = await supabase
-      .from("merchants")
-      .insert({
-        business_name: form.business_name,
-        owner_name: "",
-        phone: form.phone,
-        sales_id: salesId,
-      })
-      .select("id")
-      .single();
+    // 기존 가맹점을 연결했으면 그대로 쓰고, 아니면 새로 만든다.
+    // merchants.owner_name은 NOT NULL이라 빈 값을 넘기고 가맹점 360에서 채운다.
+    let merchantId: string;
+    if (linkedMerchant) {
+      merchantId = linkedMerchant.id;
+    } else {
+      const { data: merchantData, error: merchantError } = await supabase
+        .from("merchants")
+        .insert({
+          business_name: form.business_name,
+          owner_name: "",
+          phone: form.phone,
+          sales_id: salesId,
+        })
+        .select("id")
+        .single();
 
-    if (merchantError || !merchantData) {
-      alert("가맹점 등록 실패: " + merchantError?.message);
-      setLoading(false);
-      return;
+      if (merchantError || !merchantData) {
+        alert("가맹점 등록 실패: " + merchantError?.message);
+        setLoading(false);
+        return;
+      }
+      merchantId = merchantData.id;
     }
-
-    const merchantId = merchantData.id;
 
     // 처리를 다 끝낸 뒤 기록하는 로그이므로 상태는 바로 "완료"로 저장한다.
     // 문의내용이 목록 제목(title) 역할을 하고, 답변내용은 progress_note를 재사용한다.
@@ -139,7 +178,7 @@ export default function NewTicketForm({ salesId, role }: Props) {
     }
 
     if (error || !ticket) {
-      await supabase.from("merchants").delete().eq("id", merchantId);
+      if (!linkedMerchant) await supabase.from("merchants").delete().eq("id", merchantId);
       alert("등록 실패: " + error?.message);
       setLoading(false);
       return;
@@ -162,26 +201,78 @@ export default function NewTicketForm({ salesId, role }: Props) {
     <form onSubmit={handleSubmit} className="space-y-4">
       <Section title="인입 정보">
         <div className="space-y-3">
-          <div>
-            <Label>상호명 *</Label>
-            <input
-              type="text"
-              required
-              value={form.business_name}
-              onChange={(e) => setForm((f) => ({ ...f, business_name: e.target.value }))}
-              className={INPUT}
-            />
-          </div>
+          {linkedMerchant ? (
+            <div>
+              <Label>가맹점</Label>
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">
+                    {linkedMerchant.business_name}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {linkedMerchant.phone || "-"}
+                    {linkedMerchant.address ? ` · ${linkedMerchant.address}` : ""}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setLinkedMerchant(null)}
+                  className="shrink-0 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  연결 해제
+                </button>
+              </div>
+              <p className="mt-1 text-[11px] text-gray-400">
+                기존 가맹점에 연결됩니다. 새 가맹점을 만들지 않습니다.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="relative">
+                <Label>상호명 *</Label>
+                <input
+                  type="text"
+                  required
+                  value={form.business_name}
+                  onChange={(e) => setForm((f) => ({ ...f, business_name: e.target.value }))}
+                  className={INPUT}
+                  placeholder="입력하면 기존 가맹점을 검색합니다"
+                />
+                {suggestions.length > 0 && (
+                  <ul className="absolute z-10 mt-1 w-full max-h-56 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                    {suggestions.map((m) => (
+                      <li key={m.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLinkedMerchant(m);
+                            setSuggestions([]);
+                          }}
+                          className="w-full px-3 py-2 text-left hover:bg-blue-50"
+                        >
+                          <p className="text-sm font-medium text-gray-900">{m.business_name}</p>
+                          <p className="text-xs text-gray-500">
+                            {m.phone || "-"}
+                            {m.address ? ` · ${m.address}` : ""}
+                          </p>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
 
-          <div>
-            <Label>연락처</Label>
-            <input
-              type="text"
-              value={form.phone}
-              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-              className={INPUT}
-            />
-          </div>
+              <div>
+                <Label>연락처</Label>
+                <input
+                  type="text"
+                  value={form.phone}
+                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                  className={INPUT}
+                />
+              </div>
+            </>
+          )}
 
           <div>
             <Label>인입 채널 *</Label>
