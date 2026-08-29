@@ -11,19 +11,7 @@ interface Props {
 
 const PAGE_SIZE = 50;
 
-const TRANSFERRED_STATUSES: TicketStatus[] = [
-  "cs_pending",
-  "cs_progress",
-  "scheduled",
-  "tech_pending",
-  "in_progress",
-  "done",
-  "canceled",
-];
-
 const TAB_STATUSES: Record<string, TicketStatus[]> = {
-  sales: ["sales"],
-  transferred: TRANSFERRED_STATUSES,
   cs: ["cs_pending", "cs_progress", "scheduled"],
   tech: ["in_progress"],
 };
@@ -106,8 +94,6 @@ export default async function TicketsPage({ searchParams }: Props) {
     p.role === "sales" || p.role === "admin" || p.role === "master"
       ? [
           { key: "all", label: "전체" },
-          { key: "sales", label: "접수중" },
-          { key: "transferred", label: "이관완료" },
           { key: "cs", label: "CS팀" },
           { key: "tech", label: "기술지원" },
         ]
