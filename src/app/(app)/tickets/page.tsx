@@ -110,10 +110,17 @@ export default async function TicketsPage({ searchParams }: Props) {
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const page = Math.min(requestedPage, totalPages);
 
-  const { data: tickets } = await buildQuery(useTeamFilter).range(
+  const { data: tickets, error: listError } = await buildQuery(useTeamFilter).range(
     (page - 1) * PAGE_SIZE,
     page * PAGE_SIZE - 1,
   );
+
+  // 조회 실패를 "0건"으로 보여주면 원인을 알 수 없다 — cs-report의 loadFailed와 같은 원칙.
+  const loadFailed = !!(countRes.error || listError);
+  const loadErrorMessage =
+    (countRes.error as { message?: string } | null)?.message ??
+    (listError as { message?: string } | null)?.message ??
+    "";
 
   const TABS =
     p.role === "tech"
@@ -194,6 +201,15 @@ export default async function TicketsPage({ searchParams }: Props) {
               {STATUS_LABEL[s]}
             </Link>
           ))}
+        </div>
+      )}
+
+      {loadFailed && (
+        <div className="mb-5 rounded-2xl border border-red-300 bg-red-50 px-5 py-4 text-sm font-semibold text-red-700">
+          목록을 불러오지 못했습니다. 아래는 빈 목록이 아니라 조회 실패입니다.
+          {loadErrorMessage && (
+            <span className="mt-1 block font-normal text-red-600">{loadErrorMessage}</span>
+          )}
         </div>
       )}
 
