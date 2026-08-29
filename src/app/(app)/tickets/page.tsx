@@ -30,6 +30,15 @@ function isMissingColumnError(error: { code?: string; message?: string } | null)
   );
 }
 
+// 42703: 'column tickets.team does not exist' / PGRST204: "Could not find the 'team' column ..."
+function missingColumnName(error: { message?: string } | null): string | null {
+  const message = error?.message ?? "";
+  const match =
+    /Could not find the '([^']+)' column/.exec(message) ??
+    /column "?([A-Za-z0-9_.]+)"? does not exist/.exec(message);
+  return match?.[1]?.split(".").pop() ?? null;
+}
+
 export default async function TicketsPage({ searchParams }: Props) {
   const params = await searchParams;
   const tab = params.tab ?? "all";
@@ -67,15 +76,17 @@ export default async function TicketsPage({ searchParams }: Props) {
     searchTechIds = (techRows ?? []).map((r) => r.id);
   }
 
-  function buildQuery(useTeamFilter: boolean) {
+  function buildQuery(useTeamFilter: boolean, useSoftDeleteFilter: boolean) {
     let q = supabase
       .from("tickets")
       .select(
         "*, merchant:merchants(business_name, phone), sales:profiles!tickets_sales_id_fkey(name), tech:profiles!tickets_tech_id_fkey(name)",
         { count: "exact" },
       )
-      .is("deleted_at", null)
       .order("created_at", { ascending: false });
+
+    // 062 마이그레이션(deleted_at) 미적용 환경에서는 이 필터가 42703을 내므로 뺄 수 있게 한다.
+    if (useSoftDeleteFilter) q = q.is("deleted_at", null);
 
     if (p.role === "sales") q = q.eq("sales_id", userId);
     if (p.role === "cs") q = q.eq("cs_id", userId);
@@ -101,19 +112,24 @@ export default async function TicketsPage({ searchParams }: Props) {
   }
 
   let useTeamFilter = tab === "cs" || tab === "tech";
-  let countRes = await buildQuery(useTeamFilter).range(0, 0);
-  if (useTeamFilter && isMissingColumnError(countRes.error)) {
-    useTeamFilter = false;
-    countRes = await buildQuery(false).range(0, 0);
+  let useSoftDeleteFilter = true;
+  let countRes = await buildQuery(useTeamFilter, useSoftDeleteFilter).range(0, 0);
+  // 미적용 마이그레이션 컬럼(team/deleted_at)이 원인이면 해당 필터만 빼고 재시도한다.
+  for (let retry = 0; retry < 2 && isMissingColumnError(countRes.error); retry++) {
+    const missing = missingColumnName(countRes.error);
+    if (missing === "deleted_at" && useSoftDeleteFilter) useSoftDeleteFilter = false;
+    else if (missing === "team" && useTeamFilter) useTeamFilter = false;
+    else break;
+    countRes = await buildQuery(useTeamFilter, useSoftDeleteFilter).range(0, 0);
   }
   const totalCount = countRes.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const page = Math.min(requestedPage, totalPages);
 
-  const { data: tickets, error: listError } = await buildQuery(useTeamFilter).range(
-    (page - 1) * PAGE_SIZE,
-    page * PAGE_SIZE - 1,
-  );
+  const { data: tickets, error: listError } = await buildQuery(
+    useTeamFilter,
+    useSoftDeleteFilter,
+  ).range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
 
   // 조회 실패를 "0건"으로 보여주면 원인을 알 수 없다 — cs-report의 loadFailed와 같은 원칙.
   const loadFailed = !!(countRes.error || listError);
