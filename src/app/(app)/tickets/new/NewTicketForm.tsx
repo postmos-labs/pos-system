@@ -12,6 +12,7 @@ interface Props {
 }
 
 const TEAMS: TicketTeam[] = ["cs", "tech"];
+const CHANNELS = ["카카오톡", "유선"];
 
 // 123번 마이그레이션(tickets.team)이 아직 적용되지 않은 환경에서 team을 insert하면
 // "column does not exist"(42703) 에러가 난다. 등록 자체를 막지 않고 team만 빼고 재시도한다.
@@ -32,15 +33,17 @@ export default function NewTicketForm({ salesId, role }: Props) {
     business_name: string;
     phone: string;
     team: TicketTeam | "";
+    reception_channel: string;
   }>({
     business_name: "",
     phone: "",
     team: "",
+    reception_channel: "",
   });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.team) return;
+    if (!form.team || !form.reception_channel) return;
     setLoading(true);
     const supabase = createClient();
 
@@ -66,14 +69,16 @@ export default function NewTicketForm({ salesId, role }: Props) {
     const merchantId = merchantData.id;
 
     // tickets.title은 NOT NULL이라 상호명을 그대로 제목으로 쓴다.
+    // 처리를 다 끝낸 뒤 기록하는 로그이므로 상태는 바로 "완료"로 저장한다.
     const ticketPayload = {
       merchant_id: merchantId,
       title: form.business_name,
       type: "install",
       priority: "normal",
+      reception_channel: form.reception_channel,
       sales_id: role === "sales" ? salesId : null,
       cs_id: role === "cs" ? salesId : null,
-      status: role === "cs" ? "cs_pending" : "sales",
+      status: "done",
     };
 
     let { data: ticket, error } = await supabase
@@ -100,7 +105,7 @@ export default function NewTicketForm({ salesId, role }: Props) {
     const { error: logError } = await supabase.from("ticket_logs").insert({
       ticket_id: ticket.id,
       user_id: salesId,
-      to_status: role === "cs" ? "cs_pending" : "sales",
+      to_status: "done",
       message: "신규 인입내역 등록",
     });
     if (logError) {
@@ -137,6 +142,27 @@ export default function NewTicketForm({ salesId, role }: Props) {
           </div>
 
           <div>
+            <Label>인입 채널 *</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {CHANNELS.map((channel) => (
+                <button
+                  key={channel}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, reception_channel: channel }))}
+                  aria-pressed={form.reception_channel === channel}
+                  className={`py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                    form.reception_channel === channel
+                      ? "border-blue-600 bg-blue-50 text-blue-700"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {channel}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
             <Label>담당팀 *</Label>
             <div className="grid grid-cols-2 gap-2">
               {TEAMS.map((team) => (
@@ -168,7 +194,7 @@ export default function NewTicketForm({ salesId, role }: Props) {
         </Link>
         <button
           type="submit"
-          disabled={loading || !form.team}
+          disabled={loading || !form.team || !form.reception_channel}
           className="flex-1 bg-blue-600 text-white py-3 rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
         >
           {loading ? "등록 중..." : "인입내역 등록"}

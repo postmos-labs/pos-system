@@ -32,6 +32,7 @@ interface Ticket {
   status: string;
   priority: string;
   team?: TicketTeam | null;
+  reception_channel?: string | null;
   scheduled_at?: string;
   created_at: string;
   merchant?: { business_name: string; phone: string } | null;
@@ -182,6 +183,9 @@ export default function TicketsClient({
                   <span className="text-xs text-slate-600 font-medium">
                     {TYPE_LABEL[ticket.type as TicketType]}
                   </span>
+                  {ticket.reception_channel && (
+                    <span className="text-xs text-slate-500">{ticket.reception_channel}</span>
+                  )}
                 </div>
                 <p className="text-sm font-semibold text-slate-900 break-words">{ticket.title}</p>
                 <div className="flex items-center gap-3 text-xs text-slate-500">

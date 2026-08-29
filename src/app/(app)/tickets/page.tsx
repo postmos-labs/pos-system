@@ -11,10 +11,24 @@ interface Props {
 
 const PAGE_SIZE = 50;
 
+// 상단 팀 탭은 team 컬럼으로 거른다. 123번 마이그레이션(tickets.team)이 아직 적용되지
+// 않은 환경에서는 42703이 나므로 아래 상태 기반 매핑으로 폴백한다.
 const TAB_STATUSES: Record<string, TicketStatus[]> = {
   cs: ["cs_pending", "cs_progress", "scheduled"],
   tech: ["in_progress"],
 };
+
+// 처리 완료 후 기록하는 인입 로그라 파이프라인 단계 대신 결과 3구간만 필터로 쓴다.
+const LOG_STATUSES: TicketStatus[] = ["done", "in_progress", "canceled"];
+
+function isMissingColumnError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /column .* does not exist/i.test(error.message ?? "")
+  );
+}
 
 export default async function TicketsPage({ searchParams }: Props) {
   const params = await searchParams;
@@ -53,7 +67,7 @@ export default async function TicketsPage({ searchParams }: Props) {
     searchTechIds = (techRows ?? []).map((r) => r.id);
   }
 
-  function buildQuery() {
+  function buildQuery(useTeamFilter: boolean) {
     let q = supabase
       .from("tickets")
       .select(
@@ -67,7 +81,10 @@ export default async function TicketsPage({ searchParams }: Props) {
     if (p.role === "cs") q = q.eq("cs_id", userId);
     if (p.role === "tech") q = q.eq("tech_id", userId);
 
-    if (params.status) {
+    if (useTeamFilter && (tab === "cs" || tab === "tech")) {
+      q = q.eq("team", tab);
+      if (params.status) q = q.eq("status", params.status);
+    } else if (params.status) {
       q = q.eq("status", params.status);
     } else if (tab !== "all") {
       q = q.in("status", TAB_STATUSES[tab] ?? []);
@@ -83,47 +100,37 @@ export default async function TicketsPage({ searchParams }: Props) {
     return q;
   }
 
-  const { count } = await buildQuery().range(0, 0);
-  const totalCount = count ?? 0;
+  let useTeamFilter = tab === "cs" || tab === "tech";
+  let countRes = await buildQuery(useTeamFilter).range(0, 0);
+  if (useTeamFilter && isMissingColumnError(countRes.error)) {
+    useTeamFilter = false;
+    countRes = await buildQuery(false).range(0, 0);
+  }
+  const totalCount = countRes.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const page = Math.min(requestedPage, totalPages);
 
-  const { data: tickets } = await buildQuery().range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+  const { data: tickets } = await buildQuery(useTeamFilter).range(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE - 1,
+  );
 
   const TABS =
-    p.role === "sales" || p.role === "admin" || p.role === "master"
+    p.role === "tech"
       ? [
+          { key: "all", label: "전체" },
+          { key: "tech", label: "기술지원" },
+        ]
+      : [
           { key: "all", label: "전체" },
           { key: "cs", label: "CS팀" },
           { key: "tech", label: "기술지원" },
-        ]
-      : p.role === "cs"
-        ? [
-            { key: "all", label: "전체" },
-            { key: "cs", label: "CS 진행" },
-            { key: "tech", label: "기술지원" },
-          ]
-        : [
-            { key: "all", label: "전체" },
-            { key: "tech", label: "진행중" },
-          ];
+        ];
 
   // 탭·상태·페이지 이동 시 검색어가 풀리지 않도록 모든 링크에 q를 유지한다.
   const qParam = searchTerm ? `&q=${encodeURIComponent(searchTerm)}` : "";
 
-  const statusFilters: TicketStatus[] =
-    tab === "all"
-      ? [
-          "sales",
-          "cs_pending",
-          "cs_progress",
-          "scheduled",
-          "tech_pending",
-          "in_progress",
-          "done",
-          "canceled",
-        ]
-      : (TAB_STATUSES[tab] ?? []);
+  const statusFilters: TicketStatus[] = LOG_STATUSES;
 
   return (
     <div className="p-6 max-w-5xl mx-auto">

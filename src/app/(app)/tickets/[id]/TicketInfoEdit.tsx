@@ -6,7 +6,7 @@ import type { Ticket } from "@/types";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField } from "@/components/ui/DatePickerField";
 
-const RECEPTION_CHANNELS = ["전화", "카카오톡", "문자", "방문", "온라인", "기타"];
+const RECEPTION_CHANNELS = ["전화", "유선", "카카오톡", "문자", "방문", "온라인", "기타"];
 const DOCUMENT_STATUSES = ["미접수", "일부접수", "완료"];
 const VAN_COMPANIES = ["KIS", "NICE", "KCP", "KSNET", "한국정보통신", "스마트로", "JTNET", "기타"];
 const SIMPLE_PAYMENTS = [

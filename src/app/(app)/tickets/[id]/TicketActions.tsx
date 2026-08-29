@@ -359,17 +359,38 @@ export default function TicketActions({ ticket, profile, techUsers, csUsers }: P
         )}
 
         {}
-        {status !== "done" &&
-          status !== "canceled" &&
-          (role === "cs" || role === "admin" || role === "master") && (
-            <button
-              onClick={requestCancel}
-              disabled={loading}
-              className="text-sm text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 transition-colors font-medium"
-            >
-              취소
-            </button>
-          )}
+        {status === "done" && (
+          <button
+            onClick={() => updateStatus("in_progress")}
+            disabled={loading}
+            className="flex items-center gap-1.5 bg-purple-500 text-white text-sm px-4 py-2 rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50 font-medium"
+          >
+            후속 필요로 전환
+          </button>
+        )}
+
+        {}
+        {status === "in_progress" && (
+          <button
+            onClick={() => updateStatus("done")}
+            disabled={loading}
+            className="flex items-center gap-1.5 bg-green-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 font-medium"
+          >
+            <CheckCircle size={15} />
+            완료로 전환
+          </button>
+        )}
+
+        {}
+        {status !== "canceled" && (role === "cs" || role === "admin" || role === "master") && (
+          <button
+            onClick={requestCancel}
+            disabled={loading}
+            className="text-sm text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 transition-colors font-medium"
+          >
+            취소
+          </button>
+        )}
       </div>
 
       <div className="pt-2 border-t border-gray-100">

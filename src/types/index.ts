@@ -291,7 +291,7 @@ export const STATUS_LABEL: Record<TicketStatus, string> = {
   cs_progress: "CS 진행중",
   scheduled: "일정 확정",
   tech_pending: "배정완료",
-  in_progress: "작업중",
+  in_progress: "후속 필요",
   done: "완료",
   canceled: "취소",
 };
