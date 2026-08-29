@@ -19,6 +19,8 @@ interface Props {
   loadFailed: boolean;
   managedMerchantCount: number;
   replacementEquipmentCount: number;
+  /** 이번 달 수치에 합산된 인입내역 기술지원 AS 건수 */
+  inboundAsCount: number;
   metrics: CsReportMetrics;
 }
 
@@ -80,6 +82,7 @@ export default function CsReportClient({
   loadFailed,
   managedMerchantCount,
   replacementEquipmentCount,
+  inboundAsCount,
   metrics,
 }: Props) {
   const router = useRouter();
@@ -120,6 +123,7 @@ export default function CsReportClient({
         { 항목: "출장", 값: `${metrics.onsiteCount}건` },
         { 항목: "전월 대비 장애", 값: deltaValue },
         { 항목: "교체 필요 장비", 값: `${replacementEquipmentCount}건` },
+        { 항목: "인입내역 AS 포함", 값: `${inboundAsCount}건` },
         { 항목: "분류 미입력", 값: `${metrics.missingCount}건` },
       ];
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryData), "요약");
@@ -234,6 +238,13 @@ export default function CsReportClient({
         <MetricCard label="전월 대비" value={deltaValue} valueClassName={deltaClassName} />
         <MetricCard label="교체 필요 장비" value={`${replacementEquipmentCount}건`} />
       </div>
+
+      {inboundAsCount > 0 && (
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-5 py-4 text-sm text-sky-700">
+          이번 달 수치에 인입내역의 기술지원 AS <strong>{inboundAsCount}건</strong>이 포함되어
+          있습니다. VAN사가 확인되지 않은 인입 건은 토스계열 리포트에만 합산됩니다.
+        </div>
+      )}
 
       {metrics.missingCount > 0 && (
         <div className="flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-700">

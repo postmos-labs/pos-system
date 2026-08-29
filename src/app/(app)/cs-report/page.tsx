@@ -56,6 +56,9 @@ const MERCHANT_FULL_COLUMNS = `${MERCHANT_BASE_COLUMNS},van_company`;
 const MEMO_BASE_COLUMNS = "id,merchant_id,entry_type,created_at";
 const MEMO_FULL_COLUMNS = `${MEMO_BASE_COLUMNS},issue_category,resolution,is_repeat`;
 
+const TICKET_BASE_COLUMNS = "id,merchant_id,created_at";
+const TICKET_FULL_COLUMNS = `${TICKET_BASE_COLUMNS},issue_category,resolution,is_repeat`;
+
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 // Supabase는 select에 범위를 주지 않으면 한 번에 최대 1000행만 돌려준다. 가맹점이 1000개를
@@ -94,6 +97,15 @@ type MemoRow = {
   id: string;
   merchant_id: string;
   entry_type: "as" | "claim" | "general" | "etc";
+  created_at: string;
+  issue_category?: CsReportMemoInput["issue_category"];
+  resolution?: CsReportMemoInput["resolution"];
+  is_repeat?: CsReportMemoInput["is_repeat"];
+};
+
+type TechTicketRow = {
+  id: string;
+  merchant_id: string;
   created_at: string;
   issue_category?: CsReportMemoInput["issue_category"];
   resolution?: CsReportMemoInput["resolution"];
@@ -139,6 +151,33 @@ async function fetchMemos(supabase: SupabaseServerClient, startIso: string, endI
   return { rows: full.rows, error: full.error, schemaReady: true };
 }
 
+// 인입내역(tickets)의 기술지원 건을 AS로 합산한다. 123/124번 마이그레이션 미적용 환경에서는
+// team/AS 컬럼 select가 42703이므로 단계적으로 폴백하고, team 컬럼 자체가 없으면 tech로
+// 표시된 건도 존재할 수 없으므로 빈 결과로 둔다. 취소·삭제 건은 무효 기록이라 제외한다.
+async function fetchTechTickets(supabase: SupabaseServerClient, startIso: string, endIso: string) {
+  const query = (columns: string) => (from: number, to: number) =>
+    supabase
+      .from("tickets")
+      .select(columns)
+      .eq("team", "tech")
+      .is("deleted_at", null)
+      .neq("status", "canceled")
+      .gte("created_at", startIso)
+      .lt("created_at", endIso)
+      .range(from, to)
+      .overrideTypes<TechTicketRow[]>();
+
+  const full = await fetchAllPages<TechTicketRow>(query(TICKET_FULL_COLUMNS));
+  if (full.error && isMissingColumnError(full.error as { code?: string; message?: string })) {
+    const base = await fetchAllPages<TechTicketRow>(query(TICKET_BASE_COLUMNS));
+    if (base.error && isMissingColumnError(base.error as { code?: string; message?: string })) {
+      return { rows: [] as TechTicketRow[], error: null };
+    }
+    return { rows: base.rows, error: base.error };
+  }
+  return { rows: full.rows, error: full.error };
+}
+
 export default async function CsReportPage({ searchParams }: Props) {
   const params = await searchParams;
   const supabase = await createClient();
@@ -156,10 +195,19 @@ export default async function CsReportPage({ searchParams }: Props) {
   const { startIso, endIso } = monthRangeKst(month);
   const { startIso: prevStartIso, endIso: prevEndIso } = monthRangeKst(shiftMonth(month, -1));
 
-  const [merchantsResult, memosResult, prevMemosResult, equipmentResult] = await Promise.all([
+  const [
+    merchantsResult,
+    memosResult,
+    prevMemosResult,
+    ticketsResult,
+    prevTicketsResult,
+    equipmentResult,
+  ] = await Promise.all([
     fetchMerchants(supabase),
     fetchMemos(supabase, startIso, endIso),
     fetchMemos(supabase, prevStartIso, prevEndIso),
+    fetchTechTickets(supabase, startIso, endIso),
+    fetchTechTickets(supabase, prevStartIso, prevEndIso),
     fetchAllPages<{ id: string; merchant_id: string; status: string }>((from, to) =>
       supabase
         .from("merchant_equipment")
@@ -198,6 +246,8 @@ export default async function CsReportPage({ searchParams }: Props) {
     merchantsResult.error ||
     memosResult.error ||
     prevMemosResult.error ||
+    ticketsResult.error ||
+    prevTicketsResult.error ||
     equipmentResult.error ||
     franchiseVanError
   );
@@ -237,9 +287,35 @@ export default async function CsReportPage({ searchParams }: Props) {
       }));
   }
 
+  // 인입내역 등록이 만드는 가맹점은 VAN 정보가 없어 계열 매칭이 안 된다. VAN 미상 인입 건은
+  // 토스계열 리포트에만 합산하고, KICC 리포트에는 KICC로 확인된 가맹점 건만 넣는다
+  // (KICC 제출 숫자를 오염시키지 않기 위함).
+  const kiccMerchantIds = new Set(
+    merchants.filter((m) => isKiccList(effectiveVanList(m))).map((m) => m.id),
+  );
+
+  function toTicketInput(rows: TechTicketRow[]): CsReportMemoInput[] {
+    return rows
+      .filter((row) =>
+        van === "kicc"
+          ? kiccMerchantIds.has(row.merchant_id)
+          : !kiccMerchantIds.has(row.merchant_id),
+      )
+      .map((row) => ({
+        entry_type: "as" as const,
+        issue_category: row.issue_category ?? null,
+        resolution: row.resolution ?? null,
+        is_repeat: row.is_repeat ?? null,
+        brand: brandByMerchantId.get(row.merchant_id) ?? null,
+      }));
+  }
+
+  const inboundCurrent = toTicketInput(ticketsResult.rows);
+  const inboundPrev = toTicketInput(prevTicketsResult.rows);
+
   const metrics = computeCsReportMetrics(
-    toReportInput(memosResult.rows),
-    toReportInput(prevMemosResult.rows),
+    [...toReportInput(memosResult.rows), ...inboundCurrent],
+    [...toReportInput(prevMemosResult.rows), ...inboundPrev],
   );
 
   const replacementEquipmentCount = equipmentResult.rows.filter((row) =>
@@ -254,6 +330,7 @@ export default async function CsReportPage({ searchParams }: Props) {
       loadFailed={loadFailed}
       managedMerchantCount={matchingMerchantIds.size}
       replacementEquipmentCount={replacementEquipmentCount}
+      inboundAsCount={inboundCurrent.length}
       metrics={metrics}
     />
   );
