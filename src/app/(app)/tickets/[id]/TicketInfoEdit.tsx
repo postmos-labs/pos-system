@@ -31,6 +31,25 @@ interface Props {
   canEdit: boolean;
 }
 
+// 렌더 중 컴포넌트 생성(react-hooks/static-components) 방지를 위해 모듈 레벨에 두고 상태를 props로 받는다.
+function StatusDot({
+  field,
+  saving,
+  saved,
+  saveError,
+}: {
+  field: string;
+  saving: string | null;
+  saved: string | null;
+  saveError: string | null;
+}) {
+  if (saving === field) return <span className="text-[10px] text-slate-400 ml-1">저장중...</span>;
+  if (saveError === field)
+    return <span className="text-[10px] text-red-500 ml-1">✗ 저장 실패</span>;
+  if (saved === field) return <span className="text-[10px] text-blue-500 ml-1">✓ 저장됨</span>;
+  return null;
+}
+
 export default function TicketInfoEdit({ ticket, canEdit }: Props) {
   const [form, setForm] = useState({
     business_type: ticket.business_type ?? "개인",
@@ -84,14 +103,6 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
 
   const INPUT = `w-full border-0 border-b border-slate-200 bg-transparent px-0 py-1 text-sm text-slate-900 focus:outline-none focus:border-blue-400 transition-colors ${canEdit ? "" : "pointer-events-none"}`;
 
-  function StatusDot({ field }: { field: string }) {
-    if (saving === field) return <span className="text-[10px] text-slate-400 ml-1">저장중...</span>;
-    if (saveError === field)
-      return <span className="text-[10px] text-red-500 ml-1">✗ 저장 실패</span>;
-    if (saved === field) return <span className="text-[10px] text-blue-500 ml-1">✓ 저장됨</span>;
-    return null;
-  }
-
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
       <h2 className="text-sm font-semibold text-gray-700 mb-4">영업 / CS 정보</h2>
@@ -100,7 +111,8 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
         {}
         <div>
           <p className="text-xs text-gray-400 mb-1">
-            사업자 구분 <StatusDot field="business_type" />
+            사업자 구분{" "}
+            <StatusDot field="business_type" saving={saving} saved={saved} saveError={saveError} />
           </p>
           <AppSelect
             value={form.business_type}
@@ -120,7 +132,13 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
         {}
         <div>
           <p className="text-xs text-gray-400 mb-1">
-            접수 채널 <StatusDot field="reception_channel" />
+            접수 채널{" "}
+            <StatusDot
+              field="reception_channel"
+              saving={saving}
+              saved={saved}
+              saveError={saveError}
+            />
           </p>
           <AppSelect
             value={form.reception_channel}
@@ -140,7 +158,8 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
         {}
         <div>
           <p className="text-xs text-gray-400 mb-1">
-            문제 유형 <StatusDot field="issue_category" />
+            문제 유형{" "}
+            <StatusDot field="issue_category" saving={saving} saved={saved} saveError={saveError} />
           </p>
           <AppSelect
             value={form.issue_category}
@@ -163,7 +182,8 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
         {}
         <div>
           <p className="text-xs text-gray-400 mb-1">
-            해결 방식 <StatusDot field="resolution" />
+            해결 방식{" "}
+            <StatusDot field="resolution" saving={saving} saved={saved} saveError={saveError} />
           </p>
           <AppSelect
             value={form.resolution}
@@ -183,7 +203,8 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
         {}
         <div>
           <p className="text-xs text-gray-400 mb-1">
-            반복 여부 <StatusDot field="is_repeat" />
+            반복 여부{" "}
+            <StatusDot field="is_repeat" saving={saving} saved={saved} saveError={saveError} />
           </p>
           <AppSelect
             value={form.is_repeat}
@@ -205,7 +226,13 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
         {}
         <div>
           <p className="text-xs text-gray-400 mb-1">
-            서류 접수 상태 <StatusDot field="document_status" />
+            서류 접수 상태{" "}
+            <StatusDot
+              field="document_status"
+              saving={saving}
+              saved={saved}
+              saveError={saveError}
+            />
           </p>
           <AppSelect
             value={form.document_status}
@@ -222,7 +249,7 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
         {}
         <div>
           <p className="text-xs text-gray-400 mb-1">
-            상품 <StatusDot field="product" />
+            상품 <StatusDot field="product" saving={saving} saved={saved} saveError={saveError} />
           </p>
           <input
             value={form.product}
@@ -237,7 +264,8 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
         {}
         <div>
           <p className="text-xs text-gray-400 mb-1">
-            VAN사 <StatusDot field="van_company" />
+            VAN사{" "}
+            <StatusDot field="van_company" saving={saving} saved={saved} saveError={saveError} />
           </p>
           <AppSelect
             value={form.van_company}
@@ -257,7 +285,8 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
         {}
         <div>
           <p className="text-xs text-gray-400 mb-1">
-            인터넷 <StatusDot field="internet" />
+            인터넷{" "}
+            <StatusDot field="internet" saving={saving} saved={saved} saveError={saveError} />
           </p>
           <input
             value={form.internet}
@@ -272,7 +301,13 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
         {}
         <div>
           <p className="text-xs text-gray-400 mb-1">
-            카드가맹 접수일 <StatusDot field="card_apply_date" />
+            카드가맹 접수일{" "}
+            <StatusDot
+              field="card_apply_date"
+              saving={saving}
+              saved={saved}
+              saveError={saveError}
+            />
           </p>
           <DatePickerField
             value={form.card_apply_date}
@@ -288,7 +323,8 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
         {}
         <div>
           <p className="text-xs text-gray-400 mb-1">
-            간편결제 <StatusDot field="simple_payment" />
+            간편결제{" "}
+            <StatusDot field="simple_payment" saving={saving} saved={saved} saveError={saveError} />
           </p>
           <AppSelect
             value={form.simple_payment}
@@ -308,7 +344,8 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
         {}
         <div className="col-span-2">
           <p className="text-xs text-gray-400 mb-1">
-            배민접수 <StatusDot field="baemin_apply" />
+            배민접수{" "}
+            <StatusDot field="baemin_apply" saving={saving} saved={saved} saveError={saveError} />
           </p>
           <label
             className={`flex items-center gap-2 mt-1 ${canEdit ? "cursor-pointer" : "pointer-events-none"}`}
@@ -331,7 +368,8 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
       {}
       <div className="mt-4 pt-4 border-t border-gray-100">
         <p className="text-xs text-gray-400 mb-1">
-          답변내용 <StatusDot field="progress_note" />
+          답변내용{" "}
+          <StatusDot field="progress_note" saving={saving} saved={saved} saveError={saveError} />
         </p>
         <textarea
           value={form.progress_note}
@@ -347,7 +385,7 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
       {}
       <div className="mt-4 pt-4 border-t border-gray-100">
         <p className="text-xs text-gray-400 mb-1">
-          비고 <StatusDot field="memo" />
+          비고 <StatusDot field="memo" saving={saving} saved={saved} saveError={saveError} />
         </p>
         <textarea
           value={form.memo}
