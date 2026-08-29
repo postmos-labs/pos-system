@@ -4,7 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { TEAM_LABEL, type TicketTeam } from "@/types";
+import {
+  KICC_VAN_COMPANY,
+  TEAM_LABEL,
+  VAN_GROUP_LABEL,
+  type TicketTeam,
+  type VanGroup,
+} from "@/types";
 import {
   MEMO_ISSUE_CATEGORIES,
   MEMO_ISSUE_CATEGORY_LABEL,
@@ -24,7 +30,16 @@ interface MerchantSuggestion {
   business_name: string;
   phone: string | null;
   address: string | null;
+  van_company: string | null;
 }
+
+// 가맹점 계열 판정(토스계열 = VAN 있고 KICC 아님)에 맞는 저장 값.
+// 토스계열은 특정 밴사가 아니라 계열이므로 자리표시 값 "토스"를 넣는다.
+const VAN_GROUP_VALUE: Record<VanGroup, string> = {
+  toss: "토스",
+  kicc: KICC_VAN_COMPANY,
+};
+const VAN_GROUPS: VanGroup[] = ["toss", "kicc"];
 const CHANNELS = ["채널톡", "유선"];
 
 // 마이그레이션(123 team / 124 AS 구분 / 125 reception_channel·progress_note)이 아직 적용되지
@@ -63,6 +78,7 @@ export default function NewTicketForm({ salesId, role }: Props) {
     issue_category: string;
     resolution: string;
     is_repeat: boolean | null;
+    van_group: VanGroup | "";
   }>({
     business_name: "",
     phone: "",
@@ -73,6 +89,7 @@ export default function NewTicketForm({ salesId, role }: Props) {
     issue_category: "",
     resolution: "",
     is_repeat: null,
+    van_group: "",
   });
 
   // 같은 가게의 인입마다 가맹점이 새로 생기지 않도록, 상호명 입력 시 기존 가맹점을
@@ -98,7 +115,7 @@ export default function NewTicketForm({ salesId, role }: Props) {
       }
       const { data, error } = await supabase
         .from("merchants")
-        .select("id,business_name,phone,address")
+        .select("id,business_name,phone,address,van_company")
         .or(`business_name.ilike.%${safe}%,phone.ilike.%${safe}%`)
         .order("created_at", { ascending: false })
         .limit(8);
@@ -123,18 +140,22 @@ export default function NewTicketForm({ salesId, role }: Props) {
     // merchants.owner_name은 NOT NULL이라 신규 생성 시 빈 값을 넘기고 가맹점 360에서 채운다.
     let merchantId: string;
     let createdMerchant = false;
+    // 계열을 골랐고 연결/재사용한 가맹점의 VAN이 비어 있으면 채운다 (기존 값은 봉인).
+    let fillVanCompany = false;
     if (linkedMerchant) {
       merchantId = linkedMerchant.id;
+      fillVanCompany = !linkedMerchant.van_company;
     } else {
       const { data: exact } = await supabase
         .from("merchants")
-        .select("id")
+        .select("id,van_company")
         .eq("business_name", form.business_name.trim())
         .order("created_at", { ascending: false })
         .limit(1);
 
       if (exact && exact.length > 0) {
         merchantId = exact[0].id;
+        fillVanCompany = !exact[0].van_company;
       } else {
         const { data: merchantData, error: merchantError } = await supabase
           .from("merchants")
@@ -143,6 +164,7 @@ export default function NewTicketForm({ salesId, role }: Props) {
             owner_name: "",
             phone: form.phone,
             sales_id: salesId,
+            van_company: form.van_group ? VAN_GROUP_VALUE[form.van_group] : null,
           })
           .select("id")
           .single();
@@ -204,6 +226,14 @@ export default function NewTicketForm({ salesId, role }: Props) {
       return;
     }
 
+    if (!createdMerchant && fillVanCompany && form.van_group) {
+      const { error: vanError } = await supabase
+        .from("merchants")
+        .update({ van_company: VAN_GROUP_VALUE[form.van_group] })
+        .eq("id", merchantId);
+      if (vanError) console.error("VAN 계열 기록 실패:", vanError.message);
+    }
+
     const { error: logError } = await supabase.from("ticket_logs").insert({
       ticket_id: ticket.id,
       user_id: salesId,
@@ -231,6 +261,7 @@ export default function NewTicketForm({ salesId, role }: Props) {
                   </p>
                   <p className="text-xs text-gray-500 truncate">
                     {linkedMerchant.phone || "-"}
+                    {linkedMerchant.van_company ? ` · ${linkedMerchant.van_company}` : ""}
                     {linkedMerchant.address ? ` · ${linkedMerchant.address}` : ""}
                   </p>
                 </div>
@@ -314,6 +345,31 @@ export default function NewTicketForm({ salesId, role }: Props) {
               ))}
             </div>
           </div>
+
+          {!(linkedMerchant && linkedMerchant.van_company) && (
+            <div>
+              <Label>VAN 계열 (선택)</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {VAN_GROUPS.map((group) => (
+                  <button
+                    key={group}
+                    type="button"
+                    onClick={() =>
+                      setForm((f) => ({ ...f, van_group: f.van_group === group ? "" : group }))
+                    }
+                    aria-pressed={form.van_group === group}
+                    className={`py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                      form.van_group === group
+                        ? "border-blue-600 bg-blue-50 text-blue-700"
+                        : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {VAN_GROUP_LABEL[group]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div>
             <Label>담당팀 *</Label>
