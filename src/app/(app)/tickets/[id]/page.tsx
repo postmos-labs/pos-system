@@ -16,6 +16,12 @@ import {
   type TicketTeam,
   type Profile,
 } from "@/types";
+import {
+  MEMO_ISSUE_CATEGORY_LABEL,
+  MEMO_RESOLUTION_LABEL,
+  type MemoIssueCategory,
+  type MemoResolution,
+} from "@/app/(app)/merchants/merchant360";
 import TicketActions from "./TicketActions";
 import TicketLogs from "./TicketLogs";
 import TicketInfoEdit from "./TicketInfoEdit";
@@ -89,6 +95,22 @@ export default async function TicketDetailPage({ params }: Props) {
             </span>
           )}
           <span className="text-xs text-gray-500">{TYPE_LABEL[ticket.type as TicketType]}</span>
+          {ticket.issue_category &&
+            MEMO_ISSUE_CATEGORY_LABEL[ticket.issue_category as MemoIssueCategory] && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-100 text-slate-600">
+                {MEMO_ISSUE_CATEGORY_LABEL[ticket.issue_category as MemoIssueCategory]}
+              </span>
+            )}
+          {ticket.resolution && MEMO_RESOLUTION_LABEL[ticket.resolution as MemoResolution] && (
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-100 text-slate-600">
+              {MEMO_RESOLUTION_LABEL[ticket.resolution as MemoResolution]}
+            </span>
+          )}
+          {ticket.is_repeat === true && (
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700">
+              또 그럼
+            </span>
+          )}
         </div>
         <h1 className="text-xl font-bold text-gray-900">{ticket.title}</h1>
         <p className="text-sm text-gray-500 mt-1">

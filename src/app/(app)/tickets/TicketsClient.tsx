@@ -20,6 +20,12 @@ import {
   type Priority,
   type TicketTeam,
 } from "@/types";
+import {
+  MEMO_ISSUE_CATEGORY_LABEL,
+  MEMO_RESOLUTION_LABEL,
+  type MemoIssueCategory,
+  type MemoResolution,
+} from "@/app/(app)/merchants/merchant360";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import BulkDeleteActions from "@/components/ui/BulkDeleteActions";
@@ -33,6 +39,9 @@ interface Ticket {
   priority: string;
   team?: TicketTeam | null;
   reception_channel?: string | null;
+  issue_category?: string | null;
+  resolution?: string | null;
+  is_repeat?: boolean | null;
   scheduled_at?: string;
   created_at: string;
   merchant?: { business_name: string; phone: string } | null;
@@ -185,6 +194,21 @@ export default function TicketsClient({
                   </span>
                   {ticket.reception_channel && (
                     <span className="text-xs text-slate-500">{ticket.reception_channel}</span>
+                  )}
+                  {ticket.issue_category &&
+                    MEMO_ISSUE_CATEGORY_LABEL[ticket.issue_category as MemoIssueCategory] && (
+                      <span className="text-xs text-slate-500">
+                        {MEMO_ISSUE_CATEGORY_LABEL[ticket.issue_category as MemoIssueCategory]}
+                      </span>
+                    )}
+                  {ticket.resolution &&
+                    MEMO_RESOLUTION_LABEL[ticket.resolution as MemoResolution] && (
+                      <span className="text-xs text-slate-500">
+                        {MEMO_RESOLUTION_LABEL[ticket.resolution as MemoResolution]}
+                      </span>
+                    )}
+                  {ticket.is_repeat === true && (
+                    <Badge colorClass="bg-red-100 text-red-700">또 그럼</Badge>
                   )}
                 </div>
                 <p className="text-sm font-semibold text-slate-900 break-words">{ticket.title}</p>

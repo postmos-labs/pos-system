@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { TEAM_LABEL, type TicketTeam } from "@/types";
+import {
+  MEMO_ISSUE_CATEGORIES,
+  MEMO_ISSUE_CATEGORY_LABEL,
+  MEMO_RESOLUTIONS,
+  MEMO_RESOLUTION_LABEL,
+} from "@/app/(app)/merchants/merchant360";
 
 interface Props {
   salesId: string;
@@ -14,9 +20,9 @@ interface Props {
 const TEAMS: TicketTeam[] = ["cs", "tech"];
 const CHANNELS = ["채널톡", "유선"];
 
-// 123번 마이그레이션(tickets.team)이 아직 적용되지 않은 환경에서 team을 insert하면
-// "column does not exist"(42703) 에러가 난다. 등록 자체를 막지 않고 team만 빼고 재시도한다.
-// src/app/(app)/merchants/actions.ts의 isMissingColumnError와 같은 패턴.
+// 123/124번 마이그레이션(tickets.team / AS 구분 컬럼)이 아직 적용되지 않은 환경에서
+// 해당 컬럼을 insert하면 "column does not exist"(42703) 에러가 난다. 등록 자체를 막지 않고
+// 최신 컬럼부터 하나씩 빼며 재시도한다. src/app/(app)/merchants/actions.ts의 isMissingColumnError와 같은 패턴.
 function isMissingColumnError(error: { code?: string; message?: string } | null) {
   if (!error) return false;
   return (
@@ -36,6 +42,9 @@ export default function NewTicketForm({ salesId, role }: Props) {
     reception_channel: string;
     inquiry: string;
     answer: string;
+    issue_category: string;
+    resolution: string;
+    is_repeat: boolean | null;
   }>({
     business_name: "",
     phone: "",
@@ -43,11 +52,18 @@ export default function NewTicketForm({ salesId, role }: Props) {
     reception_channel: "",
     inquiry: "",
     answer: "",
+    issue_category: "",
+    resolution: "",
+    is_repeat: null,
   });
+
+  // 기술지원팀 인입은 AS 구분 3종을 모두 선택해야 등록할 수 있다.
+  const asIncomplete =
+    form.team === "tech" && (!form.issue_category || !form.resolution || form.is_repeat === null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.team || !form.reception_channel) return;
+    if (!form.team || !form.reception_channel || asIncomplete) return;
     setLoading(true);
     const supabase = createClient();
 
@@ -86,18 +102,29 @@ export default function NewTicketForm({ salesId, role }: Props) {
       status: "done",
     };
 
-    let { data: ticket, error } = await supabase
-      .from("tickets")
-      .insert({ ...ticketPayload, team: form.team })
-      .select("id")
-      .single();
+    // AS 구분(124) → team(123) 순으로 최신 컬럼부터 빼며 재시도한다.
+    const attempts: Record<string, unknown>[] =
+      form.team === "tech"
+        ? [
+            {
+              ...ticketPayload,
+              team: form.team,
+              issue_category: form.issue_category,
+              resolution: form.resolution,
+              is_repeat: form.is_repeat,
+            },
+            { ...ticketPayload, team: form.team },
+            ticketPayload,
+          ]
+        : [{ ...ticketPayload, team: form.team }, ticketPayload];
 
-    if (isMissingColumnError(error)) {
-      ({ data: ticket, error } = await supabase
-        .from("tickets")
-        .insert(ticketPayload)
-        .select("id")
-        .single());
+    let ticket: { id: string } | null = null;
+    let error: { code?: string; message?: string } | null = null;
+    for (const payload of attempts) {
+      const res = await supabase.from("tickets").insert(payload).select("id").single();
+      ticket = res.data;
+      error = res.error;
+      if (!isMissingColumnError(error)) break;
     }
 
     if (error || !ticket) {
@@ -187,6 +214,78 @@ export default function NewTicketForm({ salesId, role }: Props) {
             </div>
           </div>
 
+          {form.team === "tech" && (
+            <>
+              <div>
+                <Label>무엇이 문제였나요? *</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {MEMO_ISSUE_CATEGORIES.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, issue_category: c }))}
+                      aria-pressed={form.issue_category === c}
+                      className={`py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                        form.issue_category === c
+                          ? "border-blue-600 bg-blue-50 text-blue-700"
+                          : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      {MEMO_ISSUE_CATEGORY_LABEL[c]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <Label>어떻게 해결했나요? *</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {MEMO_RESOLUTIONS.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, resolution: r }))}
+                      aria-pressed={form.resolution === r}
+                      className={`py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                        form.resolution === r
+                          ? "border-blue-600 bg-blue-50 text-blue-700"
+                          : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      {MEMO_RESOLUTION_LABEL[r]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <Label>처음인가요? *</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      [false, "처음"],
+                      [true, "또 그럼"],
+                    ] as [boolean, string][]
+                  ).map(([value, label]) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, is_repeat: value }))}
+                      aria-pressed={form.is_repeat === value}
+                      className={`py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                        form.is_repeat === value
+                          ? "border-blue-600 bg-blue-50 text-blue-700"
+                          : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
           <div>
             <Label>문의내용 *</Label>
             <textarea
@@ -221,7 +320,7 @@ export default function NewTicketForm({ salesId, role }: Props) {
         </Link>
         <button
           type="submit"
-          disabled={loading || !form.team || !form.reception_channel}
+          disabled={loading || !form.team || !form.reception_channel || asIncomplete}
           className="flex-1 bg-blue-600 text-white py-3 rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
         >
           {loading ? "등록 중..." : "인입내역 등록"}

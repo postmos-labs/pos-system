@@ -4,6 +4,12 @@ import { useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Ticket } from "@/types";
 import { AppSelect } from "@/components/ui/AppSelect";
+import {
+  MEMO_ISSUE_CATEGORIES,
+  MEMO_ISSUE_CATEGORY_LABEL,
+  MEMO_RESOLUTIONS,
+  MEMO_RESOLUTION_LABEL,
+} from "@/app/(app)/merchants/merchant360";
 import { DatePickerField } from "@/components/ui/DatePickerField";
 
 const RECEPTION_CHANNELS = ["채널톡", "유선", "전화", "카카오톡", "문자", "방문", "온라인", "기타"];
@@ -29,6 +35,9 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
   const [form, setForm] = useState({
     business_type: ticket.business_type ?? "개인",
     reception_channel: ticket.reception_channel ?? "",
+    issue_category: ticket.issue_category ?? "",
+    resolution: ticket.resolution ?? "",
+    is_repeat: ticket.is_repeat == null ? "" : ticket.is_repeat ? "repeat" : "first",
     progress_note: ticket.progress_note ?? "",
     document_status: ticket.document_status ?? "미접수",
     internet: ticket.internet ?? "",
@@ -51,7 +60,7 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
       const supabase = createClient();
       const { error } = await supabase
         .from("tickets")
-        .update({ [key]: value || null })
+        .update({ [key]: value === "" ? null : value })
         .eq("id", ticket.id);
       setSaving(null);
       if (error) {
@@ -124,6 +133,71 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
             options={[
               { value: "", label: "선택" },
               ...RECEPTION_CHANNELS.map((c) => ({ value: c, label: c })),
+            ]}
+          />
+        </div>
+
+        {}
+        <div>
+          <p className="text-xs text-gray-400 mb-1">
+            문제 유형 <StatusDot field="issue_category" />
+          </p>
+          <AppSelect
+            value={form.issue_category}
+            disabled={!canEdit}
+            onValueChange={(value) => {
+              handleChange("issue_category", value);
+              save("issue_category", value);
+            }}
+            aria-label="문제 유형"
+            options={[
+              { value: "", label: "선택" },
+              ...MEMO_ISSUE_CATEGORIES.map((c) => ({
+                value: c,
+                label: MEMO_ISSUE_CATEGORY_LABEL[c],
+              })),
+            ]}
+          />
+        </div>
+
+        {}
+        <div>
+          <p className="text-xs text-gray-400 mb-1">
+            해결 방식 <StatusDot field="resolution" />
+          </p>
+          <AppSelect
+            value={form.resolution}
+            disabled={!canEdit}
+            onValueChange={(value) => {
+              handleChange("resolution", value);
+              save("resolution", value);
+            }}
+            aria-label="해결 방식"
+            options={[
+              { value: "", label: "선택" },
+              ...MEMO_RESOLUTIONS.map((r) => ({ value: r, label: MEMO_RESOLUTION_LABEL[r] })),
+            ]}
+          />
+        </div>
+
+        {}
+        <div>
+          <p className="text-xs text-gray-400 mb-1">
+            반복 여부 <StatusDot field="is_repeat" />
+          </p>
+          <AppSelect
+            value={form.is_repeat}
+            disabled={!canEdit}
+            onValueChange={(value) => {
+              handleChange("is_repeat", value);
+              // 저장 컬럼은 BOOLEAN이라 select 값(first/repeat)을 변환한다. 빈 값은 null 저장.
+              save("is_repeat", value === "" ? "" : value === "repeat");
+            }}
+            aria-label="반복 여부"
+            options={[
+              { value: "", label: "선택" },
+              { value: "first", label: "처음" },
+              { value: "repeat", label: "또 그럼" },
             ]}
           />
         </div>

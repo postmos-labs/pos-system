@@ -84,6 +84,10 @@ export interface Ticket {
   cs_id?: string;
   tech_id?: string;
   team?: TicketTeam;
+  // 기술지원 AS 구분 — 값 체계는 merchant_memo_entries와 동일 (merchant360.ts 라벨 공유)
+  issue_category?: string;
+  resolution?: string;
+  is_repeat?: boolean;
   memo?: string;
 
   business_type?: string;
