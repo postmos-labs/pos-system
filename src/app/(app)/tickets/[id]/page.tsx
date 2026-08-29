@@ -5,14 +5,9 @@ import { ko } from "date-fns/locale";
 import {
   STATUS_LABEL,
   STATUS_COLOR,
-  TYPE_LABEL,
-  PRIORITY_LABEL,
-  PRIORITY_COLOR,
   TEAM_LABEL,
   TEAM_COLOR,
   type TicketStatus,
-  type TicketType,
-  type Priority,
   type TicketTeam,
   type Profile,
 } from "@/types";
@@ -39,13 +34,7 @@ export default async function TicketDetailPage({ params }: Props) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [
-    { data: profile },
-    { data: ticket },
-    { data: logs },
-    { data: techUsers },
-    { data: csUsers },
-  ] = await Promise.all([
+  const [{ data: profile }, { data: ticket }, { data: logs }] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).single(),
     supabase
       .from("tickets")
@@ -65,8 +54,6 @@ export default async function TicketDetailPage({ params }: Props) {
       .select("*, user:profiles(*)")
       .eq("ticket_id", id)
       .order("created_at", { ascending: false }),
-    supabase.from("profiles").select("id, name, phone").eq("role", "tech"),
-    supabase.from("profiles").select("id, name").eq("role", "cs"),
   ]);
 
   if (!profile) redirect("/login");
@@ -82,11 +69,6 @@ export default async function TicketDetailPage({ params }: Props) {
           >
             {STATUS_LABEL[ticket.status as TicketStatus]}
           </span>
-          <span
-            className={`text-xs px-2 py-0.5 rounded-full font-medium ${PRIORITY_COLOR[ticket.priority as Priority]}`}
-          >
-            {PRIORITY_LABEL[ticket.priority as Priority]}
-          </span>
           {ticket.team && TEAM_LABEL[ticket.team as TicketTeam] && (
             <span
               className={`text-xs px-2 py-0.5 rounded-full font-medium ${TEAM_COLOR[ticket.team as TicketTeam]}`}
@@ -94,7 +76,6 @@ export default async function TicketDetailPage({ params }: Props) {
               {TEAM_LABEL[ticket.team as TicketTeam]}
             </span>
           )}
-          <span className="text-xs text-gray-500">{TYPE_LABEL[ticket.type as TicketType]}</span>
           {ticket.issue_category &&
             MEMO_ISSUE_CATEGORY_LABEL[ticket.issue_category as MemoIssueCategory] && (
               <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-100 text-slate-600">
@@ -127,51 +108,10 @@ export default async function TicketDetailPage({ params }: Props) {
             <p className="font-medium">{(ticket.merchant as any)?.business_name}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-400">대표자</p>
-            <p className="font-medium">{(ticket.merchant as any)?.owner_name}</p>
-          </div>
-          <div>
             <p className="text-xs text-gray-400">연락처</p>
-            <p className="font-medium">{(ticket.merchant as any)?.phone}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">포스 기종</p>
-            <p className="font-medium">{(ticket.merchant as any)?.pos_model ?? "-"}</p>
-          </div>
-          <div className="col-span-2">
-            <p className="text-xs text-gray-400">주소</p>
-            <p className="font-medium">
-              {(ticket.merchant as any)?.address} {(ticket.merchant as any)?.address_detail}
-            </p>
+            <p className="font-medium">{(ticket.merchant as any)?.phone || "-"}</p>
           </div>
         </div>
-      </div>
-
-      {}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">담당자</h2>
-        <div className="grid grid-cols-3 gap-3 text-sm">
-          <div>
-            <p className="text-xs text-gray-400">영업</p>
-            <p className="font-medium">{(ticket.sales as any)?.name ?? "-"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">CS</p>
-            <p className="font-medium">{(ticket.cs as any)?.name ?? "-"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">기사</p>
-            <p className="font-medium">{(ticket.tech as any)?.name ?? "-"}</p>
-          </div>
-        </div>
-        {ticket.scheduled_at && (
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <p className="text-xs text-gray-400">예약 일정</p>
-            <p className="font-medium text-sm">
-              {format(new Date(ticket.scheduled_at), "yyyy년 M월 d일 (EEE) HH:mm", { locale: ko })}
-            </p>
-          </div>
-        )}
       </div>
 
       {}
@@ -181,12 +121,7 @@ export default async function TicketDetailPage({ params }: Props) {
       />
 
       {}
-      <TicketActions
-        ticket={ticket as any}
-        profile={profile as Profile}
-        techUsers={techUsers ?? []}
-        csUsers={csUsers ?? []}
-      />
+      <TicketActions ticket={ticket as any} profile={profile as Profile} />
 
       {}
       <TicketLogs logs={logs ?? []} />
