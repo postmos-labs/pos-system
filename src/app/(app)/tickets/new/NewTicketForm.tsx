@@ -20,15 +20,26 @@ interface Props {
 const TEAMS: TicketTeam[] = ["cs", "tech"];
 const CHANNELS = ["채널톡", "유선"];
 
-// 123/124번 마이그레이션(tickets.team / AS 구분 컬럼)이 아직 적용되지 않은 환경에서
-// 해당 컬럼을 insert하면 "column does not exist"(42703) 에러가 난다. 등록 자체를 막지 않고
-// 최신 컬럼부터 하나씩 빼며 재시도한다. src/app/(app)/merchants/actions.ts의 isMissingColumnError와 같은 패턴.
+// 마이그레이션(123 team / 124 AS 구분 / 125 reception_channel·progress_note)이 아직 적용되지
+// 않은 환경에서 해당 컬럼을 insert하면 "column does not exist"(42703/PGRST204) 에러가 난다.
+// 등록 자체를 막지 않도록, 에러 메시지에서 없는 컬럼명을 찾아 그 컬럼만 빼고 재시도한다.
 function isMissingColumnError(error: { code?: string; message?: string } | null) {
   if (!error) return false;
   return (
     error.code === "42703" ||
     error.code === "PGRST204" ||
     /column .* does not exist/i.test(error.message ?? "")
+  );
+}
+
+// PGRST204: "Could not find the 'team' column of 'tickets' in the schema cache"
+// 42703:    'column "team" of relation "tickets" does not exist'
+function missingColumnName(error: { message?: string } | null): string | null {
+  const message = error?.message ?? "";
+  return (
+    /Could not find the '([^']+)' column/.exec(message)?.[1] ??
+    /column "([^"]+)"/.exec(message)?.[1] ??
+    null
   );
 }
 
@@ -102,29 +113,29 @@ export default function NewTicketForm({ salesId, role }: Props) {
       status: "done",
     };
 
-    // AS 구분(124) → team(123) 순으로 최신 컬럼부터 빼며 재시도한다.
-    const attempts: Record<string, unknown>[] =
-      form.team === "tech"
-        ? [
-            {
-              ...ticketPayload,
-              team: form.team,
-              issue_category: form.issue_category,
-              resolution: form.resolution,
-              is_repeat: form.is_repeat,
-            },
-            { ...ticketPayload, team: form.team },
-            ticketPayload,
-          ]
-        : [{ ...ticketPayload, team: form.team }, ticketPayload];
+    // 어떤 컬럼이 없어도 등록이 실패하지 않도록, 없는 컬럼을 하나씩 빼며 재시도한다.
+    const payload: Record<string, unknown> = {
+      ...ticketPayload,
+      team: form.team,
+      ...(form.team === "tech"
+        ? {
+            issue_category: form.issue_category,
+            resolution: form.resolution,
+            is_repeat: form.is_repeat,
+          }
+        : {}),
+    };
 
     let ticket: { id: string } | null = null;
     let error: { code?: string; message?: string } | null = null;
-    for (const payload of attempts) {
+    for (let attempt = 0; attempt < 8; attempt++) {
       const res = await supabase.from("tickets").insert(payload).select("id").single();
       ticket = res.data;
       error = res.error;
       if (!isMissingColumnError(error)) break;
+      const missing = missingColumnName(error);
+      if (!missing || !(missing in payload)) break;
+      delete payload[missing];
     }
 
     if (error || !ticket) {
