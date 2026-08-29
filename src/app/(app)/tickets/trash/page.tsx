@@ -34,11 +34,11 @@ export default async function TicketsTrashPage() {
           href="/tickets"
           className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-2"
         >
-          <ArrowLeft size={14} /> 작업 목록으로
+          <ArrowLeft size={14} /> 인입내역으로
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900">작업 휴지통</h1>
+        <h1 className="text-2xl font-bold text-slate-900">인입내역 휴지통</h1>
         <p className="text-slate-500 text-sm mt-1">
-          삭제된 작업 {tickets?.length ?? 0}건 (복구 가능)
+          삭제된 인입내역 {tickets?.length ?? 0}건 (복구 가능)
         </p>
       </div>
 

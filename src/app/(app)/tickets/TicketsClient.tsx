@@ -136,7 +136,7 @@ export default function TicketsClient({
       )}
 
       {filteredTickets.length === 0 && (
-        <EmptyState message={search.trim() ? "검색 결과가 없습니다" : "작업이 없습니다"} />
+        <EmptyState message={search.trim() ? "검색 결과가 없습니다" : "인입내역이 없습니다"} />
       )}
 
       <div className="divide-y divide-slate-50">

@@ -143,7 +143,7 @@ export default async function TicketsPage({ searchParams }: Props) {
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">작업 목록</h1>
+          <h1 className="text-2xl font-bold text-slate-900">인입내역</h1>
           <p className="text-slate-500 text-sm mt-1">총 {totalCount}건</p>
         </div>
         <div className="flex items-center gap-2">
@@ -160,7 +160,7 @@ export default async function TicketsPage({ searchParams }: Props) {
               href="/tickets/new"
               className="flex items-center gap-2 bg-blue-600 text-white text-sm px-4 py-2.5 rounded-xl hover:bg-blue-700 transition-colors font-semibold shadow-sm shadow-blue-200"
             >
-              <Plus size={16} />새 작업
+              <Plus size={16} />새 인입내역
             </Link>
           )}
         </div>

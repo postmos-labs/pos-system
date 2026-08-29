@@ -9,7 +9,7 @@ import type { Role } from "@/types";
 
 const NAV = [
   { href: "/dashboard", label: "대시보드", icon: LayoutDashboard },
-  { href: "/tickets", label: "작업", icon: FileText },
+  { href: "/tickets", label: "인입내역", icon: FileText },
   { href: "/notifications", label: "알림", icon: Bell },
 ];
 
