@@ -128,7 +128,9 @@ export default function NewTicketForm({ salesId, role }: Props) {
   // 상호명 안내 문구용 — 동일 상호명이 제안에 있으면 등록 시 그 가맹점에 자동 연결된다.
   const trimmedName = form.business_name.trim();
   const exactNameMatch =
-    !linkedMerchant && !!trimmedName && suggestions.some((m) => m.business_name === trimmedName);
+    !linkedMerchant &&
+    !!trimmedName &&
+    suggestions.some((m) => m.business_name.toLowerCase() === trimmedName.toLowerCase());
 
   // 기술지원팀 인입은 AS 구분 3종을 모두 선택해야 등록할 수 있다.
   const asIncomplete =
@@ -151,10 +153,12 @@ export default function NewTicketForm({ salesId, role }: Props) {
       merchantId = linkedMerchant.id;
       fillVanCompany = !linkedMerchant.van_company;
     } else {
+      // 대소문자만 다른 중복 생성을 막기 위해 ilike로 정확 일치(와일드카드 이스케이프)를 찾는다.
+      const exactPattern = form.business_name.trim().replace(/[\%_]/g, (m) => "\\" + m);
       const { data: exact } = await supabase
         .from("merchants")
         .select("id,van_company")
-        .eq("business_name", form.business_name.trim())
+        .ilike("business_name", exactPattern)
         .order("created_at", { ascending: false })
         .limit(1);
 
