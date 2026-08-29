@@ -58,9 +58,11 @@ export default async function TicketsPage({ searchParams }: Props) {
   // 검색은 서버에서 전체 범위로 수행한다 — 클라이언트에서 현재 페이지 50건만 거르면
   // 다른 페이지의 티켓이 검색되지 않는다. 가맹점명·기사명은 조인 테이블이라 or()에
   // 직접 걸 수 없어, 매칭되는 id를 먼저 뽑아 in 조건으로 합친다.
-  const searchTerm = (params.q ?? "").trim();
-  const searchEscaped = searchTerm.replace(/[\\%_]/g, (m) => "\\" + m).replace(/"/g, '\\"');
-  const searchPattern = `"%${searchEscaped}%"`;
+  const searchTerm = (params.q ?? "").trim().slice(0, 100);
+  // .or() 안에서 쉼표·괄호·따옴표·백슬래시는 문법 문자라 그대로 넘기면 쿼리가 깨진다.
+  // 가맹점 360(merchants/page.tsx applySearch)에서 검증된 방식 — 문법 문자를 제거하고 비인용 패턴을 쓴다.
+  const searchSafe = searchTerm.replace(/[,()"'\\%*_]/g, "");
+  const searchPattern = `%${searchSafe}%`;
   let searchMerchantIds: string[] = [];
   let searchTechIds: string[] = [];
   if (searchTerm) {
@@ -70,7 +72,7 @@ export default async function TicketsPage({ searchParams }: Props) {
         .select("id")
         .or(`business_name.ilike.${searchPattern},phone.ilike.${searchPattern}`)
         .limit(200),
-      supabase.from("profiles").select("id").ilike("name", `%${searchEscaped}%`).limit(50),
+      supabase.from("profiles").select("id").ilike("name", searchPattern).limit(50),
     ]);
     searchMerchantIds = (merchantRows ?? []).map((r) => r.id);
     searchTechIds = (techRows ?? []).map((r) => r.id);

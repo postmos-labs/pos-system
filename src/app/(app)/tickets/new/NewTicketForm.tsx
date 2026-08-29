@@ -89,15 +89,20 @@ export default function NewTicketForm({ salesId, role }: Props) {
         return;
       }
       const supabase = createClient();
-      // tickets/page.tsx의 검색과 같은 이스케이프 — ilike 와일드카드와 따옴표를 막는다.
-      const escaped = term.replace(/[\\%_]/g, (m) => "\\" + m).replace(/"/g, '\\"');
-      const pattern = `"%${escaped}%"`;
-      const { data } = await supabase
+      // .or() 안에서 쉼표·괄호·따옴표·백슬래시는 문법 문자라 그대로 넘기면 쿼리가 깨진다.
+      // 가맹점 360(merchants/page.tsx applySearch)에서 검증된 방식 — 문법 문자를 제거하고 비인용 패턴을 쓴다.
+      const safe = term.replace(/[,()"'\\%*_]/g, "");
+      if (!safe) {
+        setSuggestions([]);
+        return;
+      }
+      const { data, error } = await supabase
         .from("merchants")
         .select("id,business_name,phone,address")
-        .or(`business_name.ilike.${pattern},phone.ilike.${pattern}`)
+        .or(`business_name.ilike.%${safe}%,phone.ilike.%${safe}%`)
         .order("created_at", { ascending: false })
         .limit(8);
+      if (error) console.error("가맹점 검색 실패:", error.message);
       setSuggestions((data as MerchantSuggestion[]) ?? []);
     }, 300);
     return () => clearTimeout(timer);
@@ -113,29 +118,43 @@ export default function NewTicketForm({ salesId, role }: Props) {
     setLoading(true);
     const supabase = createClient();
 
-    // 기존 가맹점을 연결했으면 그대로 쓰고, 아니면 새로 만든다.
-    // merchants.owner_name은 NOT NULL이라 빈 값을 넘기고 가맹점 360에서 채운다.
+    // 기존 가맹점을 연결했으면 그대로 쓰고, 아니면 동일 상호명을 먼저 찾아 재사용한다.
+    // 제안을 클릭하지 않고 이름만 입력해도 같은 가맹점에 매핑되도록 하기 위함.
+    // merchants.owner_name은 NOT NULL이라 신규 생성 시 빈 값을 넘기고 가맹점 360에서 채운다.
     let merchantId: string;
+    let createdMerchant = false;
     if (linkedMerchant) {
       merchantId = linkedMerchant.id;
     } else {
-      const { data: merchantData, error: merchantError } = await supabase
+      const { data: exact } = await supabase
         .from("merchants")
-        .insert({
-          business_name: form.business_name,
-          owner_name: "",
-          phone: form.phone,
-          sales_id: salesId,
-        })
         .select("id")
-        .single();
+        .eq("business_name", form.business_name.trim())
+        .order("created_at", { ascending: false })
+        .limit(1);
 
-      if (merchantError || !merchantData) {
-        alert("가맹점 등록 실패: " + merchantError?.message);
-        setLoading(false);
-        return;
+      if (exact && exact.length > 0) {
+        merchantId = exact[0].id;
+      } else {
+        const { data: merchantData, error: merchantError } = await supabase
+          .from("merchants")
+          .insert({
+            business_name: form.business_name.trim(),
+            owner_name: "",
+            phone: form.phone,
+            sales_id: salesId,
+          })
+          .select("id")
+          .single();
+
+        if (merchantError || !merchantData) {
+          alert("가맹점 등록 실패: " + merchantError?.message);
+          setLoading(false);
+          return;
+        }
+        merchantId = merchantData.id;
+        createdMerchant = true;
       }
-      merchantId = merchantData.id;
     }
 
     // 처리를 다 끝낸 뒤 기록하는 로그이므로 상태는 바로 "완료"로 저장한다.
@@ -178,7 +197,8 @@ export default function NewTicketForm({ salesId, role }: Props) {
     }
 
     if (error || !ticket) {
-      if (!linkedMerchant) await supabase.from("merchants").delete().eq("id", merchantId);
+      // 이번 등록에서 새로 만든 가맹점일 때만 롤백한다. 기존 가맹점은 건드리지 않는다.
+      if (createdMerchant) await supabase.from("merchants").delete().eq("id", merchantId);
       alert("등록 실패: " + error?.message);
       setLoading(false);
       return;
