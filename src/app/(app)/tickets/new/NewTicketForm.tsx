@@ -47,7 +47,17 @@ const VAN_GROUP_VALUE: Record<VanGroup, string> = {
 };
 const VAN_GROUPS: VanGroup[] = ["toss", "kicc"];
 const CHANNELS = ["채널톡", "유선"];
-const MERCHANT_COLUMNS = "id,business_name,phone,address,van_company";
+
+// 컬럼이 없어 저장되지 못한 항목을 직원이 알아볼 수 있는 이름으로 알린다.
+const DROPPED_COLUMN_LABEL: Record<string, string> = {
+  team: "담당팀",
+  reception_channel: "인입 채널",
+  progress_note: "처리 내용",
+  resolution_steps: "해결 절차",
+  issue_category: "문제 유형",
+  resolution: "해결 방식",
+  is_repeat: "반복 여부",
+};
 
 // 마이그레이션(123 team / 124 AS 구분 / 125 reception_channel·progress_note)이 아직 적용되지
 // 않은 환경에서 해당 컬럼을 insert하면 "column does not exist"(42703/PGRST204) 에러가 난다.
@@ -244,6 +254,9 @@ export default function NewTicketForm({ salesId, role }: Props) {
 
     let ticket: { id: string } | null = null;
     let error: { code?: string; message?: string } | null = null;
+    // 마이그레이션이 밀려 컬럼이 없으면 그 값을 빼고 등록한다. 다만 조용히 버리면
+    // 직원이 적은 내용이 사라진 걸 아무도 모르므로, 무엇이 빠졌는지 모아 알린다.
+    const droppedColumns: string[] = [];
     for (let attempt = 0; attempt < 8; attempt++) {
       const res = await supabase.from("tickets").insert(payload).select("id").single();
       ticket = res.data;
@@ -252,6 +265,7 @@ export default function NewTicketForm({ salesId, role }: Props) {
       const missing = missingColumnName(error);
       if (!missing || !(missing in payload)) break;
       delete payload[missing];
+      droppedColumns.push(missing);
     }
 
     if (error || !ticket) {
@@ -268,6 +282,19 @@ export default function NewTicketForm({ salesId, role }: Props) {
         .update({ van_company: VAN_GROUP_VALUE[form.van_group] })
         .eq("id", merchantId);
       if (vanError) console.error("VAN 계열 기록 실패:", vanError.message);
+    }
+
+    if (droppedColumns.length > 0) {
+      const names = droppedColumns.map((column) => DROPPED_COLUMN_LABEL[column] ?? column);
+      alert(
+        "인입내역은 등록되었지만 아래 항목은 저장되지 않았습니다." +
+          "\n" +
+          "\n" +
+          names.join(", ") +
+          "\n" +
+          "\n" +
+          "관리자에게 알려주세요. (DB 준비가 아직 안 된 항목입니다)",
+      );
     }
 
     const { error: logError } = await supabase.from("ticket_logs").insert({

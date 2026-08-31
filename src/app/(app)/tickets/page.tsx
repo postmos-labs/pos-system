@@ -4,9 +4,16 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { STATUS_LABEL, type TicketStatus, type Profile } from "@/types";
 import TicketsClient from "./TicketsClient";
+import AuthorStats, { type AuthorStatRange, type AuthorStatRow } from "./AuthorStats";
 
 interface Props {
-  searchParams: Promise<{ status?: string; tab?: string; page?: string; q?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    tab?: string;
+    page?: string;
+    q?: string;
+    stat?: string;
+  }>;
 }
 
 const PAGE_SIZE = 50;
@@ -37,6 +44,20 @@ function missingColumnName(error: { message?: string } | null): string | null {
     /Could not find the '([^']+)' column/.exec(message) ??
     /column "?([A-Za-z0-9_.]+)"? does not exist/.exec(message);
   return match?.[1]?.split(".").pop() ?? null;
+}
+
+// 작성 현황 집계에서 한 번에 읽어올 최대 건수. 넘으면 화면에 잘렸다고 알린다.
+const STAT_LIMIT = 5000;
+
+// KST 기준 이번 달/지난 달 경계
+function monthRangeKst(offset: number) {
+  const now = new Date();
+  const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const year = kstNow.getUTCFullYear();
+  const month = kstNow.getUTCMonth() + offset;
+  const start = new Date(Date.UTC(year, month, 1) - 9 * 60 * 60 * 1000);
+  const end = new Date(Date.UTC(year, month + 1, 1) - 9 * 60 * 60 * 1000);
+  return { start: start.toISOString(), end: end.toISOString() };
 }
 
 export default async function TicketsPage({ searchParams }: Props) {
@@ -157,6 +178,59 @@ export default async function TicketsPage({ searchParams }: Props) {
 
   const statusFilters: TicketStatus[] = LOG_STATUSES;
 
+  // 작성 현황은 마스터만 본다. 등록하면 등록자가 자기 팀 담당으로 들어가므로
+  // 담당자(sales_id/cs_id/tech_id) 기준 집계가 사실상 작성자 집계다.
+  const statRange: AuthorStatRange =
+    params.stat === "prev" ? "prev" : params.stat === "all" ? "all" : "month";
+  let statRows: AuthorStatRow[] = [];
+  let statTruncated = false;
+  if (p.role === "master") {
+    let statQuery = supabase
+      .from("tickets")
+      .select("sales_id,cs_id,tech_id,team")
+      .limit(STAT_LIMIT);
+    if (useSoftDeleteFilter) statQuery = statQuery.is("deleted_at", null);
+    if (statRange !== "all") {
+      const { start, end } = monthRangeKst(statRange === "prev" ? -1 : 0);
+      statQuery = statQuery.gte("created_at", start).lt("created_at", end);
+    }
+    const { data: statData } = await statQuery;
+    const rows = (statData ?? []) as {
+      sales_id: string | null;
+      cs_id: string | null;
+      tech_id: string | null;
+      team: string | null;
+    }[];
+    statTruncated = rows.length >= STAT_LIMIT;
+
+    const ids = [
+      ...new Set(
+        rows
+          .map((row) => row.sales_id ?? row.cs_id ?? row.tech_id)
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    const nameById = new Map<string, string>();
+    if (ids.length > 0) {
+      const { data: people } = await supabase.from("profiles").select("id,name").in("id", ids);
+      for (const person of (people ?? []) as { id: string; name: string | null }[]) {
+        if (person.name) nameById.set(person.id, person.name);
+      }
+    }
+
+    const counts = new Map<string, AuthorStatRow>();
+    for (const row of rows) {
+      const ownerId = row.sales_id ?? row.cs_id ?? row.tech_id;
+      const name = ownerId ? (nameById.get(ownerId) ?? "알 수 없음") : "담당자 없음";
+      const entry = counts.get(name) ?? { name, cs: 0, tech: 0, total: 0 };
+      if (row.team === "tech") entry.tech += 1;
+      else if (row.team === "cs") entry.cs += 1;
+      entry.total += 1;
+      counts.set(name, entry);
+    }
+    statRows = [...counts.values()].sort((a, b) => b.total - a.total);
+  }
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -187,6 +261,10 @@ export default async function TicketsPage({ searchParams }: Props) {
           )}
         </div>
       </div>
+
+      {p.role === "master" && (
+        <AuthorStats rows={statRows} range={statRange} truncated={statTruncated} />
+      )}
 
       {}
       <div className="flex gap-1 bg-slate-100 p-1 rounded-xl mb-5 w-fit">
