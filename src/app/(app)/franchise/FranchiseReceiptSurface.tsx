@@ -8,6 +8,7 @@ import {
   ChevronRightIcon,
   ChevronUpIcon,
   CircleHelpIcon,
+  DownloadIcon,
   ClockIcon,
   FileTextIcon,
   FileWarningIcon,
@@ -226,6 +227,7 @@ interface Props {
   onBulkAssign: () => void;
   onBulkDelete: () => void;
   onBulkTransfer: () => void;
+  onExcelDownload: () => void;
 }
 
 const HIDDEN_STATUSES: FranchiseStatus[] = [
@@ -912,6 +914,17 @@ export default function FranchiseReceiptSurface(props: Props) {
           <span className="text-foreground text-sm font-semibold">
             전체 {props.filteredCount}건
           </span>
+          {activeTab === "canceled" && (
+            <button
+              type="button"
+              onClick={props.onExcelDownload}
+              disabled={props.filteredCount === 0}
+              className="border-border bg-card text-foreground hover:bg-muted focus-visible:ring-primary/30 inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50"
+            >
+              <DownloadIcon className="size-3.5" />
+              엑셀 받기
+            </button>
+          )}
           <button type="button" title="도움말" onClick={props.onHelp} className={iconButton}>
             <CircleHelpIcon className="size-3.5" />
           </button>

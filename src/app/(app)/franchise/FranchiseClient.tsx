@@ -2203,8 +2203,10 @@ export default function FranchiseClient({
       }));
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "가맹접수");
-      XLSX.writeFile(wb, `가맹접수_${format(new Date(), "yyyyMMdd")}.xlsx`);
+      XLSX.utils.book_append_sheet(wb, ws, tableView === "canceled" ? "취소" : "가맹접수");
+      const suffix = tableView === "canceled" ? "취소" : "";
+      const name = ["가맹접수", suffix, format(new Date(), "yyyyMMdd")].filter(Boolean).join("_");
+      XLSX.writeFile(wb, `${name}.xlsx`);
     });
   }
 
@@ -3213,6 +3215,7 @@ export default function FranchiseClient({
         onBulkAssign={() => setBulkAssignModal(true)}
         onBulkDelete={handleDelete}
         onBulkTransfer={() => setBulkTransferConfirmOpen(true)}
+        onExcelDownload={handleExcel}
       />
 
       {showForm && (
