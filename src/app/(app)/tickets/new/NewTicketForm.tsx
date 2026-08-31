@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -41,6 +41,7 @@ const VAN_GROUP_VALUE: Record<VanGroup, string> = {
 };
 const VAN_GROUPS: VanGroup[] = ["toss", "kicc"];
 const CHANNELS = ["채널톡", "유선"];
+const MERCHANT_COLUMNS = "id,business_name,phone,address,van_company";
 
 // 마이그레이션(123 team / 124 AS 구분 / 125 reception_channel·progress_note)이 아직 적용되지
 // 않은 환경에서 해당 컬럼을 insert하면 "column does not exist"(42703/PGRST204) 에러가 난다.
@@ -92,49 +93,83 @@ export default function NewTicketForm({ salesId, role }: Props) {
     van_group: "",
   });
 
-  // 같은 가게의 인입마다 가맹점이 새로 생기지 않도록, 상호명 입력 시 기존 가맹점을
-  // 검색해 연결할 수 있게 한다. 연결하면 merchants insert를 건너뛴다.
+  // 가맹점 연결은 사용자가 직접 하게 한다. 저장 시점에 시스템이 상호·번호로 추측해
+  // 붙이던 예전 방식은 같은 상호/같은 번호가 여럿일 때 엉뚱한 가맹점에 붙었다.
+  // 상태는 셋 중 하나 — 검색 중 / 기존 가맹점 연결됨 / 새 가맹점으로 등록.
   const [linkedMerchant, setLinkedMerchant] = useState<MerchantSuggestion | null>(null);
-  const [suggestions, setSuggestions] = useState<MerchantSuggestion[]>([]);
+  const [creatingNew, setCreatingNew] = useState(false);
+  const [searchField, setSearchField] = useState<"phone" | "business_name">("phone");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [results, setResults] = useState<MerchantSuggestion[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
 
-  useEffect(() => {
-    if (linkedMerchant) return;
-    // 번호만 아는 경우가 흔해, 상호명이 비어 있으면 연락처로도 후보를 띄운다.
-    const term = form.business_name.trim() || form.phone.trim();
-    const timer = setTimeout(async () => {
-      if (!term) {
-        setSuggestions([]);
-        return;
+  async function runSearch() {
+    const term = searchTerm.trim();
+    if (!term) return;
+    setSearching(true);
+    const supabase = createClient();
+    // ilike 패턴에서 %·_는 와일드카드다. 문법 문자를 지워 문자 그대로 찾게 한다.
+    const safe = term.replace(/[,()"'\\%*_]/g, "");
+    let rows: MerchantSuggestion[] = [];
+
+    if (searchField === "phone") {
+      const digits = term.replace(/[^0-9]/g, "");
+      if (digits) {
+        // 숫자만 남긴 컬럼으로 찾아 "010-1234-5678"과 "01012345678"을 같이 취급한다.
+        const res = await supabase
+          .from("merchants")
+          .select(MERCHANT_COLUMNS)
+          .ilike("phone_digits", `%${digits}%`)
+          .order("created_at", { ascending: false })
+          .limit(20);
+        if (res.error) {
+          // 127번 마이그레이션 미적용 환경 — 저장된 형식 그대로 찾는다.
+          const fallback = await supabase
+            .from("merchants")
+            .select(MERCHANT_COLUMNS)
+            .ilike("phone", `%${safe}%`)
+            .order("created_at", { ascending: false })
+            .limit(20);
+          rows = (fallback.data as MerchantSuggestion[]) ?? [];
+        } else {
+          rows = (res.data as MerchantSuggestion[]) ?? [];
+        }
       }
-      const supabase = createClient();
-      // .or() 안에서 쉼표·괄호·따옴표·백슬래시는 문법 문자라 그대로 넘기면 쿼리가 깨진다.
-      // 가맹점 360(merchants/page.tsx applySearch)에서 검증된 방식 — 문법 문자를 제거하고 비인용 패턴을 쓴다.
-      const safe = term.replace(/[,()"'\\%*_]/g, "");
-      if (!safe) {
-        setSuggestions([]);
-        return;
-      }
-      const { data, error } = await supabase
+    } else if (safe) {
+      const res = await supabase
         .from("merchants")
-        .select("id,business_name,phone,address,van_company")
-        .or(`business_name.ilike.%${safe}%,phone.ilike.%${safe}%`)
+        .select(MERCHANT_COLUMNS)
+        .ilike("business_name", `%${safe}%`)
         .order("created_at", { ascending: false })
-        .limit(8);
-      if (error) console.error("가맹점 검색 실패:", error.message);
-      setSuggestions((data as MerchantSuggestion[]) ?? []);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [form.business_name, form.phone, linkedMerchant]);
+        .limit(20);
+      rows = (res.data as MerchantSuggestion[]) ?? [];
+    }
 
-  // 상호명 안내 문구용 — 동일 상호명이 제안에 있으면 등록 시 그 가맹점에 자동 연결된다.
-  const trimmedName = form.business_name.trim();
-  const exactNameMatches =
-    linkedMerchant || !trimmedName
-      ? []
-      : suggestions.filter((m) => m.business_name.toLowerCase() === trimmedName.toLowerCase());
-  const exactNameMatch = exactNameMatches.length === 1;
-  // 같은 상호가 여럿이면 어느 지점인지 사람이 골라야 한다(프랜차이즈에서 흔하다).
-  const duplicateNameMatch = exactNameMatches.length > 1;
+    setResults(rows);
+    setSearched(true);
+    setSearching(false);
+  }
+
+  // 검색해서 없을 때만 새 가맹점으로 넘어간다. 방금 검색한 값을 그대로 채워준다.
+  function startNewMerchant() {
+    setForm((f) => ({
+      ...f,
+      business_name: searchField === "business_name" ? searchTerm.trim() : f.business_name,
+      phone: searchField === "phone" ? searchTerm.trim() : f.phone,
+    }));
+    setCreatingNew(true);
+  }
+
+  function resetMerchant() {
+    setLinkedMerchant(null);
+    setCreatingNew(false);
+    setResults([]);
+    setSearched(false);
+  }
+
+  // tickets.merchant_id가 NOT NULL이라 가맹점을 정하기 전에는 저장할 수 없다.
+  const merchantChosen = !!linkedMerchant || (creatingNew && !!form.business_name.trim());
 
   // 기술지원팀 인입은 AS 구분 3종을 모두 선택해야 등록할 수 있다.
   const asIncomplete =
@@ -142,13 +177,11 @@ export default function NewTicketForm({ salesId, role }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.team || !form.reception_channel || asIncomplete) return;
+    if (!form.team || !form.reception_channel || asIncomplete || !merchantChosen) return;
     setLoading(true);
     const supabase = createClient();
 
-    // 기존 가맹점을 연결했으면 그대로 쓰고, 아니면 동일 상호명을 먼저 찾아 재사용한다.
-    // 제안을 클릭하지 않고 이름만 입력해도 같은 가맹점에 매핑되도록 하기 위함.
-    // merchants.owner_name은 NOT NULL이라 신규 생성 시 빈 값을 넘기고 가맹점 360에서 채운다.
+    // 가맹점은 사용자가 이미 정해둔 상태다 — 검색해서 연결했거나, 새로 등록하기로 골랐거나.
     let merchantId: string;
     let createdMerchant = false;
     // 계열을 골랐고 연결/재사용한 가맹점의 VAN이 비어 있으면 채운다 (기존 값은 봉인).
@@ -157,109 +190,27 @@ export default function NewTicketForm({ salesId, role }: Props) {
       merchantId = linkedMerchant.id;
       fillVanCompany = !linkedMerchant.van_company;
     } else {
-      // 번호를 1순위 식별자로 본다. 상호명은 겹치지만("마포노가리포차" 3건 등)
-      // 번호가 가게를 더 잘 가른다. 다만 번호도 유일하지 않아(한 사장이 여러 매장)
-      // 하나로 좁혀지지 않으면 임의로 고르지 않고 사람에게 넘긴다.
-      // 127번 마이그레이션 미적용 환경에서는 phone_digits가 없어 조회가 실패하는데,
-      // 그때는 번호 경로를 건너뛰고 아래 상호명 경로로 내려간다.
-      const phoneDigits = form.phone.replace(/[^0-9]/g, "");
-      let byPhone: { id: string; business_name: string; van_company: string | null }[] = [];
-      if (phoneDigits.length >= 8) {
-        const { data: phoneRows, error: phoneError } = await supabase
-          .from("merchants")
-          .select("id,business_name,van_company")
-          .eq("phone_digits", phoneDigits)
-          .limit(10);
-        if (!phoneError) byPhone = phoneRows ?? [];
+      // 여기 오는 경우는 "새 가맹점으로 등록"을 명시적으로 고른 때뿐이다.
+      // merchants.owner_name은 NOT NULL이라 빈 값을 넣고 가맹점 360에서 채운다.
+      const { data: merchantData, error: merchantError } = await supabase
+        .from("merchants")
+        .insert({
+          business_name: form.business_name.trim(),
+          owner_name: "",
+          phone: form.phone,
+          sales_id: salesId,
+          van_company: form.van_group ? VAN_GROUP_VALUE[form.van_group] : null,
+        })
+        .select("id")
+        .single();
+
+      if (merchantError || !merchantData) {
+        alert("가맹점 등록 실패: " + merchantError?.message);
+        setLoading(false);
+        return;
       }
-
-      let phonePicked: { id: string; van_company: string | null } | null = null;
-      if (byPhone.length > 0) {
-        // 번호가 여러 건이면 상호명으로 한 번 더 좁혀본다.
-        const sameName = byPhone.filter(
-          (m) => m.business_name.trim().toLowerCase() === form.business_name.trim().toLowerCase(),
-        );
-        phonePicked =
-          byPhone.length === 1 ? byPhone[0] : sameName.length === 1 ? sameName[0] : null;
-        if (!phonePicked) {
-          alert(
-            `이 번호로 등록된 가맹점이 ${byPhone.length}개 있습니다.\n\n어느 가맹점인지 위 검색 목록에서 직접 선택해 주세요.`,
-          );
-          setLoading(false);
-          return;
-        }
-      }
-
-      if (phonePicked) {
-        merchantId = phonePicked.id;
-        fillVanCompany = !phonePicked.van_company;
-      } else {
-        // 대소문자만 다른 중복 생성을 막기 위해 ilike로 정확 일치(와일드카드 이스케이프)를 찾는다.
-        const exactPattern = form.business_name.trim().replace(/[\%_]/g, (m) => "\\" + m);
-        const { data: exact, count: exactCount } = await supabase
-          .from("merchants")
-          .select("id,van_company", { count: "exact" })
-          .ilike("business_name", exactPattern)
-          .order("created_at", { ascending: false })
-          .limit(2);
-
-        // 동일 상호가 둘 이상이면 어느 지점인지 알 수 없다. 예전에는 limit(1)로 가장
-        // 최근 가맹점에 조용히 붙였는데, 그러면 엉뚱한 지점 기록으로 남고 CS 리포트와
-        // 가맹점 360 이력까지 그대로 오염된다. 사람이 고르게 하고 저장을 멈춘다.
-        if (exact && exact.length > 1) {
-          alert(
-            `"${form.business_name.trim()}" 상호의 가맹점이 ${exactCount ?? exact.length}개 있습니다.\n\n어느 가맹점인지 위 검색 목록에서 직접 선택해 주세요.`,
-          );
-          setLoading(false);
-          return;
-        }
-
-        if (exact && exact.length === 1) {
-          // 번호를 적었는데 번호로는 못 찾고 상호만 같다면 다른 지점일 수 있다.
-          // 상호명만 믿고 붙이면 엉뚱한 가맹점 이력이 되므로 한 번 묻는다.
-          if (phoneDigits.length >= 8) {
-            const sameStore = confirm(
-              `"${form.business_name.trim()}" 가맹점이 있지만 등록된 번호가 입력하신 번호와 다릅니다.\n\n같은 가게가 맞으면 확인을 눌러 연결하고, 다른 가게면 취소 후 위 목록에서 확인해 주세요.`,
-            );
-            if (!sameStore) {
-              setLoading(false);
-              return;
-            }
-          }
-          merchantId = exact[0].id;
-          fillVanCompany = !exact[0].van_company;
-        } else {
-          // 오타로 비슷한 가맹점이 계속 늘어나는 걸 막는 마지막 방어선.
-          // 상호명을 문구에 그대로 넣어 저장 전에 눈으로 확인할 수 있게 한다.
-          const confirmed = confirm(
-            `"${form.business_name.trim()}"으로 등록된 가맹점이 없습니다.\n\n새 가맹점으로 등록할까요?\n\n취소하면 상호명을 다시 고칠 수 있습니다.`,
-          );
-          if (!confirmed) {
-            setLoading(false);
-            return;
-          }
-
-          const { data: merchantData, error: merchantError } = await supabase
-            .from("merchants")
-            .insert({
-              business_name: form.business_name.trim(),
-              owner_name: "",
-              phone: form.phone,
-              sales_id: salesId,
-              van_company: form.van_group ? VAN_GROUP_VALUE[form.van_group] : null,
-            })
-            .select("id")
-            .single();
-
-          if (merchantError || !merchantData) {
-            alert("가맹점 등록 실패: " + merchantError?.message);
-            setLoading(false);
-            return;
-          }
-          merchantId = merchantData.id;
-          createdMerchant = true;
-        }
-      }
+      merchantId = merchantData.id;
+      createdMerchant = true;
     }
 
     // 처리를 다 끝낸 뒤 기록하는 로그이므로 상태는 바로 "완료"로 저장한다.
@@ -353,19 +304,32 @@ export default function NewTicketForm({ salesId, role }: Props) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setLinkedMerchant(null)}
+                  onClick={resetMerchant}
                   className="shrink-0 text-xs text-blue-600 hover:text-blue-800 font-medium"
                 >
-                  연결 해제
+                  다시 검색
                 </button>
               </div>
               <p className="mt-1 text-[11px] text-gray-400">
                 기존 가맹점에 연결됩니다. 새 가맹점을 만들지 않습니다.
               </p>
             </div>
-          ) : (
+          ) : creatingNew ? (
             <>
-              <div className="relative">
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <p className="text-xs font-medium text-amber-700">
+                  새 가맹점으로 등록합니다. 저장할 때 함께 만들어집니다.
+                </p>
+                <button
+                  type="button"
+                  onClick={resetMerchant}
+                  className="shrink-0 text-xs font-medium text-amber-700 hover:text-amber-900"
+                >
+                  다시 검색
+                </button>
+              </div>
+
+              <div>
                 <Label>상호명 *</Label>
                 <input
                   type="text"
@@ -373,46 +337,7 @@ export default function NewTicketForm({ salesId, role }: Props) {
                   value={form.business_name}
                   onChange={(e) => setForm((f) => ({ ...f, business_name: e.target.value }))}
                   className={INPUT}
-                  placeholder="입력하면 기존 가맹점을 검색합니다"
                 />
-                {suggestions.length > 0 && (
-                  <ul className="absolute z-10 mt-1 w-full max-h-56 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
-                    {suggestions.map((m) => (
-                      <li key={m.id}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setLinkedMerchant(m);
-                            setSuggestions([]);
-                          }}
-                          className="w-full px-3 py-2 text-left hover:bg-blue-50"
-                        >
-                          <p className="text-sm font-medium text-gray-900">{m.business_name}</p>
-                          <p className="text-xs text-gray-500">
-                            {m.phone || "-"}
-                            {m.address ? ` · ${m.address}` : ""}
-                          </p>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {trimmedName &&
-                  (duplicateNameMatch ? (
-                    <p className="mt-1 text-[11px] font-medium text-red-600">
-                      동일 상호명 가맹점이 {exactNameMatches.length}개 있습니다. 위 목록에서 어느
-                      가맹점인지 직접 선택해 주세요.
-                    </p>
-                  ) : exactNameMatch ? (
-                    <p className="mt-1 text-[11px] text-blue-600">
-                      동일 상호명 가맹점이 있어 등록 시 그 가맹점에 연결됩니다.
-                    </p>
-                  ) : (
-                    <p className="mt-1 text-[11px] font-medium text-amber-600">
-                      새 가맹점 &ldquo;{trimmedName}&rdquo;이(가) 함께 등록됩니다. 기존 가맹점이면
-                      위 목록에서 선택해 연결하세요.
-                    </p>
-                  ))}
               </div>
 
               <div>
@@ -425,6 +350,102 @@ export default function NewTicketForm({ salesId, role }: Props) {
                 />
               </div>
             </>
+          ) : (
+            <div>
+              <Label>가맹점 *</Label>
+
+              <div className="mb-2 flex w-fit gap-1 rounded-lg bg-gray-100 p-1">
+                {(
+                  [
+                    ["phone", "전화번호로 검색"],
+                    ["business_name", "상호명으로 검색"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      setSearchField(value);
+                      setResults([]);
+                      setSearched(false);
+                    }}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                      searchField === value
+                        ? "bg-white text-gray-900 shadow-sm"
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setSearched(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void runSearch();
+                    }
+                  }}
+                  className={INPUT}
+                  placeholder={searchField === "phone" ? "010-1234-5678" : "가맹점 상호명"}
+                />
+                <button
+                  type="button"
+                  onClick={() => void runSearch()}
+                  disabled={searching || !searchTerm.trim()}
+                  className="shrink-0 rounded-lg bg-gray-900 px-4 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-40"
+                >
+                  {searching ? "검색 중" : "검색"}
+                </button>
+              </div>
+
+              {results.length > 0 && (
+                <ul className="mt-2 max-h-56 divide-y divide-gray-100 overflow-y-auto rounded-lg border border-gray-200">
+                  {results.map((m) => (
+                    <li key={m.id}>
+                      <button
+                        type="button"
+                        onClick={() => setLinkedMerchant(m)}
+                        className="w-full px-3 py-2 text-left hover:bg-blue-50"
+                      >
+                        <p className="text-sm font-medium text-gray-900">{m.business_name}</p>
+                        <p className="text-xs text-gray-500">
+                          {m.phone || "-"}
+                          {m.address ? ` · ${m.address}` : ""}
+                        </p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {searched && results.length === 0 && (
+                <div className="mt-2 rounded-lg border border-dashed border-gray-300 px-3 py-4 text-center">
+                  <p className="text-sm text-gray-500">검색 결과가 없습니다.</p>
+                  <button
+                    type="button"
+                    onClick={startNewMerchant}
+                    className="mt-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  >
+                    + 새 가맹점으로 등록
+                  </button>
+                </div>
+              )}
+
+              {!searched && (
+                <p className="mt-1 text-[11px] text-gray-400">
+                  검색해서 기존 가맹점을 연결하거나, 결과가 없으면 새로 등록합니다.
+                </p>
+              )}
+            </div>
           )}
 
           <div>
@@ -600,7 +621,9 @@ export default function NewTicketForm({ salesId, role }: Props) {
         </Link>
         <button
           type="submit"
-          disabled={loading || !form.team || !form.reception_channel || asIncomplete}
+          disabled={
+            loading || !form.team || !form.reception_channel || asIncomplete || !merchantChosen
+          }
           className="flex-1 bg-blue-600 text-white py-3 rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
         >
           {loading ? "등록 중..." : "인입내역 등록"}
