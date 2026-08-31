@@ -99,7 +99,8 @@ export default function NewTicketForm({ salesId, role }: Props) {
 
   useEffect(() => {
     if (linkedMerchant) return;
-    const term = form.business_name.trim();
+    // 번호만 아는 경우가 흔해, 상호명이 비어 있으면 연락처로도 후보를 띄운다.
+    const term = form.business_name.trim() || form.phone.trim();
     const timer = setTimeout(async () => {
       if (!term) {
         setSuggestions([]);
@@ -123,7 +124,7 @@ export default function NewTicketForm({ salesId, role }: Props) {
       setSuggestions((data as MerchantSuggestion[]) ?? []);
     }, 300);
     return () => clearTimeout(timer);
-  }, [form.business_name, linkedMerchant]);
+  }, [form.business_name, form.phone, linkedMerchant]);
 
   // 상호명 안내 문구용 — 동일 상호명이 제안에 있으면 등록 시 그 가맹점에 자동 연결된다.
   const trimmedName = form.business_name.trim();
@@ -156,59 +157,108 @@ export default function NewTicketForm({ salesId, role }: Props) {
       merchantId = linkedMerchant.id;
       fillVanCompany = !linkedMerchant.van_company;
     } else {
-      // 대소문자만 다른 중복 생성을 막기 위해 ilike로 정확 일치(와일드카드 이스케이프)를 찾는다.
-      const exactPattern = form.business_name.trim().replace(/[\%_]/g, (m) => "\\" + m);
-      const { data: exact, count: exactCount } = await supabase
-        .from("merchants")
-        .select("id,van_company", { count: "exact" })
-        .ilike("business_name", exactPattern)
-        .order("created_at", { ascending: false })
-        .limit(2);
-
-      // 동일 상호가 둘 이상이면 어느 지점인지 알 수 없다. 예전에는 limit(1)로 가장
-      // 최근 가맹점에 조용히 붙였는데, 그러면 엉뚱한 지점 기록으로 남고 CS 리포트와
-      // 가맹점 360 이력까지 그대로 오염된다. 사람이 고르게 하고 저장을 멈춘다.
-      if (exact && exact.length > 1) {
-        alert(
-          `"${form.business_name.trim()}" 상호의 가맹점이 ${exactCount ?? exact.length}개 있습니다.\n\n어느 가맹점인지 위 검색 목록에서 직접 선택해 주세요.`,
-        );
-        setLoading(false);
-        return;
+      // 번호를 1순위 식별자로 본다. 상호명은 겹치지만("마포노가리포차" 3건 등)
+      // 번호가 가게를 더 잘 가른다. 다만 번호도 유일하지 않아(한 사장이 여러 매장)
+      // 하나로 좁혀지지 않으면 임의로 고르지 않고 사람에게 넘긴다.
+      // 127번 마이그레이션 미적용 환경에서는 phone_digits가 없어 조회가 실패하는데,
+      // 그때는 번호 경로를 건너뛰고 아래 상호명 경로로 내려간다.
+      const phoneDigits = form.phone.replace(/[^0-9]/g, "");
+      let byPhone: { id: string; business_name: string; van_company: string | null }[] = [];
+      if (phoneDigits.length >= 8) {
+        const { data: phoneRows, error: phoneError } = await supabase
+          .from("merchants")
+          .select("id,business_name,van_company")
+          .eq("phone_digits", phoneDigits)
+          .limit(10);
+        if (!phoneError) byPhone = phoneRows ?? [];
       }
 
-      if (exact && exact.length === 1) {
-        merchantId = exact[0].id;
-        fillVanCompany = !exact[0].van_company;
-      } else {
-        // 오타로 비슷한 가맹점이 계속 늘어나는 걸 막는 마지막 방어선.
-        // 상호명을 문구에 그대로 넣어 저장 전에 눈으로 확인할 수 있게 한다.
-        const confirmed = confirm(
-          `"${form.business_name.trim()}"으로 등록된 가맹점이 없습니다.\n\n새 가맹점으로 등록할까요?\n\n취소하면 상호명을 다시 고칠 수 있습니다.`,
+      let phonePicked: { id: string; van_company: string | null } | null = null;
+      if (byPhone.length > 0) {
+        // 번호가 여러 건이면 상호명으로 한 번 더 좁혀본다.
+        const sameName = byPhone.filter(
+          (m) => m.business_name.trim().toLowerCase() === form.business_name.trim().toLowerCase(),
         );
-        if (!confirmed) {
+        phonePicked =
+          byPhone.length === 1 ? byPhone[0] : sameName.length === 1 ? sameName[0] : null;
+        if (!phonePicked) {
+          alert(
+            `이 번호로 등록된 가맹점이 ${byPhone.length}개 있습니다.\n\n어느 가맹점인지 위 검색 목록에서 직접 선택해 주세요.`,
+          );
           setLoading(false);
           return;
         }
+      }
 
-        const { data: merchantData, error: merchantError } = await supabase
+      if (phonePicked) {
+        merchantId = phonePicked.id;
+        fillVanCompany = !phonePicked.van_company;
+      } else {
+        // 대소문자만 다른 중복 생성을 막기 위해 ilike로 정확 일치(와일드카드 이스케이프)를 찾는다.
+        const exactPattern = form.business_name.trim().replace(/[\%_]/g, (m) => "\\" + m);
+        const { data: exact, count: exactCount } = await supabase
           .from("merchants")
-          .insert({
-            business_name: form.business_name.trim(),
-            owner_name: "",
-            phone: form.phone,
-            sales_id: salesId,
-            van_company: form.van_group ? VAN_GROUP_VALUE[form.van_group] : null,
-          })
-          .select("id")
-          .single();
+          .select("id,van_company", { count: "exact" })
+          .ilike("business_name", exactPattern)
+          .order("created_at", { ascending: false })
+          .limit(2);
 
-        if (merchantError || !merchantData) {
-          alert("가맹점 등록 실패: " + merchantError?.message);
+        // 동일 상호가 둘 이상이면 어느 지점인지 알 수 없다. 예전에는 limit(1)로 가장
+        // 최근 가맹점에 조용히 붙였는데, 그러면 엉뚱한 지점 기록으로 남고 CS 리포트와
+        // 가맹점 360 이력까지 그대로 오염된다. 사람이 고르게 하고 저장을 멈춘다.
+        if (exact && exact.length > 1) {
+          alert(
+            `"${form.business_name.trim()}" 상호의 가맹점이 ${exactCount ?? exact.length}개 있습니다.\n\n어느 가맹점인지 위 검색 목록에서 직접 선택해 주세요.`,
+          );
           setLoading(false);
           return;
         }
-        merchantId = merchantData.id;
-        createdMerchant = true;
+
+        if (exact && exact.length === 1) {
+          // 번호를 적었는데 번호로는 못 찾고 상호만 같다면 다른 지점일 수 있다.
+          // 상호명만 믿고 붙이면 엉뚱한 가맹점 이력이 되므로 한 번 묻는다.
+          if (phoneDigits.length >= 8) {
+            const sameStore = confirm(
+              `"${form.business_name.trim()}" 가맹점이 있지만 등록된 번호가 입력하신 번호와 다릅니다.\n\n같은 가게가 맞으면 확인을 눌러 연결하고, 다른 가게면 취소 후 위 목록에서 확인해 주세요.`,
+            );
+            if (!sameStore) {
+              setLoading(false);
+              return;
+            }
+          }
+          merchantId = exact[0].id;
+          fillVanCompany = !exact[0].van_company;
+        } else {
+          // 오타로 비슷한 가맹점이 계속 늘어나는 걸 막는 마지막 방어선.
+          // 상호명을 문구에 그대로 넣어 저장 전에 눈으로 확인할 수 있게 한다.
+          const confirmed = confirm(
+            `"${form.business_name.trim()}"으로 등록된 가맹점이 없습니다.\n\n새 가맹점으로 등록할까요?\n\n취소하면 상호명을 다시 고칠 수 있습니다.`,
+          );
+          if (!confirmed) {
+            setLoading(false);
+            return;
+          }
+
+          const { data: merchantData, error: merchantError } = await supabase
+            .from("merchants")
+            .insert({
+              business_name: form.business_name.trim(),
+              owner_name: "",
+              phone: form.phone,
+              sales_id: salesId,
+              van_company: form.van_group ? VAN_GROUP_VALUE[form.van_group] : null,
+            })
+            .select("id")
+            .single();
+
+          if (merchantError || !merchantData) {
+            alert("가맹점 등록 실패: " + merchantError?.message);
+            setLoading(false);
+            return;
+          }
+          merchantId = merchantData.id;
+          createdMerchant = true;
+        }
       }
     }
 
