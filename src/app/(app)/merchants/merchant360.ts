@@ -19,11 +19,12 @@ export interface WorkHistoryItem {
 export type MemoIssueCategory = "payment" | "pos" | "device" | "install" | "usage" | "etc";
 
 export const MEMO_ISSUE_CATEGORY_LABEL: Record<MemoIssueCategory, string> = {
-  payment: "결제",
-  pos: "포스",
-  device: "장비",
-  install: "설치오류",
-  usage: "사용법",
+  payment: "결제 문제",
+  pos: "포스 문제",
+  device: "장비 문제",
+  install: "설치 문제",
+  // 고장이 아니라 물어보는 건이라 "문제"가 아닌 "문의"로 둔다.
+  usage: "사용법 문의",
   etc: "기타",
 };
 
@@ -32,10 +33,10 @@ export const MEMO_ISSUE_CATEGORIES = Object.keys(MEMO_ISSUE_CATEGORY_LABEL) as M
 export type MemoResolution = "phone" | "guide" | "remote" | "onsite" | "unresolved";
 
 export const MEMO_RESOLUTION_LABEL: Record<MemoResolution, string> = {
-  phone: "전화",
-  guide: "가이드",
-  remote: "원격",
-  onsite: "출장",
+  phone: "전화 안내",
+  guide: "가이드 발송",
+  remote: "원격 지원",
+  onsite: "현장 출장",
   unresolved: "미해결",
 };
 
