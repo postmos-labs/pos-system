@@ -13,7 +13,7 @@ type CompletionApproval = {
   installation_id: string;
   target_status: string;
   status: string;
-  requested_by: string;
+  requested_by: string | null;
   requested_by_name: string;
   requested_at: string;
   approval_notes: ApprovalNote[];
@@ -22,7 +22,7 @@ type CompletionApproval = {
 
 type TransferApproval = {
   franchise_application_id: string;
-  requested_by: string;
+  requested_by: string | null;
   requested_by_name: string;
   requested_at: string;
   cs_approved_by_name: string | null;
@@ -83,7 +83,9 @@ export default async function ApprovalsPage() {
             "installation_id, target_status, status, requested_by, requested_by_name, requested_at, approval_notes, installation:installations(id, customer_name, address)",
           )
           .in("status", p.approval_role === "team_lead" ? ["responsible_approved"] : ["requested"])
-          .neq("requested_by", userId)
+          // 요청자 계정이 삭제되면 requested_by가 NULL이 된다. neq만 쓰면 NULL 행이
+          // 통째로 걸러져(NULL <> x → NULL) 승인함에서 사라지므로 NULL도 함께 남긴다.
+          .or(`requested_by.is.null,requested_by.neq.${userId}`)
           .order("requested_at", { ascending: true })
           .limit(5)
       : null;
@@ -99,7 +101,8 @@ export default async function ApprovalsPage() {
             "status",
             p.approval_role === "cs_responsible" ? "requested" : "cs_responsible_approved",
           )
-          .neq("requested_by", userId)
+          // 위와 같은 이유로 요청자가 삭제된 건(NULL)도 승인함에 남긴다.
+          .or(`requested_by.is.null,requested_by.neq.${userId}`)
           .order("requested_at", { ascending: true })
           .limit(5)
       : null;

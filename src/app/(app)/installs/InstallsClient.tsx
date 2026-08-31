@@ -160,7 +160,7 @@ export type CompletionApproval = {
     eta?: string;
     skip_notify?: boolean;
   };
-  requested_by: string;
+  requested_by: string | null;
   requested_by_name: string;
   responsible_approved_by_name?: string | null;
   approved_by: string | null;

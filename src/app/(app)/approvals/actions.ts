@@ -242,12 +242,15 @@ export async function approveCsResponsibleTransfer(franchiseApplicationId: strin
   }
   if (error) return { error: error.message };
 
-  const { data: approvers } = await admin
+  let approverQuery = admin
     .from("profiles")
     .select("id")
     .eq("approval_role", "team_lead")
-    .neq("id", approver.user.id)
-    .neq("id", approval.requested_by);
+    .neq("id", approver.user.id);
+  // 요청자 계정이 삭제되면 requested_by가 NULL이다. neq에 NULL을 넘기면 조건이 NULL로
+  // 평가돼 대상이 0명이 되고 알림이 통째로 빠지므로, 값이 있을 때만 제외한다.
+  if (approval.requested_by) approverQuery = approverQuery.neq("id", approval.requested_by);
+  const { data: approvers } = await approverQuery;
   const { error: notificationError } = approvers?.length
     ? await admin.from("notifications").insert(
         approvers.map(({ id }) => ({
@@ -343,15 +346,19 @@ export async function rejectFranchiseTransfer(franchiseApplicationId: string, re
     return { error: "감사 로그 저장에 실패해 반려를 취소했습니다: " + logError.message };
   }
 
-  const { error: notificationError } = await admin.from("notifications").insert({
-    user_id: approval.requested_by,
-    franchise_application_id: franchiseApplicationId,
-    type: "approval_transfer_rejected",
-    title: "[반려] 기술지원 이관 승인요청",
-    body: trimmedReason
-      ? `${profile?.name ?? "승인자"}님이 이관 승인요청을 반려했습니다. 사유: ${trimmedReason}`
-      : `${profile?.name ?? "승인자"}님이 이관 승인요청을 반려했습니다.`,
-  });
+  // 요청자 계정이 삭제됐으면 보낼 곳이 없다. notifications.user_id는 NOT NULL이라
+  // NULL을 그대로 넣으면 insert가 실패하므로 알림만 건너뛴다(반려 자체는 이미 처리됨).
+  const { error: notificationError } = approval.requested_by
+    ? await admin.from("notifications").insert({
+        user_id: approval.requested_by,
+        franchise_application_id: franchiseApplicationId,
+        type: "approval_transfer_rejected",
+        title: "[반려] 기술지원 이관 승인요청",
+        body: trimmedReason
+          ? `${profile?.name ?? "승인자"}님이 이관 승인요청을 반려했습니다. 사유: ${trimmedReason}`
+          : `${profile?.name ?? "승인자"}님이 이관 승인요청을 반려했습니다.`,
+      })
+    : { error: null };
 
   return { error: null, notificationError: notificationError?.message ?? null };
 }
