@@ -49,17 +49,52 @@ export async function linkWooCustomerToMerchant(wooId: string) {
     return { error: null, merchantId: woo.merchant_id as string, created: false };
 
   // 2) 번호가 같은 가맹점이 이미 있으면 새로 만들지 않는다.
+  //    여러 개면 어느 쪽인지 알 수 없다. 세 번째를 만들면 중복만 늘어나므로 사람에게 넘긴다.
   const digits = (woo.phone ?? "").replace(/[^0-9]/g, "");
   if (digits.length >= 8) {
-    const { data: existing, error: existingError } = await admin
+    const { data: byPhone, error: phoneError } = await admin
       .from("merchants")
       .select("id")
       .eq("phone_digits", digits)
       .limit(2);
     // phone_digits가 없는 환경(127 미적용)에서는 이 단계를 건너뛴다.
-    if (!existingError && existing && existing.length === 1) {
-      await admin.from("woo_customers").update({ merchant_id: existing[0].id }).eq("id", wooId);
-      return { error: null, merchantId: existing[0].id as string, created: false };
+    if (!phoneError && byPhone) {
+      if (byPhone.length > 1) {
+        return {
+          error: "이 번호로 등록된 가맹점이 여러 개입니다. 검색 목록에서 직접 골라주세요.",
+          merchantId: null,
+          created: false,
+        };
+      }
+      if (byPhone.length === 1) {
+        await admin.from("woo_customers").update({ merchant_id: byPhone[0].id }).eq("id", wooId);
+        return { error: null, merchantId: byPhone[0].id as string, created: false };
+      }
+    }
+  }
+
+  // 2-1) 번호가 없거나 못 찾았으면 상호명으로 한 번 더 확인한다.
+  //      번호가 "미입력"인 우국상 건이 있어 번호만 믿으면 같은 가게가 또 만들어진다.
+  const name = (woo.business_name ?? "").trim();
+  if (name) {
+    const { data: byName } = await admin
+      .from("merchants")
+      .select("id")
+      .ilike(
+        "business_name",
+        name.replace(/[%_]/g, (match: string) => "\\" + match),
+      )
+      .limit(2);
+    if (byName && byName.length > 1) {
+      return {
+        error: "같은 상호명 가맹점이 여러 개입니다. 검색 목록에서 직접 골라주세요.",
+        merchantId: null,
+        created: false,
+      };
+    }
+    if (byName && byName.length === 1) {
+      await admin.from("woo_customers").update({ merchant_id: byName[0].id }).eq("id", wooId);
+      return { error: null, merchantId: byName[0].id as string, created: false };
     }
   }
 
