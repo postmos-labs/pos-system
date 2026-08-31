@@ -220,6 +220,12 @@ export async function sendNotice(input: { title: string; body: string; userIds: 
   const authError = await requireMaster();
   if (authError) return { error: authError, sentCount: 0 };
 
+  const sessionClient = await createClient();
+  const {
+    data: { user: sender },
+  } = await sessionClient.auth.getUser();
+  if (!sender) return { error: "로그인이 필요합니다.", sentCount: 0 };
+
   const title = input.title.trim();
   const body = input.body.trim();
   if (!title) return { error: "제목을 입력해주세요.", sentCount: 0 };
@@ -245,6 +251,23 @@ export async function sendNotice(input: { title: string; body: string; userIds: 
     .insert(targets.map((target) => ({ user_id: target.id, type: "notice", title, body })));
   if (error) return { error: error.message, sentCount: 0 };
 
+  // 발송 사건 자체를 한 줄로 남긴다. 알림은 사람 수만큼 생기므로 그것과 별개다.
+  // 130번 마이그레이션이 아직 없어도 발송은 이미 끝났으므로 실패해도 되돌리지 않는다.
+  const { data: senderProfile } = await admin
+    .from("profiles")
+    .select("name")
+    .eq("id", sender.id)
+    .maybeSingle();
+  const { error: logError } = await admin.from("notice_logs").insert({
+    title,
+    body,
+    recipient_count: targets.length,
+    sent_by: sender.id,
+    sender_name: senderProfile?.name ?? "알 수 없음",
+  });
+  if (logError) console.error("공지 발송 기록 실패:", logError.message);
+
   revalidatePath("/notifications");
+  revalidatePath("/admin/logs");
   return { error: null, sentCount: targets.length };
 }

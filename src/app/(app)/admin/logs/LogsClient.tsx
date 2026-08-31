@@ -26,7 +26,8 @@ export type ActivitySource =
   | "memo"
   | "alimtalk"
   | "inventory"
-  | "deletion";
+  | "deletion"
+  | "notice";
 
 export interface EmployeeActivityLog {
   id: string;
@@ -104,6 +105,7 @@ const SOURCE_TONE: Record<ActivitySource, string> = {
   call: "bg-cyan-50 text-cyan-700",
   installation: "bg-orange-50 text-orange-700",
   ticket: "bg-purple-50 text-purple-700",
+  notice: "bg-indigo-50 text-indigo-700",
   change: "bg-indigo-50 text-indigo-700",
   memo: "bg-slate-100 text-slate-700",
   alimtalk: "bg-teal-50 text-teal-700",
@@ -116,6 +118,7 @@ const SOURCE_FILTERS: { key: ActivitySource; label: string }[] = [
   { key: "call", label: "통화" },
   { key: "installation", label: "설치" },
   { key: "ticket", label: "인입내역" },
+  { key: "notice", label: "공지" },
   { key: "change", label: "변경접수" },
   { key: "memo", label: "메모" },
   { key: "alimtalk", label: "알림톡" },

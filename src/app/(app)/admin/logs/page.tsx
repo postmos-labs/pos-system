@@ -122,6 +122,15 @@ function actorNameOf(...candidates: (string | null | undefined)[]) {
   return UNKNOWN_ACTOR;
 }
 
+type NoticeLogRow = {
+  id: string;
+  title: string;
+  body: string;
+  recipient_count: number;
+  sender_name: string | null;
+  created_at: string;
+};
+
 function one<T>(relation: Relation<T>) {
   return Array.isArray(relation) ? (relation[0] ?? null) : relation;
 }
@@ -231,6 +240,7 @@ export default async function AdminLogsPage({
     postHistoryResult,
     changeResult,
     deletionResult,
+    noticeResult,
   ] = await Promise.all([
     scoped(
       (() => {
@@ -353,6 +363,15 @@ export default async function AdminLogsPage({
         return hasMerchantQuery ? base.ilike("subject", like) : base;
       })(),
     ),
+    // 사내 공지는 가맹점과 무관하므로 가맹점 검색 시에는 제외한다(재고와 같은 이유).
+    hasMerchantQuery
+      ? emptyResult
+      : scoped(
+          supabase
+            .from("notice_logs")
+            .select("id,title,body,recipient_count,sender_name,created_at")
+            .order("created_at", { ascending: false }),
+        ),
   ]);
 
   // 아직 마이그레이션이 적용되지 않은 환경에서도 화면이 죽지 않도록 소스별로 실패를 흡수한다
@@ -369,6 +388,7 @@ export default async function AdminLogsPage({
   const postHistory = rowsOf<PostHistoryRow>(postHistoryResult);
   const changeLogs = rowsOf<ChangeLogRow>(changeResult);
   const deletionLogs = rowsOf<DeletionLogRow>(deletionResult);
+  const noticeLogs = rowsOf<NoticeLogRow>(noticeResult);
 
   // 알림톡 로그는 entity_type/entity_id가 다형적이라 대상 이름을 따로 조회한다
   const notifiedInstallIds = [
@@ -531,6 +551,18 @@ export default async function AdminLogsPage({
       toStatus: null,
       details: null,
       description: `${DELETION_ENTITY_LABEL[log.entity_type] ?? log.entity_type} 삭제`,
+      createdAt: log.created_at,
+    })),
+    ...noticeLogs.map((log) => ({
+      id: `notice-${log.id}`,
+      source: "notice" as const,
+      sourceLabel: "공지",
+      actorName: actorNameOf(log.sender_name),
+      subject: log.title,
+      fromStatus: null,
+      toStatus: null,
+      details: null,
+      description: `${log.recipient_count}명에게 발송 · ${log.body}`,
       createdAt: log.created_at,
     })),
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
