@@ -211,3 +211,38 @@ export async function setUserDeletePermission(userId: string, canDelete: boolean
   revalidatePath("/admin/users");
   return { error: null };
 }
+
+// 사내 공지 — 마스터만 보낼 수 있다.
+// 알림 기능(/notifications + 실시간 팝업)이 이미 있으므로 그 위에 얹는다.
+// 받는 사람은 profiles에 있는 직원 전부다. 이 시스템에서는 계정 삭제가 곧 퇴사 처리라
+// 비활성 구분이 따로 없다.
+export async function sendNotice(input: { title: string; body: string; team: string }) {
+  const authError = await requireMaster();
+  if (authError) return { error: authError, sentCount: 0 };
+
+  const title = input.title.trim();
+  const body = input.body.trim();
+  if (!title) return { error: "제목을 입력해주세요.", sentCount: 0 };
+  if (title.length > 100) return { error: "제목은 100자 이하로 입력해주세요.", sentCount: 0 };
+  if (!body) return { error: "내용을 입력해주세요.", sentCount: 0 };
+  if (body.length > 2000) return { error: "내용은 2,000자 이하로 입력해주세요.", sentCount: 0 };
+  if (input.team !== "all" && !TEAMS.includes(input.team)) {
+    return { error: "잘못된 대상입니다.", sentCount: 0 };
+  }
+
+  const admin = createAdminClient();
+  let targetQuery = admin.from("profiles").select("id");
+  if (input.team !== "all") targetQuery = targetQuery.eq("team", input.team);
+  const { data: targets, error: targetError } = await targetQuery;
+  if (targetError) return { error: targetError.message, sentCount: 0 };
+  if (!targets || targets.length === 0) return { error: "받을 직원이 없습니다.", sentCount: 0 };
+
+  // 한 사람당 한 행. notifications.user_id는 NOT NULL이고 계정 삭제 시 함께 지워진다.
+  const { error } = await admin
+    .from("notifications")
+    .insert(targets.map((target) => ({ user_id: target.id, type: "notice", title, body })));
+  if (error) return { error: error.message, sentCount: 0 };
+
+  revalidatePath("/notifications");
+  return { error: null, sentCount: targets.length };
+}
