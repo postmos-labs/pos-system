@@ -18,6 +18,7 @@ import {
   type MemoResolution,
 } from "@/app/(app)/merchants/merchant360";
 import TicketActions from "./TicketActions";
+import TicketMerchantCard from "./TicketMerchantCard";
 import TicketLogs from "./TicketLogs";
 import TicketInfoEdit from "./TicketInfoEdit";
 
@@ -100,24 +101,18 @@ export default async function TicketDetailPage({ params }: Props) {
       </div>
 
       {}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">가맹점 정보</h2>
-        <div className="grid grid-cols-2 gap-y-2.5 text-sm">
-          <div>
-            <p className="text-xs text-gray-400">상호명</p>
-            <p className="font-medium">{(ticket.merchant as any)?.business_name}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">연락처</p>
-            <p className="font-medium">{(ticket.merchant as any)?.phone || "-"}</p>
-          </div>
-        </div>
-      </div>
+      <TicketMerchantCard
+        ticketId={ticket.id as string}
+        merchantId={(ticket.merchant_id as string | null) ?? null}
+        businessName={(ticket.merchant as { business_name?: string } | null)?.business_name ?? null}
+        phone={(ticket.merchant as { phone?: string | null } | null)?.phone ?? null}
+        canEdit={["admin", "master", "sales", "cs", "tech"].includes((profile as Profile).role)}
+      />
 
       {}
       <TicketInfoEdit
         ticket={ticket as any}
-        canEdit={["admin", "master", "sales", "cs"].includes((profile as Profile).role)}
+        canEdit={["admin", "master", "sales", "cs", "tech"].includes((profile as Profile).role)}
       />
 
       {}
