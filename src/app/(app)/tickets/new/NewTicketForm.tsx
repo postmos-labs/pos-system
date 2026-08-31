@@ -127,10 +127,13 @@ export default function NewTicketForm({ salesId, role }: Props) {
 
   // 상호명 안내 문구용 — 동일 상호명이 제안에 있으면 등록 시 그 가맹점에 자동 연결된다.
   const trimmedName = form.business_name.trim();
-  const exactNameMatch =
-    !linkedMerchant &&
-    !!trimmedName &&
-    suggestions.some((m) => m.business_name.toLowerCase() === trimmedName.toLowerCase());
+  const exactNameMatches =
+    linkedMerchant || !trimmedName
+      ? []
+      : suggestions.filter((m) => m.business_name.toLowerCase() === trimmedName.toLowerCase());
+  const exactNameMatch = exactNameMatches.length === 1;
+  // 같은 상호가 여럿이면 어느 지점인지 사람이 골라야 한다(프랜차이즈에서 흔하다).
+  const duplicateNameMatch = exactNameMatches.length > 1;
 
   // 기술지원팀 인입은 AS 구분 3종을 모두 선택해야 등록할 수 있다.
   const asIncomplete =
@@ -155,14 +158,25 @@ export default function NewTicketForm({ salesId, role }: Props) {
     } else {
       // 대소문자만 다른 중복 생성을 막기 위해 ilike로 정확 일치(와일드카드 이스케이프)를 찾는다.
       const exactPattern = form.business_name.trim().replace(/[\%_]/g, (m) => "\\" + m);
-      const { data: exact } = await supabase
+      const { data: exact, count: exactCount } = await supabase
         .from("merchants")
-        .select("id,van_company")
+        .select("id,van_company", { count: "exact" })
         .ilike("business_name", exactPattern)
         .order("created_at", { ascending: false })
-        .limit(1);
+        .limit(2);
 
-      if (exact && exact.length > 0) {
+      // 동일 상호가 둘 이상이면 어느 지점인지 알 수 없다. 예전에는 limit(1)로 가장
+      // 최근 가맹점에 조용히 붙였는데, 그러면 엉뚱한 지점 기록으로 남고 CS 리포트와
+      // 가맹점 360 이력까지 그대로 오염된다. 사람이 고르게 하고 저장을 멈춘다.
+      if (exact && exact.length > 1) {
+        alert(
+          `"${form.business_name.trim()}" 상호의 가맹점이 ${exactCount ?? exact.length}개 있습니다.\n\n어느 가맹점인지 위 검색 목록에서 직접 선택해 주세요.`,
+        );
+        setLoading(false);
+        return;
+      }
+
+      if (exact && exact.length === 1) {
         merchantId = exact[0].id;
         fillVanCompany = !exact[0].van_company;
       } else {
@@ -334,7 +348,12 @@ export default function NewTicketForm({ salesId, role }: Props) {
                   </ul>
                 )}
                 {trimmedName &&
-                  (exactNameMatch ? (
+                  (duplicateNameMatch ? (
+                    <p className="mt-1 text-[11px] font-medium text-red-600">
+                      동일 상호명 가맹점이 {exactNameMatches.length}개 있습니다. 위 목록에서 어느
+                      가맹점인지 직접 선택해 주세요.
+                    </p>
+                  ) : exactNameMatch ? (
                     <p className="mt-1 text-[11px] text-blue-600">
                       동일 상호명 가맹점이 있어 등록 시 그 가맹점에 연결됩니다.
                     </p>
