@@ -45,6 +45,7 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
     resolution: ticket.resolution ?? "",
     is_repeat: ticket.is_repeat == null ? "" : ticket.is_repeat ? "repeat" : "first",
     progress_note: ticket.progress_note ?? "",
+    resolution_steps: ticket.resolution_steps ?? "",
     memo: ticket.memo ?? "",
   });
   const [saving, setSaving] = useState<string | null>(null);
@@ -184,7 +185,7 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
       {}
       <div className="mt-4 pt-4 border-t border-gray-100">
         <p className="text-xs text-gray-400 mb-1">
-          답변내용{" "}
+          {ticket.team === "tech" ? "처리 내용" : "답변내용"}{" "}
           <StatusDot field="progress_note" saving={saving} saved={saved} saveError={saveError} />
         </p>
         <textarea
@@ -194,9 +195,34 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
           onChange={(e) => handleChange("progress_note", e.target.value)}
           onBlur={() => handleBlur("progress_note")}
           className="w-full border-0 border-b border-slate-200 bg-transparent px-0 py-1 text-sm text-slate-900 focus:outline-none focus:border-blue-400 transition-colors resize-none"
-          placeholder="답변내용"
+          placeholder={ticket.team === "tech" ? "이번 건에 무슨 일이 있었는지" : "답변내용"}
         />
       </div>
+
+      {/* 해결 절차는 재사용 가능한 절차만 받는 칸이라 기술지원 건에서만 보인다. */}
+      {ticket.team === "tech" && (
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <p className="text-xs text-gray-400 mb-1">
+            해결 절차{" "}
+            <StatusDot
+              field="resolution_steps"
+              saving={saving}
+              saved={saved}
+              saveError={saveError}
+            />
+            <span className="ml-1 text-[10px] font-medium text-blue-600">챗봇 학습에 사용</span>
+          </p>
+          <textarea
+            value={form.resolution_steps}
+            disabled={!canEdit}
+            rows={4}
+            onChange={(e) => handleChange("resolution_steps", e.target.value)}
+            onBlur={() => handleBlur("resolution_steps")}
+            className="w-full border-0 border-b border-slate-200 bg-transparent px-0 py-1 text-sm text-slate-900 focus:outline-none focus:border-blue-400 transition-colors resize-none"
+            placeholder="같은 문제가 또 왔을 때 따라 할 순서 (가맹점 정보는 쓰지 마세요)"
+          />
+        </div>
+      )}
 
       {}
       <div className="mt-4 pt-4 border-t border-gray-100">

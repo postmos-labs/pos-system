@@ -78,6 +78,7 @@ export default function NewTicketForm({ salesId, role }: Props) {
     answer: string;
     issue_category: string;
     resolution: string;
+    resolution_steps: string;
     is_repeat: boolean | null;
     van_group: VanGroup | "";
   }>({
@@ -89,6 +90,7 @@ export default function NewTicketForm({ salesId, role }: Props) {
     answer: "",
     issue_category: "",
     resolution: "",
+    resolution_steps: "",
     is_repeat: null,
     van_group: "",
   });
@@ -239,6 +241,7 @@ export default function NewTicketForm({ salesId, role }: Props) {
             issue_category: form.issue_category,
             resolution: form.resolution,
             is_repeat: form.is_repeat,
+            resolution_steps: form.resolution_steps.trim() || null,
           }
         : {}),
     };
@@ -600,15 +603,45 @@ export default function NewTicketForm({ salesId, role }: Props) {
           </div>
 
           <div>
-            <Label>답변내용</Label>
+            <Label>{form.team === "tech" ? "처리 내용" : "답변내용"}</Label>
             <textarea
               value={form.answer}
               onChange={(e) => setForm((f) => ({ ...f, answer: e.target.value }))}
               rows={2}
               className={INPUT + " resize-none"}
-              placeholder="처리한 내용을 입력하세요 (선택)"
+              placeholder={
+                form.team === "tech"
+                  ? "이번 건에 무슨 일이 있었는지 적어주세요 (선택)"
+                  : "처리한 내용을 입력하세요 (선택)"
+              }
             />
           </div>
+
+          {/* 해결 절차는 재사용을 전제로 한 칸이라 기술지원 건에서만 받는다.
+              처리 내용(경위)과 섞이면 챗봇 학습 자료에 가맹점 정보가 딸려 들어간다. */}
+          {form.team === "tech" && (
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <Label>해결 절차</Label>
+                <span className="text-[11px] font-medium text-blue-600">
+                  챗봇 학습에 사용됩니다
+                </span>
+              </div>
+              <textarea
+                value={form.resolution_steps}
+                onChange={(e) => setForm((f) => ({ ...f, resolution_steps: e.target.value }))}
+                rows={4}
+                className={INPUT + " resize-none"}
+                placeholder={
+                  "1) 포스 좌측 상단 [메뉴] 클릭\n2) [설정] -> [결제] 탭 이동\n3) [단말기 재연결] 버튼 클릭"
+                }
+              />
+              <p className="mt-1 text-[11px] text-gray-500">
+                같은 문제가 또 왔을 때 다른 사람이 그대로 따라 할 수 있게, 화면에 쓰인 버튼 이름
+                그대로 순서대로 적어주세요. 가맹점 이름·전화번호 등 특정 정보는 쓰지 마세요.
+              </p>
+            </div>
+          )}
         </div>
       </Section>
 

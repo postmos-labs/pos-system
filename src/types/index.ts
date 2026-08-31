@@ -93,6 +93,8 @@ export interface Ticket {
   business_type?: string;
   reception_channel?: string;
   progress_note?: string;
+  // 기술지원 건에서만 쓰는 재사용 가능한 해결 절차(챗봇 학습 자료)
+  resolution_steps?: string;
   document_status?: string;
   open_date?: string;
   install_date?: string;
