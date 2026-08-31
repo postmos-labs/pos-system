@@ -15,7 +15,8 @@ export default async function NewTicketPage() {
     .select("role")
     .eq("id", user.id)
     .single();
-  if (!profile || !["sales", "cs", "admin", "master"].includes(profile.role)) redirect("/tickets");
+  if (!profile || !["sales", "cs", "tech", "admin", "master"].includes(profile.role))
+    redirect("/tickets");
 
   return (
     <div className="p-4 md:p-6 max-w-2xl mx-auto">

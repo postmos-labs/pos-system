@@ -199,6 +199,9 @@ export default function NewTicketForm({ salesId, role }: Props) {
       progress_note: form.answer || null,
       sales_id: role === "sales" ? salesId : null,
       cs_id: role === "cs" ? salesId : null,
+      // 기술지원 목록은 tech_id로 거르므로(tickets/page.tsx), 비워두면 등록자가
+      // 방금 올린 건을 자기 목록에서 못 본다. sales/cs와 같은 규칙으로 채운다.
+      tech_id: role === "tech" ? salesId : null,
       status: "done",
     };
 

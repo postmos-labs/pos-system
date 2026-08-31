@@ -173,7 +173,11 @@ export default async function TicketsPage({ searchParams }: Props) {
               휴지통
             </Link>
           )}
-          {(p.role === "sales" || p.role === "cs" || p.role === "admin" || p.role === "master") && (
+          {(p.role === "sales" ||
+            p.role === "cs" ||
+            p.role === "tech" ||
+            p.role === "admin" ||
+            p.role === "master") && (
             <Link
               href="/tickets/new"
               className="flex items-center gap-2 bg-blue-600 text-white text-sm px-4 py-2.5 rounded-xl hover:bg-blue-700 transition-colors font-semibold shadow-sm shadow-blue-200"
