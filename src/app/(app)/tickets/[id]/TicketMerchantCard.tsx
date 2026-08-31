@@ -5,15 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-
-interface MerchantResult {
-  id: string;
-  business_name: string;
-  phone: string | null;
-  address: string | null;
-}
-
-const COLUMNS = "id,business_name,phone,address";
+import {
+  searchMerchantCandidates,
+  type CandidateField,
+  type MerchantCandidate,
+} from "@/lib/merchantCandidates";
+import { linkWooCustomerToMerchant } from "@/app/(app)/woo/actions";
 
 export default function TicketMerchantCard({
   ticketId,
@@ -30,72 +27,53 @@ export default function TicketMerchantCard({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [field, setField] = useState<"phone" | "business_name">("phone");
+  const [field, setField] = useState<CandidateField>("phone");
   const [term, setTerm] = useState("");
-  const [results, setResults] = useState<MerchantResult[]>([]);
+  const [results, setResults] = useState<MerchantCandidate[]>([]);
   const [searching, setSearching] = useState(false);
   const [searched, setSearched] = useState(false);
   const [saving, setSaving] = useState(false);
 
   async function runSearch() {
-    const value = term.trim();
-    if (!value) return;
+    if (!term.trim()) return;
     setSearching(true);
-    const supabase = createClient();
-    // ilike 패턴에서 %·_는 와일드카드다. 문법 문자를 지워 문자 그대로 찾게 한다.
-    const safe = value.replace(/[,()"'\\%*_]/g, "");
-    let rows: MerchantResult[] = [];
-
-    if (field === "phone") {
-      const digits = value.replace(/[^0-9]/g, "");
-      if (digits) {
-        // 숫자만 남긴 컬럼으로 찾아 형식이 달라도 같은 번호로 취급한다.
-        const res = await supabase
-          .from("merchants")
-          .select(COLUMNS)
-          .ilike("phone_digits", `%${digits}%`)
-          .order("created_at", { ascending: false })
-          .limit(20);
-        if (res.error) {
-          // 127번 마이그레이션 미적용 환경 — 저장된 형식 그대로 찾는다.
-          const fallback = await supabase
-            .from("merchants")
-            .select(COLUMNS)
-            .ilike("phone", `%${safe}%`)
-            .order("created_at", { ascending: false })
-            .limit(20);
-          rows = (fallback.data as MerchantResult[]) ?? [];
-        } else {
-          rows = (res.data as MerchantResult[]) ?? [];
-        }
-      }
-    } else if (safe) {
-      const res = await supabase
-        .from("merchants")
-        .select(COLUMNS)
-        .ilike("business_name", `%${safe}%`)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      rows = (res.data as MerchantResult[]) ?? [];
-    }
-
-    setResults(rows);
+    setResults(await searchMerchantCandidates(field, term));
     setSearched(true);
     setSearching(false);
   }
 
-  async function handleSelect(next: MerchantResult) {
-    if (next.id === merchantId) {
+  async function handleSelect(next: MerchantCandidate) {
+    if (next.source === "merchant" && next.id === merchantId) {
       alert("이미 연결된 가맹점입니다.");
       return;
     }
-    if (!confirm(`가맹점을 "${next.business_name}"(으)로 바꿉니다.\n계속할까요?`)) return;
+    const notice =
+      next.source === "woo" ? "\n\n우국상 고객이라 가맹점으로 등록한 뒤 연결합니다." : "";
+    if (!confirm(`가맹점을 "${next.business_name}"(으)로 바꿉니다.${notice}\n계속할까요?`)) return;
 
     setSaving(true);
+
+    // 인입내역은 merchants만 가리킬 수 있어(FK), 우국상 고객은 먼저 가맹점으로 만든다.
+    let targetId = next.id;
+    if (next.source === "woo") {
+      const linked = await linkWooCustomerToMerchant(next.id);
+      if (linked.error || !linked.merchantId) {
+        setSaving(false);
+        alert("가맹점 연결 실패: " + (linked.error ?? "알 수 없는 오류"));
+        return;
+      }
+      targetId = linked.merchantId;
+      if (targetId === merchantId) {
+        setSaving(false);
+        alert("이미 연결된 가맹점입니다.");
+        return;
+      }
+    }
+
     const supabase = createClient();
     const { error } = await supabase
       .from("tickets")
-      .update({ merchant_id: next.id })
+      .update({ merchant_id: targetId })
       .eq("id", ticketId);
     if (error) {
       setSaving(false);
@@ -233,7 +211,14 @@ export default function TicketMerchantCard({
                       onClick={() => void handleSelect(m)}
                       className="w-full px-3 py-2 text-left hover:bg-blue-50 disabled:opacity-50"
                     >
-                      <p className="text-sm font-medium text-gray-900">{m.business_name}</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {m.business_name}
+                        {m.source === "woo" && (
+                          <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">
+                            우국상
+                          </span>
+                        )}
+                      </p>
                       <p className="text-xs text-gray-500">
                         {m.phone || "-"}
                         {m.address ? ` · ${m.address}` : ""}
@@ -251,7 +236,8 @@ export default function TicketMerchantCard({
             )}
 
             <p className="mt-3 text-[11px] text-gray-400">
-              연결만 바꿉니다. 기존 가맹점은 삭제되지 않습니다.
+              연결만 바꿉니다. 기존 가맹점은 삭제되지 않습니다. 우국상 항목을 고르면 가맹점으로
+              등록한 뒤 연결합니다.
             </p>
           </div>
         </div>

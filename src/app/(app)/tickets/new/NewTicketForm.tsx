@@ -3,6 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import {
+  searchMerchantCandidates,
+  type CandidateField,
+  type MerchantCandidate,
+} from "@/lib/merchantCandidates";
+import { linkWooCustomerToMerchant } from "@/app/(app)/woo/actions";
 import Link from "next/link";
 import {
   KICC_VAN_COMPANY,
@@ -100,57 +106,47 @@ export default function NewTicketForm({ salesId, role }: Props) {
   // 상태는 셋 중 하나 — 검색 중 / 기존 가맹점 연결됨 / 새 가맹점으로 등록.
   const [linkedMerchant, setLinkedMerchant] = useState<MerchantSuggestion | null>(null);
   const [creatingNew, setCreatingNew] = useState(false);
-  const [searchField, setSearchField] = useState<"phone" | "business_name">("phone");
+  const [searchField, setSearchField] = useState<CandidateField>("phone");
   const [searchTerm, setSearchTerm] = useState("");
-  const [results, setResults] = useState<MerchantSuggestion[]>([]);
+  const [results, setResults] = useState<MerchantCandidate[]>([]);
   const [searching, setSearching] = useState(false);
   const [searched, setSearched] = useState(false);
 
   async function runSearch() {
-    const term = searchTerm.trim();
-    if (!term) return;
+    if (!searchTerm.trim()) return;
     setSearching(true);
-    const supabase = createClient();
-    // ilike 패턴에서 %·_는 와일드카드다. 문법 문자를 지워 문자 그대로 찾게 한다.
-    const safe = term.replace(/[,()"'\\%*_]/g, "");
-    let rows: MerchantSuggestion[] = [];
-
-    if (searchField === "phone") {
-      const digits = term.replace(/[^0-9]/g, "");
-      if (digits) {
-        // 숫자만 남긴 컬럼으로 찾아 "010-1234-5678"과 "01012345678"을 같이 취급한다.
-        const res = await supabase
-          .from("merchants")
-          .select(MERCHANT_COLUMNS)
-          .ilike("phone_digits", `%${digits}%`)
-          .order("created_at", { ascending: false })
-          .limit(20);
-        if (res.error) {
-          // 127번 마이그레이션 미적용 환경 — 저장된 형식 그대로 찾는다.
-          const fallback = await supabase
-            .from("merchants")
-            .select(MERCHANT_COLUMNS)
-            .ilike("phone", `%${safe}%`)
-            .order("created_at", { ascending: false })
-            .limit(20);
-          rows = (fallback.data as MerchantSuggestion[]) ?? [];
-        } else {
-          rows = (res.data as MerchantSuggestion[]) ?? [];
-        }
-      }
-    } else if (safe) {
-      const res = await supabase
-        .from("merchants")
-        .select(MERCHANT_COLUMNS)
-        .ilike("business_name", `%${safe}%`)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      rows = (res.data as MerchantSuggestion[]) ?? [];
-    }
-
-    setResults(rows);
+    setResults(await searchMerchantCandidates(searchField, searchTerm));
     setSearched(true);
     setSearching(false);
+  }
+
+  // 우국상 고객을 고르면 가맹점으로 만든 뒤 그 가맹점에 연결한다.
+  async function chooseCandidate(candidate: MerchantCandidate) {
+    if (candidate.source === "merchant") {
+      setLinkedMerchant({
+        id: candidate.id,
+        business_name: candidate.business_name,
+        phone: candidate.phone,
+        address: candidate.address,
+        van_company: candidate.van_company,
+      });
+      return;
+    }
+
+    setSearching(true);
+    const linked = await linkWooCustomerToMerchant(candidate.id);
+    setSearching(false);
+    if (linked.error || !linked.merchantId) {
+      alert("가맹점 연결 실패: " + (linked.error ?? "알 수 없는 오류"));
+      return;
+    }
+    setLinkedMerchant({
+      id: linked.merchantId,
+      business_name: candidate.business_name,
+      phone: candidate.phone,
+      address: candidate.address,
+      van_company: candidate.van_company,
+    });
   }
 
   // 검색해서 없을 때만 새 가맹점으로 넘어간다. 방금 검색한 값을 그대로 채워준다.
@@ -416,10 +412,17 @@ export default function NewTicketForm({ salesId, role }: Props) {
                     <li key={m.id}>
                       <button
                         type="button"
-                        onClick={() => setLinkedMerchant(m)}
+                        onClick={() => void chooseCandidate(m)}
                         className="w-full px-3 py-2 text-left hover:bg-blue-50"
                       >
-                        <p className="text-sm font-medium text-gray-900">{m.business_name}</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {m.business_name}
+                          {m.source === "woo" && (
+                            <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">
+                              우국상
+                            </span>
+                          )}
+                        </p>
                         <p className="text-xs text-gray-500">
                           {m.phone || "-"}
                           {m.address ? ` · ${m.address}` : ""}
