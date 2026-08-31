@@ -30,11 +30,12 @@ export default async function UsersPage() {
 
   const usersWithEmail = (users ?? []).map((u) => ({ ...u, email: emailById[u.id] ?? null }));
 
-  // 공지 대상 인원수 — 보내기 전에 몇 명에게 가는지 화면에서 바로 보이게 한다.
-  const teamCounts: Record<string, number> = {};
-  for (const member of users ?? []) {
-    if (member.team) teamCounts[member.team] = (teamCounts[member.team] ?? 0) + 1;
-  }
+  // 공지는 사람 단위로 고른다. 팀은 화면에서 한꺼번에 체크하는 단축키로만 쓰인다.
+  const noticeMembers = (users ?? []).map((member) => ({
+    id: member.id as string,
+    name: (member.name as string) ?? "이름 없음",
+    team: (member.team as string | null) ?? null,
+  }));
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -44,7 +45,7 @@ export default async function UsersPage() {
           <p className="text-slate-500 text-sm mt-1">총 {usersWithEmail.length}명</p>
         </div>
         {/* 공지는 마스터만 보낼 수 있다. 서버 액션도 requireMaster로 같은 조건을 건다. */}
-        {profile.role === "master" && <NoticeButton teamCounts={teamCounts} />}
+        {profile.role === "master" && <NoticeButton members={noticeMembers} />}
       </div>
 
       <CreateUserForm />

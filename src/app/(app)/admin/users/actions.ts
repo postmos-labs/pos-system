@@ -213,10 +213,10 @@ export async function setUserDeletePermission(userId: string, canDelete: boolean
 }
 
 // 사내 공지 — 마스터만 보낼 수 있다.
-// 알림 기능(/notifications + 실시간 팝업)이 이미 있으므로 그 위에 얹는다.
-// 받는 사람은 profiles에 있는 직원 전부다. 이 시스템에서는 계정 삭제가 곧 퇴사 처리라
-// 비활성 구분이 따로 없다.
-export async function sendNotice(input: { title: string; body: string; team: string }) {
+// 알림 기능(/notifications + 폴링 팝업)이 이미 있으므로 그 위에 얹는다.
+// 받는 사람은 화면에서 고른 직원 id 목록으로 받는다. 팀 단위 발송도 화면에서
+// 해당 팀을 한꺼번에 체크하는 방식이라 서버는 id만 알면 된다.
+export async function sendNotice(input: { title: string; body: string; userIds: string[] }) {
   const authError = await requireMaster();
   if (authError) return { error: authError, sentCount: 0 };
 
@@ -226,14 +226,16 @@ export async function sendNotice(input: { title: string; body: string; team: str
   if (title.length > 100) return { error: "제목은 100자 이하로 입력해주세요.", sentCount: 0 };
   if (!body) return { error: "내용을 입력해주세요.", sentCount: 0 };
   if (body.length > 2000) return { error: "내용은 2,000자 이하로 입력해주세요.", sentCount: 0 };
-  if (input.team !== "all" && !TEAMS.includes(input.team)) {
-    return { error: "잘못된 대상입니다.", sentCount: 0 };
-  }
+
+  const ids = [...new Set(input.userIds.filter(Boolean))];
+  if (ids.length === 0) return { error: "받는 사람을 선택해주세요.", sentCount: 0 };
 
   const admin = createAdminClient();
-  let targetQuery = admin.from("profiles").select("id");
-  if (input.team !== "all") targetQuery = targetQuery.eq("team", input.team);
-  const { data: targets, error: targetError } = await targetQuery;
+  // 화면 목록을 띄운 뒤 계정이 지워졌을 수 있어, 실제로 있는 직원만 남긴다.
+  const { data: targets, error: targetError } = await admin
+    .from("profiles")
+    .select("id")
+    .in("id", ids);
   if (targetError) return { error: targetError.message, sentCount: 0 };
   if (!targets || targets.length === 0) return { error: "받을 직원이 없습니다.", sentCount: 0 };
 

@@ -15,33 +15,64 @@ const TEAM_LABEL: Record<Team, string> = {
 };
 const TEAMS: Team[] = ["sales", "cs", "tech", "dev"];
 
-export default function NoticeButton({ teamCounts }: { teamCounts: Record<string, number> }) {
+export interface NoticeMember {
+  id: string;
+  name: string;
+  team: string | null;
+}
+
+export default function NoticeButton({ members }: { members: NoticeMember[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [target, setTarget] = useState<Team | "all">("all");
+  const [selected, setSelected] = useState<string[]>([]);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
 
-  const totalCount = Object.values(teamCounts).reduce((sum, count) => sum + count, 0);
-  const recipientCount = target === "all" ? totalCount : (teamCounts[target] ?? 0);
-  const canSend = !!title.trim() && !!body.trim() && recipientCount > 0;
+  const selectedSet = new Set(selected);
+  const canSend = !!title.trim() && !!body.trim() && selected.length > 0;
+
+  // 소속팀이 없는 계정도 빠뜨리지 않도록 마지막에 '팀 없음'으로 모아 보여준다.
+  const groups = [
+    ...TEAMS.map((team) => ({
+      key: team as string,
+      label: TEAM_LABEL[team],
+      people: members.filter((member) => member.team === team),
+    })),
+    { key: "none", label: "팀 없음", people: members.filter((member) => !member.team) },
+  ].filter((group) => group.people.length > 0);
+
+  function toggle(id: string) {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+  }
+
+  // 팀 이름을 누르면 그 팀을 통째로 넣거나 뺀다. 사람 단위 선택의 단축키일 뿐이다.
+  function toggleGroup(people: NoticeMember[]) {
+    const ids = people.map((person) => person.id);
+    const allSelected = ids.every((id) => selectedSet.has(id));
+    setSelected((prev) =>
+      allSelected ? prev.filter((id) => !ids.includes(id)) : [...new Set([...prev, ...ids])],
+    );
+  }
 
   function close() {
     setOpen(false);
-    setTarget("all");
+    setSelected([]);
     setTitle("");
     setBody("");
   }
 
   async function handleSend() {
-    // 보낸 공지는 각자의 알림함에 바로 들어가고 되돌릴 수단이 없다. 한 번 확인한다.
-    const targetLabel = target === "all" ? "전 직원" : TEAM_LABEL[target];
-    if (!confirm(`${targetLabel} ${recipientCount}명에게 공지를 보냅니다.\n되돌릴 수 없습니다.`))
+    // 보낸 공지는 각자의 알림함에 바로 들어가고 되돌릴 수단이 없다. 누구에게 가는지 보여주고 확인한다.
+    const names = members
+      .filter((member) => selectedSet.has(member.id))
+      .map((member) => member.name)
+      .join(", ");
+    if (!confirm(`${selected.length}명에게 공지를 보냅니다.\n\n${names}\n\n되돌릴 수 없습니다.`))
       return;
 
     setSending(true);
-    const result = await sendNotice({ title, body, team: target });
+    const result = await sendNotice({ title, body, userIds: selected });
     setSending(false);
     if (result.error) {
       alert(result.error);
@@ -75,34 +106,63 @@ export default function NoticeButton({ teamCounts }: { teamCounts: Record<string
 
             <div className="space-y-4">
               <div>
-                <p className="mb-1.5 text-xs text-slate-500">받는 사람</p>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setTarget("all")}
-                    className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-                      target === "all"
-                        ? "border-blue-500 bg-blue-50 text-blue-700"
-                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    전 직원 {totalCount}
-                  </button>
-                  {TEAMS.map((team) => (
+                <div className="mb-1.5 flex items-center justify-between">
+                  <p className="text-xs text-slate-500">
+                    받는 사람{" "}
+                    <span className="font-semibold text-blue-600">{selected.length}명</span>
+                  </p>
+                  <div className="flex gap-2 text-xs">
                     <button
-                      key={team}
                       type="button"
-                      onClick={() => setTarget(team)}
-                      disabled={(teamCounts[team] ?? 0) === 0}
-                      className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-40 ${
-                        target === team
-                          ? "border-blue-500 bg-blue-50 text-blue-700"
-                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                      }`}
+                      onClick={() => setSelected(members.map((member) => member.id))}
+                      className="font-medium text-slate-500 hover:text-slate-800"
                     >
-                      {TEAM_LABEL[team]} {teamCounts[team] ?? 0}
+                      전체 선택
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      onClick={() => setSelected([])}
+                      className="font-medium text-slate-500 hover:text-slate-800"
+                    >
+                      전체 해제
+                    </button>
+                  </div>
+                </div>
+
+                <div className="max-h-56 space-y-3 overflow-y-auto rounded-lg border border-slate-200 p-3">
+                  {groups.map((group) => {
+                    const allSelected = group.people.every((person) => selectedSet.has(person.id));
+                    return (
+                      <div key={group.key}>
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(group.people)}
+                          className="mb-1 text-xs font-semibold text-slate-500 hover:text-blue-600"
+                        >
+                          {group.label} {group.people.length}명 · {allSelected ? "해제" : "모두"}
+                        </button>
+                        <div className="flex flex-wrap gap-1.5">
+                          {group.people.map((person) => {
+                            const on = selectedSet.has(person.id);
+                            return (
+                              <button
+                                key={person.id}
+                                type="button"
+                                onClick={() => toggle(person.id)}
+                                className={`rounded-lg border px-2.5 py-1 text-sm transition-colors ${
+                                  on
+                                    ? "border-blue-500 bg-blue-50 font-medium text-blue-700"
+                                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                                }`}
+                              >
+                                {person.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -151,7 +211,7 @@ export default function NoticeButton({ teamCounts }: { teamCounts: Record<string
                 disabled={sending || !canSend}
                 className="h-9 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                {sending ? "보내는 중..." : `${recipientCount}명에게 보내기`}
+                {sending ? "보내는 중..." : `${selected.length}명에게 보내기`}
               </button>
             </div>
           </div>
