@@ -115,7 +115,7 @@ const SOURCE_FILTERS: { key: ActivitySource; label: string }[] = [
   { key: "franchise", label: "가맹접수" },
   { key: "call", label: "통화" },
   { key: "installation", label: "설치" },
-  { key: "ticket", label: "작업" },
+  { key: "ticket", label: "인입내역" },
   { key: "change", label: "변경접수" },
   { key: "memo", label: "메모" },
   { key: "alimtalk", label: "알림톡" },
@@ -174,17 +174,30 @@ export default function LogsClient({
   const [actor, setActor] = useState<string | null>(null);
   const [merchantInput, setMerchantInput] = useState(merchantQuery);
 
-  function navigate(
+  // 링크 조립은 여기 하나로 모은다. 예전에는 "더 보기" 버튼이 따로 URL을 만들면서
+  // 검색어와 기간을 빠뜨려, 다음 페이지에서 조회 조건이 통째로 풀렸다.
+  function buildHref(
     nextFrom: string | null,
     nextTo: string | null,
-    nextMerchant: string = merchantQuery,
+    nextMerchant: string,
+    before?: string | null,
   ) {
     const search = new URLSearchParams();
     if (nextFrom) search.set("from", nextFrom);
     if (nextTo) search.set("to", nextTo);
     if (nextMerchant.trim()) search.set("q", nextMerchant.trim());
+    if (before) search.set("before", before);
     const qs = search.toString();
-    router.push(qs ? `/admin/logs?${qs}` : "/admin/logs");
+    return qs ? `/admin/logs?${qs}` : "/admin/logs";
+  }
+
+  function navigate(
+    nextFrom: string | null,
+    nextTo: string | null,
+    nextMerchant: string = merchantQuery,
+  ) {
+    // 조건이 바뀌면 첫 페이지부터 다시 본다 — before는 싣지 않는다.
+    router.push(buildHref(nextFrom, nextTo, nextMerchant));
   }
 
   function applyRange(nextFrom: string | null, nextTo: string | null) {
@@ -449,7 +462,7 @@ export default function LogsClient({
       {nextCursor && (
         <button
           type="button"
-          onClick={() => router.push(`/admin/logs?before=${encodeURIComponent(nextCursor)}`)}
+          onClick={() => router.push(buildHref(fromDate, toDate, merchantQuery, nextCursor))}
           className="mt-4 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50"
         >
           이전 로그 300건 더 보기
