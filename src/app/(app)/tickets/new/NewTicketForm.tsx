@@ -166,6 +166,16 @@ export default function NewTicketForm({ salesId, role }: Props) {
         merchantId = exact[0].id;
         fillVanCompany = !exact[0].van_company;
       } else {
+        // 오타로 비슷한 가맹점이 계속 늘어나는 걸 막는 마지막 방어선.
+        // 상호명을 문구에 그대로 넣어 저장 전에 눈으로 확인할 수 있게 한다.
+        const confirmed = confirm(
+          `"${form.business_name.trim()}"으로 등록된 가맹점이 없습니다.\n\n새 가맹점으로 등록할까요?\n\n취소하면 상호명을 다시 고칠 수 있습니다.`,
+        );
+        if (!confirmed) {
+          setLoading(false);
+          return;
+        }
+
         const { data: merchantData, error: merchantError } = await supabase
           .from("merchants")
           .insert({
@@ -329,9 +339,9 @@ export default function NewTicketForm({ salesId, role }: Props) {
                       동일 상호명 가맹점이 있어 등록 시 그 가맹점에 연결됩니다.
                     </p>
                   ) : (
-                    <p className="mt-1 text-[11px] text-gray-400">
-                      일치하는 가맹점이 없으면 등록 시 새 가맹점이 함께 등록됩니다. 기존 가맹점이면
-                      목록에서 선택해 연결하세요.
+                    <p className="mt-1 text-[11px] font-medium text-amber-600">
+                      새 가맹점 &ldquo;{trimmedName}&rdquo;이(가) 함께 등록됩니다. 기존 가맹점이면
+                      위 목록에서 선택해 연결하세요.
                     </p>
                   ))}
               </div>
