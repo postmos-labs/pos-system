@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Plus, X, Trash2, Pencil } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X, Trash2, Pencil, ImageDown } from "lucide-react";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField } from "@/components/ui/DatePickerField";
 import { useToast } from "@/components/ui/Toast";
@@ -35,6 +35,17 @@ const CATEGORY_COLOR: Record<string, string> = {
   외출: "bg-amber-50 text-amber-700 border-amber-200",
   휴가: "bg-rose-50 text-rose-700 border-rose-200",
   기타: "bg-slate-50 text-slate-700 border-slate-200",
+};
+
+// 캔버스에 그릴 때 쓰는 색. Tailwind 클래스는 캔버스에서 해석되지 않으므로
+// CATEGORY_COLOR와 같은 색을 hex로 따로 둔다.
+const CATEGORY_HEX: Record<string, { bg: string; border: string; text: string }> = {
+  미팅: { bg: "#eff6ff", border: "#bfdbfe", text: "#1d4ed8" },
+  회의: { bg: "#f5f3ff", border: "#ddd6fe", text: "#6d28d9" },
+  교육: { bg: "#ecfdf5", border: "#a7f3d0", text: "#047857" },
+  외출: { bg: "#fffbeb", border: "#fde68a", text: "#b45309" },
+  휴가: { bg: "#fff1f2", border: "#fecdd3", text: "#be123c" },
+  기타: { bg: "#f8fafc", border: "#e2e8f0", text: "#334155" },
 };
 
 export interface StaffScheduleParticipant {
@@ -196,6 +207,129 @@ export default function StaffSchedulesClient({
   ];
   while (cells.length % 7 !== 0) cells.push(null);
 
+  // 화면을 그대로 캡처하는 라이브러리는 Tailwind 4의 oklch 색을 해석하지 못해 깨진다.
+  // 그래서 달력을 캔버스에 직접 그려 이미지를 만든다.
+  async function copyAsImage() {
+    const CELL_W = 200;
+    const CELL_H = 132;
+    const PAD = 28;
+    const HEAD = 92;
+    const DAY_H = 34;
+    const rows = cells.length / 7;
+    const width = PAD * 2 + CELL_W * 7;
+    const height = PAD * 2 + HEAD + DAY_H + CELL_H * rows;
+
+    const scale = 2;
+    const canvas = document.createElement("canvas");
+    canvas.width = width * scale;
+    canvas.height = height * scale;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      toast.error("이미지를 만들지 못했습니다.");
+      return;
+    }
+    ctx.scale(scale, scale);
+    const font = (size: number, weight = "400") =>
+      `${weight} ${size}px "Pretendard", "Malgun Gothic", sans-serif`;
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+
+    // 제목 — 어떤 조건으로 뽑은 달력인지 함께 적어야 받는 사람이 오해하지 않는다.
+    const staffName = staff ? (staffList.find((m) => m.id === staff)?.name ?? "") : "";
+    const conditions = [staffName, category].filter(Boolean).join(" · ");
+    ctx.fillStyle = "#0f172a";
+    ctx.font = font(30, "700");
+    ctx.fillText(`${year}년 ${monthNum}월 일정`, PAD, PAD + 30);
+    if (conditions) {
+      ctx.fillStyle = "#64748b";
+      ctx.font = font(16);
+      ctx.fillText(conditions, PAD, PAD + 58);
+    }
+
+    const gridTop = PAD + HEAD;
+    // 요일
+    for (let i = 0; i < 7; i++) {
+      ctx.fillStyle = i === 0 ? "#f87171" : i === 6 ? "#60a5fa" : "#64748b";
+      ctx.font = font(15, "600");
+      ctx.textAlign = "center";
+      ctx.fillText(DAYS[i], PAD + CELL_W * i + CELL_W / 2, gridTop + 22);
+    }
+    ctx.textAlign = "left";
+
+    const bodyTop = gridTop + DAY_H;
+    for (let idx = 0; idx < cells.length; idx++) {
+      const col = idx % 7;
+      const row = Math.floor(idx / 7);
+      const x = PAD + col * CELL_W;
+      const y = bodyTop + row * CELL_H;
+
+      ctx.strokeStyle = "#e2e8f0";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, CELL_W, CELL_H);
+
+      const day = cells[idx];
+      if (!day) {
+        ctx.fillStyle = "#f8fafc";
+        ctx.fillRect(x + 1, y + 1, CELL_W - 2, CELL_H - 2);
+        continue;
+      }
+
+      ctx.fillStyle = col === 0 ? "#ef4444" : col === 6 ? "#3b82f6" : "#334155";
+      ctx.font = font(14, "600");
+      ctx.fillText(String(day), x + 10, y + 22);
+
+      const events = eventsByDate[dateStr(day)] ?? [];
+      const MAX = 4;
+      events.slice(0, MAX).forEach((ev, i) => {
+        const tone = CATEGORY_HEX[ev.category] ?? CATEGORY_HEX["기타"];
+        const cy = y + 32 + i * 23;
+        ctx.fillStyle = tone.bg;
+        ctx.strokeStyle = tone.border;
+        ctx.fillRect(x + 7, cy, CELL_W - 14, 19);
+        ctx.strokeRect(x + 7, cy, CELL_W - 14, 19);
+        ctx.fillStyle = tone.text;
+        ctx.font = font(12, "600");
+        const label = `${ev.all_day ? "종일" : toTimePart(ev.starts_at)} ${ev.title}`;
+        // 칸을 넘치면 말줄임한다.
+        let text = label;
+        const maxW = CELL_W - 22;
+        if (ctx.measureText(text).width > maxW) {
+          while (text.length > 1 && ctx.measureText(text + "…").width > maxW) {
+            text = text.slice(0, -1);
+          }
+          text += "…";
+        }
+        ctx.fillText(text, x + 12, cy + 13.5);
+      });
+      if (events.length > MAX) {
+        ctx.fillStyle = "#94a3b8";
+        ctx.font = font(11);
+        ctx.fillText(`+${events.length - MAX}건`, x + 12, y + 32 + MAX * 23 + 11);
+      }
+    }
+
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!blob) {
+      toast.error("이미지를 만들지 못했습니다.");
+      return;
+    }
+
+    // 클립보드 이미지 복사는 브라우저·보안 설정에 따라 막힐 수 있다. 그때는 파일로 내려받게 한다.
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      toast.success("달력 이미지를 복사했습니다. 붙여넣기(Ctrl+V) 하세요.");
+    } catch {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `일정캘린더_${year}-${String(monthNum).padStart(2, "0")}.png`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.warning("복사가 막혀 있어 이미지 파일로 내려받았습니다.");
+    }
+  }
+
   function dateStr(day: number) {
     return `${year}-${String(monthNum).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }
@@ -342,11 +476,19 @@ export default function StaffSchedulesClient({
           내 일정만
         </button>
 
+        <button
+          type="button"
+          onClick={() => void copyAsImage()}
+          className="ml-auto flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-colors whitespace-nowrap"
+        >
+          <ImageDown size={14} /> 이미지 복사
+        </button>
+
         {schemaReady && (
           <button
             type="button"
             onClick={() => openCreateForm(selectedDate ?? todayStr)}
-            className="ml-auto flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors whitespace-nowrap"
+            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors whitespace-nowrap"
           >
             <Plus size={14} /> 일정 등록
           </button>
