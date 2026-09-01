@@ -816,8 +816,8 @@ export default function StaffSchedulesClient({
 
       {detailSchedule && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white shadow-lg">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div className="flex max-h-[92dvh] w-full max-w-md flex-col rounded-xl bg-white shadow-lg">
+            <div className="flex flex-shrink-0 items-center justify-between px-5 py-4 border-b border-slate-100">
               <p className="font-semibold text-slate-900">{detailSchedule.title}</p>
               <button
                 onClick={() => setDetailSchedule(null)}
@@ -826,7 +826,7 @@ export default function StaffSchedulesClient({
                 <X size={16} />
               </button>
             </div>
-            <div className="px-5 py-4 flex flex-col gap-2.5 text-sm">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-2.5 text-sm">
               <div>
                 <span
                   className={`inline-block text-xs font-medium rounded-full border px-2 py-0.5 ${
@@ -861,7 +861,7 @@ export default function StaffSchedulesClient({
               </div>
             </div>
             {(detailSchedule.created_by === currentUser.id || isAdmin) && (
-              <div className="flex justify-end gap-2 px-5 py-3 border-t border-slate-100">
+              <div className="flex flex-shrink-0 justify-end gap-2 px-5 py-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => openEditForm(detailSchedule)}
@@ -884,7 +884,7 @@ export default function StaffSchedulesClient({
 
       {formOpen && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-lg rounded-xl bg-white shadow-lg max-h-[90vh] flex flex-col">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-lg max-h-[92dvh] flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
               <p className="font-semibold text-slate-900">{form.id ? "일정 수정" : "일정 등록"}</p>
               <button
@@ -894,7 +894,7 @@ export default function StaffSchedulesClient({
                 <X size={16} />
               </button>
             </div>
-            <div className="px-5 py-4 flex flex-col gap-3 overflow-y-auto">
+            <div className="px-5 py-4 flex flex-col gap-3 overflow-y-auto min-h-0 flex-1">
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">
                   제목 <span className="text-red-500">*</span>
@@ -1057,14 +1057,14 @@ export default function StaffSchedulesClient({
             <div className="flex justify-end gap-2 px-5 py-3 border-t border-slate-100 flex-shrink-0">
               <button
                 onClick={() => setFormOpen(false)}
-                className="text-xs px-3 py-1.5 rounded-lg text-slate-500 hover:bg-slate-50"
+                className="rounded-lg px-4 py-2.5 text-sm text-slate-500 hover:bg-slate-50"
               >
                 취소
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={submitting || !form.title.trim()}
-                className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
               >
                 저장
               </button>
