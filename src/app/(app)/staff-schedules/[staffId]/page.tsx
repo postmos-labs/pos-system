@@ -53,17 +53,44 @@ export default async function StaffScheduleMobilePage({ params, searchParams }: 
   const sp = await searchParams;
   const month = sp.month && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : kstToday().slice(0, 7);
 
+  // 주소에는 이름이 들어온다(/staff-schedules/박은서). 예전에 복사해 둔 id 주소도 그대로 열리도록
+  // 둘 다 받는다. 이름이 겹치는 직원이 있으면 누구인지 정할 수 없으므로 id 주소만 쓴다.
+  const decoded = decodeURIComponent(staffId);
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decoded);
+
   let staffRow: { id: string; name: string | null; position?: string | null } | null = null;
-  const staffResult = await supabase
-    .from("profiles")
-    .select("id,name,position")
-    .eq("id", staffId)
-    .single();
+  let duplicateName = false;
+
+  async function lookup(columns: string) {
+    return isUuid
+      ? supabase.from("profiles").select(columns).eq("id", decoded).limit(2)
+      : supabase.from("profiles").select(columns).eq("name", decoded).limit(2);
+  }
+
+  const staffResult = await lookup("id,name,position");
+  let rows = staffResult.data as unknown as
+    { id: string; name: string | null; position?: string | null }[] | null;
   if (isMissingPositionColumnError(staffResult.error)) {
-    const fallback = await supabase.from("profiles").select("id,name").eq("id", staffId).single();
-    staffRow = fallback.data;
+    const fallback = await lookup("id,name");
+    rows = fallback.data as unknown as { id: string; name: string | null }[] | null;
+  }
+  if (rows && rows.length > 1) {
+    duplicateName = true;
   } else {
-    staffRow = staffResult.data;
+    staffRow = rows?.[0] ?? null;
+  }
+
+  if (duplicateName) {
+    return (
+      <div className="mx-auto flex w-full max-w-lg flex-col items-center justify-center gap-2 px-4 py-16 text-center">
+        <p className="text-base font-medium text-slate-600">
+          같은 이름의 직원이 여러 명이라 일정을 특정할 수 없습니다.
+        </p>
+        <p className="text-sm text-slate-400">
+          일정 캘린더에서 해당 직원의 링크를 다시 복사해 주세요.
+        </p>
+      </div>
+    );
   }
 
   if (!staffRow) {

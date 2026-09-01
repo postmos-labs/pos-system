@@ -751,8 +751,17 @@ export default function StaffSchedulesClient({
                     onClick={async (e) => {
                       e.stopPropagation();
                       try {
+                        // 주소는 읽기 쉽게 이름으로 만든다. 같은 이름이 여러 명이면
+                        // 누구인지 정할 수 없으므로 그 사람만 id 주소를 쓴다.
+                        const sameName = staffList.filter(
+                          (m) => (m.name ?? "") === (member.name ?? ""),
+                        ).length;
+                        const slug =
+                          member.name && sameName === 1
+                            ? encodeURIComponent(member.name)
+                            : member.id;
                         await navigator.clipboard.writeText(
-                          `${window.location.origin}/staff-schedules/${member.id}`,
+                          `${window.location.origin}/staff-schedules/${slug}`,
                         );
                         toast.success("링크를 복사했습니다.");
                       } catch {
