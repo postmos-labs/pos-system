@@ -99,6 +99,16 @@ export default async function StaffSchedulesPage({ searchParams }: Props) {
 
   const staffList: StaffMember[] = staffRows ?? [];
 
+  // 오른쪽 직원 목록에 띄울 건수는 직원 필터를 걸기 "전" 목록으로 센다.
+  // 필터 후에 세면 고른 직원 말고는 전부 0으로 보인다.
+  const staffCounts: Record<string, number> = {};
+  for (const member of staffList) {
+    staffCounts[member.id] = schedules.filter(
+      (row) => row.created_by === member.id || row.participants.some((p) => p.userId === member.id),
+    ).length;
+  }
+  const totalCount = schedules.length;
+
   // 특정 직원의 일정만 보기 — 그 사람이 등록했거나 참석자로 들어간 일정.
   // 존재하지 않는 id가 들어오면 필터를 걸지 않는다(빈 화면 대신 전체를 보여준다).
   const staffFilter =
@@ -118,6 +128,8 @@ export default async function StaffSchedulesPage({ searchParams }: Props) {
       category={category}
       mine={mine}
       staff={staffFilter}
+      staffCounts={staffCounts}
+      totalCount={totalCount}
       schemaReady={schemaReady}
       currentUser={{ id: user.id, name: profileRow?.name ?? null, role: profileRow?.role ?? null }}
     />

@@ -94,6 +94,8 @@ interface Props {
   category: string;
   mine: boolean;
   staff: string;
+  staffCounts: Record<string, number>;
+  totalCount: number;
   schemaReady: boolean;
   currentUser: CurrentUser;
 }
@@ -105,6 +107,8 @@ export default function StaffSchedulesClient({
   category,
   mine,
   staff,
+  staffCounts,
+  totalCount,
   schemaReady,
   currentUser,
 }: Props) {
@@ -312,102 +316,139 @@ export default function StaffSchedulesClient({
           내 일정만
         </button>
 
-        <div className="ml-auto flex items-center gap-2">
-          <div className="w-44">
-            <AppSelect
-              value={staff}
-              onValueChange={(value) => updateQuery({ staff: value })}
-              aria-label="직원 필터"
-              options={[
-                { value: "", label: "직원 전체" },
-                ...staffList.map((s) => ({ value: s.id, label: s.name })),
-              ]}
-            />
-          </div>
-          {schemaReady && (
-            <button
-              type="button"
-              onClick={() => openCreateForm(selectedDate ?? todayStr)}
-              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors whitespace-nowrap"
-            >
-              <Plus size={14} /> 일정 등록
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-7 mb-1">
-        {DAYS.map((d, i) => (
-          <div
-            key={d}
-            className={`text-center font-semibold text-xs py-2 ${
-              i === 0 ? "text-red-400" : i === 6 ? "text-blue-400" : "text-slate-500"
-            }`}
+        {schemaReady && (
+          <button
+            type="button"
+            onClick={() => openCreateForm(selectedDate ?? todayStr)}
+            className="ml-auto flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors whitespace-nowrap"
           >
-            {d}
-          </div>
-        ))}
+            <Plus size={14} /> 일정 등록
+          </button>
+        )}
       </div>
 
-      <div className="grid grid-cols-7 flex-1 min-h-0 border-t border-l border-slate-200 rounded-xl overflow-hidden">
-        {cells.map((day, idx) => {
-          if (!day)
-            return (
+      <div className="flex min-h-0 flex-1 gap-4">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="grid grid-cols-7 mb-1">
+            {DAYS.map((d, i) => (
               <div
-                key={`empty-${idx}`}
-                className="border-b border-r border-slate-200 bg-slate-50/50 min-h-[90px]"
-              />
-            );
-          const ds = dateStr(day);
-          const events = eventsByDate[ds] ?? [];
-          const isToday = ds === todayStr;
-          const isSelected = ds === selectedDate;
-          const dow = (firstDay + day - 1) % 7;
-          return (
-            <div
-              key={ds}
-              onClick={() => setSelectedDate(isSelected ? null : ds)}
-              className={`border-b border-r border-slate-200 cursor-pointer transition-colors overflow-hidden min-h-[90px] p-1.5 ${
-                isSelected ? "bg-blue-50" : "hover:bg-slate-50"
-              }`}
-            >
-              <div
-                className={`flex items-center justify-center rounded-full font-semibold w-7 h-7 text-sm mb-1 ${
-                  isToday
-                    ? "bg-blue-600 text-white"
-                    : dow === 0
-                      ? "text-red-500"
-                      : dow === 6
-                        ? "text-blue-500"
-                        : "text-slate-700"
+                key={d}
+                className={`text-center font-semibold text-xs py-2 ${
+                  i === 0 ? "text-red-400" : i === 6 ? "text-blue-400" : "text-slate-500"
                 }`}
               >
-                {day}
+                {d}
               </div>
-              <div className="flex flex-col gap-0.5">
-                {events.slice(0, 3).map((ev) => (
-                  <button
-                    key={ev.id}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDetailSchedule(ev);
-                    }}
-                    className={`text-left text-[10px] font-medium rounded border px-1.5 py-0.5 truncate ${
-                      CATEGORY_COLOR[ev.category] ?? CATEGORY_COLOR["기타"]
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 flex-1 min-h-0 border-t border-l border-slate-200 rounded-xl overflow-hidden">
+            {cells.map((day, idx) => {
+              if (!day)
+                return (
+                  <div
+                    key={`empty-${idx}`}
+                    className="border-b border-r border-slate-200 bg-slate-50/50 min-h-[90px]"
+                  />
+                );
+              const ds = dateStr(day);
+              const events = eventsByDate[ds] ?? [];
+              const isToday = ds === todayStr;
+              const isSelected = ds === selectedDate;
+              const dow = (firstDay + day - 1) % 7;
+              return (
+                <div
+                  key={ds}
+                  onClick={() => setSelectedDate(isSelected ? null : ds)}
+                  className={`border-b border-r border-slate-200 cursor-pointer transition-colors overflow-hidden min-h-[90px] p-1.5 ${
+                    isSelected ? "bg-blue-50" : "hover:bg-slate-50"
+                  }`}
+                >
+                  <div
+                    className={`flex items-center justify-center rounded-full font-semibold w-7 h-7 text-sm mb-1 ${
+                      isToday
+                        ? "bg-blue-600 text-white"
+                        : dow === 0
+                          ? "text-red-500"
+                          : dow === 6
+                            ? "text-blue-500"
+                            : "text-slate-700"
                     }`}
-                    title={`${ev.all_day ? "종일" : toTimePart(ev.starts_at)} ${ev.title}`}
                   >
-                    {ev.all_day ? "종일" : toTimePart(ev.starts_at)} {ev.title}
-                  </button>
-                ))}
-                {events.length > 3 && (
-                  <div className="text-slate-400 px-1 text-[10px]">+{events.length - 3}건</div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+                    {day}
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    {events.slice(0, 3).map((ev) => (
+                      <button
+                        key={ev.id}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDetailSchedule(ev);
+                        }}
+                        className={`text-left text-[10px] font-medium rounded border px-1.5 py-0.5 truncate ${
+                          CATEGORY_COLOR[ev.category] ?? CATEGORY_COLOR["기타"]
+                        }`}
+                        title={`${ev.all_day ? "종일" : toTimePart(ev.starts_at)} ${ev.title}`}
+                      >
+                        {ev.all_day ? "종일" : toTimePart(ev.starts_at)} {ev.title}
+                      </button>
+                    ))}
+                    {events.length > 3 && (
+                      <div className="text-slate-400 px-1 text-[10px]">+{events.length - 3}건</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 오른쪽 직원 목록 — 왼쪽 사이드메뉴처럼 이름을 눌러 그 직원 일정만 본다 */}
+        <aside className="hidden w-52 shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white lg:flex">
+          <div className="shrink-0 border-b border-slate-100 px-3 py-2.5">
+            <p className="text-xs font-bold text-slate-900">직원</p>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+            <button
+              type="button"
+              onClick={() => updateQuery({ staff: "" })}
+              className={`mb-0.5 flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${
+                staff === ""
+                  ? "bg-blue-50 font-semibold text-blue-700"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              <span>전체</span>
+              <span className="text-xs text-slate-400">{totalCount}</span>
+            </button>
+            {staffList.map((member) => {
+              const active = staff === member.id;
+              const count = staffCounts[member.id] ?? 0;
+              return (
+                <button
+                  key={member.id}
+                  type="button"
+                  onClick={() => updateQuery({ staff: active ? "" : member.id })}
+                  className={`mb-0.5 flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${
+                    active
+                      ? "bg-blue-50 font-semibold text-blue-700"
+                      : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="truncate">{member.name}</span>
+                  {count > 0 && (
+                    <span
+                      className={`shrink-0 text-xs ${active ? "text-blue-500" : "text-slate-400"}`}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </aside>
       </div>
 
       {selectedDate && (
