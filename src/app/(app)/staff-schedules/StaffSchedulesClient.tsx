@@ -1,0 +1,646 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight, Plus, X, Trash2, Pencil } from "lucide-react";
+import { AppSelect } from "@/components/ui/AppSelect";
+import { DatePickerField } from "@/components/ui/DatePickerField";
+import { useToast } from "@/components/ui/Toast";
+import { createStaffSchedule, updateStaffSchedule, deleteStaffSchedule } from "./actions";
+
+const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
+const CATEGORIES = ["미팅", "회의", "교육", "외출", "휴가", "기타"] as const;
+
+const CATEGORY_COLOR: Record<string, string> = {
+  미팅: "bg-blue-50 text-blue-700 border-blue-200",
+  회의: "bg-violet-50 text-violet-700 border-violet-200",
+  교육: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  외출: "bg-amber-50 text-amber-700 border-amber-200",
+  휴가: "bg-rose-50 text-rose-700 border-rose-200",
+  기타: "bg-slate-50 text-slate-700 border-slate-200",
+};
+
+export interface StaffScheduleParticipant {
+  userId: string;
+  name: string | null;
+}
+
+export interface StaffScheduleRow {
+  id: string;
+  title: string;
+  category: string;
+  starts_at: string;
+  ends_at: string;
+  all_day: boolean;
+  location: string | null;
+  memo: string | null;
+  created_by: string | null;
+  created_by_name: string | null;
+  participants: StaffScheduleParticipant[];
+}
+
+export interface StaffMember {
+  id: string;
+  name: string | null;
+}
+
+interface CurrentUser {
+  id: string;
+  name: string | null;
+  role: string | null;
+}
+
+interface FormState {
+  id: string | null;
+  title: string;
+  category: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  allDay: boolean;
+  location: string;
+  memo: string;
+  participantIds: string[];
+}
+
+function emptyForm(date: string): FormState {
+  return {
+    id: null,
+    title: "",
+    category: CATEGORIES[0],
+    date,
+    startTime: "09:00",
+    endTime: "10:00",
+    allDay: false,
+    location: "",
+    memo: "",
+    participantIds: [],
+  };
+}
+
+function toDatePart(iso: string) {
+  return iso.slice(0, 10);
+}
+
+function toTimePart(iso: string) {
+  return iso.slice(11, 16);
+}
+
+interface Props {
+  schedules: StaffScheduleRow[];
+  staffList: StaffMember[];
+  month: string;
+  category: string;
+  mine: boolean;
+  schemaReady: boolean;
+  currentUser: CurrentUser;
+}
+
+export default function StaffSchedulesClient({
+  schedules,
+  staffList,
+  month,
+  category,
+  mine,
+  schemaReady,
+  currentUser,
+}: Props) {
+  const router = useRouter();
+  const toast = useToast();
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [detailSchedule, setDetailSchedule] = useState<StaffScheduleRow | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [form, setForm] = useState<FormState>(() => emptyForm(`${month}-01`));
+  const [participantSearch, setParticipantSearch] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const isAdmin = currentUser.role === "admin" || currentUser.role === "master";
+  const [year, monthNum] = month.split("-").map(Number);
+
+  function updateQuery(next: { month?: string; category?: string; mine?: boolean }) {
+    const nextMonth = next.month ?? month;
+    const nextCategory = next.category ?? category;
+    const nextMine = next.mine ?? mine;
+    const params = new URLSearchParams();
+    params.set("month", nextMonth);
+    if (nextCategory) params.set("category", nextCategory);
+    if (nextMine) params.set("mine", "1");
+    router.replace(`/staff-schedules?${params.toString()}`);
+  }
+
+  function shiftMonth(delta: number) {
+    const date = new Date(Date.UTC(year, monthNum - 1 + delta, 1));
+    const nextMonth = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+    updateQuery({ month: nextMonth });
+    setSelectedDate(null);
+  }
+
+  const eventsByDate = useMemo(() => {
+    const map: Record<string, StaffScheduleRow[]> = {};
+    for (const schedule of schedules) {
+      const date = toDatePart(schedule.starts_at);
+      if (!map[date]) map[date] = [];
+      map[date].push(schedule);
+    }
+    return map;
+  }, [schedules]);
+
+  const firstDay = new Date(year, monthNum - 1, 1).getDay();
+  const daysInMonth = new Date(year, monthNum, 0).getDate();
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+  const cells: (number | null)[] = [
+    ...Array(firstDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  function dateStr(day: number) {
+    return `${year}-${String(monthNum).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+
+  function openCreateForm(date: string) {
+    setForm(emptyForm(date));
+    setParticipantSearch("");
+    setDetailSchedule(null);
+    setFormOpen(true);
+  }
+
+  function openEditForm(schedule: StaffScheduleRow) {
+    setForm({
+      id: schedule.id,
+      title: schedule.title,
+      category: schedule.category,
+      date: toDatePart(schedule.starts_at),
+      startTime: schedule.all_day ? "09:00" : toTimePart(schedule.starts_at),
+      endTime: schedule.all_day ? "18:00" : toTimePart(schedule.ends_at),
+      allDay: schedule.all_day,
+      location: schedule.location ?? "",
+      memo: schedule.memo ?? "",
+      participantIds: schedule.participants.map((p) => p.userId),
+    });
+    setParticipantSearch("");
+    setDetailSchedule(null);
+    setFormOpen(true);
+  }
+
+  function toggleParticipant(id: string) {
+    setForm((prev) => ({
+      ...prev,
+      participantIds: prev.participantIds.includes(id)
+        ? prev.participantIds.filter((pid) => pid !== id)
+        : [...prev.participantIds, id],
+    }));
+  }
+
+  async function handleSubmit() {
+    if (!form.title.trim()) {
+      toast.error("제목을 입력해주세요.");
+      return;
+    }
+    if (!form.allDay && form.endTime < form.startTime) {
+      toast.error("종료 시각은 시작 시각보다 빠를 수 없습니다.");
+      return;
+    }
+    const startsAt = form.allDay
+      ? `${form.date}T00:00:00+09:00`
+      : `${form.date}T${form.startTime}:00+09:00`;
+    const endsAt = form.allDay
+      ? `${form.date}T23:59:00+09:00`
+      : `${form.date}T${form.endTime}:00+09:00`;
+
+    setSubmitting(true);
+    const input = {
+      title: form.title.trim(),
+      category: form.category,
+      startsAt,
+      endsAt,
+      allDay: form.allDay,
+      location: form.location.trim() || null,
+      memo: form.memo.trim() || null,
+      participantIds: form.participantIds,
+    };
+    const result = form.id
+      ? await updateStaffSchedule(form.id, input)
+      : await createStaffSchedule(input);
+    setSubmitting(false);
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(form.id ? "일정을 수정했습니다." : "일정을 등록했습니다.");
+    setFormOpen(false);
+    router.refresh();
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("이 일정을 삭제하시겠습니까?")) return;
+    const result = await deleteStaffSchedule(id);
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success("일정을 삭제했습니다.");
+    setDetailSchedule(null);
+    router.refresh();
+  }
+
+  const filteredStaffList = staffList.filter((s) =>
+    (s.name ?? "").toLowerCase().includes(participantSearch.toLowerCase()),
+  );
+
+  const selectedEvents = selectedDate ? (eventsByDate[selectedDate] ?? []) : [];
+
+  return (
+    <div className="flex flex-col h-full gap-4">
+      {!schemaReady && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          일정 캘린더 마이그레이션(supabase/134)이 아직 적용되지 않았습니다. 관리자에게
+          문의해주세요.
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => shiftMonth(-1)}
+          className="rounded-lg p-1.5 hover:bg-slate-100 transition-colors"
+        >
+          <ChevronLeft size={18} className="text-slate-500" />
+        </button>
+        <h2 className="font-bold text-slate-900 text-lg min-w-[120px] text-center">
+          {year}년 {monthNum}월
+        </h2>
+        <button
+          onClick={() => shiftMonth(1)}
+          className="rounded-lg p-1.5 hover:bg-slate-100 transition-colors"
+        >
+          <ChevronRight size={18} className="text-slate-500" />
+        </button>
+
+        <div className="w-40">
+          <AppSelect
+            value={category}
+            onValueChange={(value) => updateQuery({ category: value })}
+            aria-label="구분 필터"
+            options={[
+              { value: "", label: "전체" },
+              ...CATEGORIES.map((c) => ({ value: c, label: c })),
+            ]}
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={() => updateQuery({ mine: !mine })}
+          className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+            mine
+              ? "border-blue-300 bg-blue-50 text-blue-700"
+              : "border-slate-200 text-slate-600 hover:bg-slate-50"
+          }`}
+        >
+          내 일정만
+        </button>
+
+        {schemaReady && (
+          <button
+            type="button"
+            onClick={() => openCreateForm(selectedDate ?? todayStr)}
+            className="ml-auto flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={14} /> 일정 등록
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-7 mb-1">
+        {DAYS.map((d, i) => (
+          <div
+            key={d}
+            className={`text-center font-semibold text-xs py-2 ${
+              i === 0 ? "text-red-400" : i === 6 ? "text-blue-400" : "text-slate-500"
+            }`}
+          >
+            {d}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 flex-1 min-h-0 border-t border-l border-slate-200 rounded-xl overflow-hidden">
+        {cells.map((day, idx) => {
+          if (!day)
+            return (
+              <div
+                key={`empty-${idx}`}
+                className="border-b border-r border-slate-200 bg-slate-50/50 min-h-[90px]"
+              />
+            );
+          const ds = dateStr(day);
+          const events = eventsByDate[ds] ?? [];
+          const isToday = ds === todayStr;
+          const isSelected = ds === selectedDate;
+          const dow = (firstDay + day - 1) % 7;
+          return (
+            <div
+              key={ds}
+              onClick={() => setSelectedDate(isSelected ? null : ds)}
+              className={`border-b border-r border-slate-200 cursor-pointer transition-colors overflow-hidden min-h-[90px] p-1.5 ${
+                isSelected ? "bg-blue-50" : "hover:bg-slate-50"
+              }`}
+            >
+              <div
+                className={`flex items-center justify-center rounded-full font-semibold w-7 h-7 text-sm mb-1 ${
+                  isToday
+                    ? "bg-blue-600 text-white"
+                    : dow === 0
+                      ? "text-red-500"
+                      : dow === 6
+                        ? "text-blue-500"
+                        : "text-slate-700"
+                }`}
+              >
+                {day}
+              </div>
+              <div className="flex flex-col gap-0.5">
+                {events.slice(0, 3).map((ev) => (
+                  <button
+                    key={ev.id}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDetailSchedule(ev);
+                    }}
+                    className={`text-left text-[10px] font-medium rounded border px-1.5 py-0.5 truncate ${
+                      CATEGORY_COLOR[ev.category] ?? CATEGORY_COLOR["기타"]
+                    }`}
+                    title={`${ev.all_day ? "종일" : toTimePart(ev.starts_at)} ${ev.title}`}
+                  >
+                    {ev.all_day ? "종일" : toTimePart(ev.starts_at)} {ev.title}
+                  </button>
+                ))}
+                {events.length > 3 && (
+                  <div className="text-slate-400 px-1 text-[10px]">+{events.length - 3}건</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {selectedDate && (
+        <div className="border border-slate-200 rounded-xl bg-white p-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="font-semibold text-slate-900 text-sm">
+              {selectedDate.slice(5).replace("-", "/")} 일정
+            </p>
+            <button
+              onClick={() => setSelectedDate(null)}
+              className="text-slate-400 hover:text-slate-600"
+            >
+              <X size={15} />
+            </button>
+          </div>
+          {selectedEvents.length === 0 ? (
+            <p className="text-slate-400 text-sm text-center py-6">등록된 일정이 없습니다</p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {selectedEvents.map((ev) => (
+                <button
+                  key={ev.id}
+                  type="button"
+                  onClick={() => setDetailSchedule(ev)}
+                  className={`text-left text-xs font-medium rounded-lg border px-3 py-2 ${
+                    CATEGORY_COLOR[ev.category] ?? CATEGORY_COLOR["기타"]
+                  }`}
+                >
+                  {ev.all_day ? "종일" : `${toTimePart(ev.starts_at)}~${toTimePart(ev.ends_at)}`}{" "}
+                  {ev.title}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {detailSchedule && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/30 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-lg">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <p className="font-semibold text-slate-900">{detailSchedule.title}</p>
+              <button
+                onClick={() => setDetailSchedule(null)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="px-5 py-4 flex flex-col gap-2.5 text-sm">
+              <div>
+                <span
+                  className={`inline-block text-xs font-medium rounded-full border px-2 py-0.5 ${
+                    CATEGORY_COLOR[detailSchedule.category] ?? CATEGORY_COLOR["기타"]
+                  }`}
+                >
+                  {detailSchedule.category}
+                </span>
+              </div>
+              <div className="text-slate-600">
+                {toDatePart(detailSchedule.starts_at)}{" "}
+                {detailSchedule.all_day
+                  ? "종일"
+                  : `${toTimePart(detailSchedule.starts_at)} ~ ${toTimePart(detailSchedule.ends_at)}`}
+              </div>
+              {detailSchedule.location && (
+                <div className="text-slate-600">장소: {detailSchedule.location}</div>
+              )}
+              <div className="text-slate-600">
+                참석자:{" "}
+                {detailSchedule.participants.length
+                  ? detailSchedule.participants.map((p) => p.name ?? "이름 미상").join(", ")
+                  : "없음"}
+              </div>
+              {detailSchedule.memo && (
+                <div className="text-slate-600 whitespace-pre-wrap">
+                  메모: {detailSchedule.memo}
+                </div>
+              )}
+              <div className="text-slate-400 text-xs">
+                등록자: {detailSchedule.created_by_name ?? "알 수 없음"}
+              </div>
+            </div>
+            {(detailSchedule.created_by === currentUser.id || isAdmin) && (
+              <div className="flex justify-end gap-2 px-5 py-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => openEditForm(detailSchedule)}
+                  className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors font-medium"
+                >
+                  <Pencil size={12} /> 수정
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(detailSchedule.id)}
+                  className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors font-medium"
+                >
+                  <Trash2 size={12} /> 삭제
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {formOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/30 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-lg max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
+              <p className="font-semibold text-slate-900">{form.id ? "일정 수정" : "일정 등록"}</p>
+              <button
+                onClick={() => setFormOpen(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="px-5 py-4 flex flex-col gap-3 overflow-y-auto">
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">
+                  제목 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  autoFocus
+                  value={form.title}
+                  onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
+                  className="w-full text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
+                  placeholder="일정 제목"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-slate-500 mb-1">구분</label>
+                  <AppSelect
+                    value={form.category}
+                    onValueChange={(value) => setForm((prev) => ({ ...prev, category: value }))}
+                    aria-label="구분"
+                    options={CATEGORIES.map((c) => ({ value: c, label: c }))}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-slate-500 mb-1">날짜</label>
+                  <DatePickerField
+                    value={form.date}
+                    onChange={(value) => setForm((prev) => ({ ...prev, date: value }))}
+                    ariaLabel="일정 날짜"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={form.allDay}
+                  onChange={(e) => setForm((prev) => ({ ...prev, allDay: e.target.checked }))}
+                />
+                종일
+              </label>
+
+              {!form.allDay && (
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-slate-500 mb-1">
+                      시작 시각
+                    </label>
+                    <input
+                      type="time"
+                      value={form.startTime}
+                      onChange={(e) => setForm((prev) => ({ ...prev, startTime: e.target.value }))}
+                      className="w-full text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-slate-500 mb-1">
+                      종료 시각
+                    </label>
+                    <input
+                      type="time"
+                      value={form.endTime}
+                      onChange={(e) => setForm((prev) => ({ ...prev, endTime: e.target.value }))}
+                      className="w-full text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">장소 (선택)</label>
+                <input
+                  value={form.location}
+                  onChange={(e) => setForm((prev) => ({ ...prev, location: e.target.value }))}
+                  className="w-full text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
+                  placeholder="장소"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">메모 (선택)</label>
+                <textarea
+                  value={form.memo}
+                  onChange={(e) => setForm((prev) => ({ ...prev, memo: e.target.value }))}
+                  className="w-full text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400 resize-none"
+                  rows={2}
+                  placeholder="메모"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">참석자</label>
+                <input
+                  value={participantSearch}
+                  onChange={(e) => setParticipantSearch(e.target.value)}
+                  className="w-full text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400 mb-2"
+                  placeholder="이름으로 검색"
+                />
+                <div className="max-h-40 overflow-y-auto border border-slate-100 rounded-lg p-2 flex flex-col gap-1">
+                  {filteredStaffList.length === 0 ? (
+                    <p className="text-slate-400 text-xs text-center py-2">직원이 없습니다</p>
+                  ) : (
+                    filteredStaffList.map((staff) => (
+                      <label
+                        key={staff.id}
+                        className="flex items-center gap-2 text-sm text-slate-600 px-1 py-0.5 rounded hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={form.participantIds.includes(staff.id)}
+                          onChange={() => toggleParticipant(staff.id)}
+                        />
+                        {staff.name ?? "이름 미상"}
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-3 border-t border-slate-100 flex-shrink-0">
+              <button
+                onClick={() => setFormOpen(false)}
+                className="text-xs px-3 py-1.5 rounded-lg text-slate-500 hover:bg-slate-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={submitting || !form.title.trim()}
+                className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
