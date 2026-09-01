@@ -40,7 +40,11 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/");
+      // 보호된 화면에서 넘어왔으면 그 화면으로 돌려보낸다(링크를 다시 누르지 않아도 되게).
+      // 바깥 주소로 튕기지 않도록 우리 사이트 안의 경로만 허용한다.
+      const next = new URLSearchParams(window.location.search).get("next");
+      const back = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+      router.push(back);
       router.refresh();
     } catch {
       setError("서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.");

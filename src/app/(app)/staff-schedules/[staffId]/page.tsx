@@ -44,14 +44,19 @@ function nextMonthStart(month: string) {
 
 export default async function StaffScheduleMobilePage({ params, searchParams }: Props) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
   const { staffId } = await params;
   const sp = await searchParams;
   const month = sp.month && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : kstToday().slice(0, 7);
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  // 링크를 받은 사람이 로그인하고 나면 이 페이지로 돌아오도록 원래 주소를 넘긴다.
+  // 넘기지 않으면 로그인 후 첫 화면으로 가버려 링크를 다시 눌러야 한다.
+  if (!user) {
+    const back = `/staff-schedules/${staffId}?month=${month}`;
+    redirect(`/login?next=${encodeURIComponent(back)}`);
+  }
 
   // 주소에는 이름이 들어온다(/staff-schedules/박은서). 예전에 복사해 둔 id 주소도 그대로 열리도록
   // 둘 다 받는다. 이름이 겹치는 직원이 있으면 누구인지 정할 수 없으므로 id 주소만 쓴다.

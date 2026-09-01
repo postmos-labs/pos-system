@@ -43,7 +43,12 @@ export async function proxy(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/equipment-select/");
 
   if (!user && !isLoginPage && !isPublicPage) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    // 원래 가려던 주소를 함께 넘긴다. 그러지 않으면 링크를 눌러 들어온 사람이 로그인한 뒤
+    // 첫 화면으로 가버려 링크를 다시 눌러야 한다.
+    const loginUrl = new URL("/login", request.url);
+    const back = request.nextUrl.pathname + request.nextUrl.search;
+    if (back !== "/") loginUrl.searchParams.set("next", back);
+    return NextResponse.redirect(loginUrl);
   }
 
   if (user && isLoginPage) {
