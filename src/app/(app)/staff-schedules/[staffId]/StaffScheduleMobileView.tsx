@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, MapPin, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { kstToday } from "@/lib/date";
 import { useToast } from "@/components/ui/Toast";
-import { createStaffSchedule } from "../actions";
+import { createStaffSchedule, updateStaffSchedule, deleteStaffSchedule } from "../actions";
 import {
   CATEGORY_COLOR,
   toDatePart,
@@ -32,6 +32,7 @@ interface Props {
   month: string;
   // 주소에 쓰인 값(이름 또는 id). 월을 넘겨도 들어온 형태를 그대로 유지한다.
   slug: string;
+  currentUser: { id: string; role: string | null };
 }
 
 // CATEGORY_COLOR는 "bg-xxx text-xxx border-xxx" 형태다. 카드 왼쪽 구분 막대에는
@@ -41,7 +42,13 @@ function borderClass(category: string) {
   return cls.split(" ").find((c) => c.startsWith("border-")) ?? "border-slate-200";
 }
 
-export default function StaffScheduleMobileView({ staff, schedules, month, slug }: Props) {
+export default function StaffScheduleMobileView({
+  staff,
+  schedules,
+  month,
+  slug,
+  currentUser,
+}: Props) {
   const router = useRouter();
   const toast = useToast();
   const [year, monthNum] = month.split("-").map(Number);
@@ -51,6 +58,10 @@ export default function StaffScheduleMobileView({ staff, schedules, month, slug 
   // 그대로 목록에 나타난다(등록자는 지금 로그인한 사람).
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [detail, setDetail] = useState<StaffScheduleRow | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const isAdmin = currentUser.role === "admin" || currentUser.role === "master";
+  const canEdit = (row: StaffScheduleRow) => row.created_by === currentUser.id || isAdmin;
   const [form, setForm] = useState({
     title: "",
     category: "미팅",
@@ -77,7 +88,40 @@ export default function StaffScheduleMobileView({ staff, schedules, month, slug 
       location: "",
       memo: "",
     });
+    setEditingId(null);
     setFormOpen(true);
+  }
+
+  function openEdit(row: StaffScheduleRow) {
+    const start = row.all_day ? "09:00" : toTimePart(row.starts_at);
+    const end = row.all_day ? "18:00" : toTimePart(row.ends_at);
+    setForm({
+      title: row.title,
+      category: row.category,
+      date: toDatePart(row.starts_at),
+      startHour: start.slice(0, 2),
+      startMin: start.slice(3, 5),
+      endHour: end.slice(0, 2),
+      endMin: end.slice(3, 5),
+      allDay: row.all_day,
+      location: row.location ?? "",
+      memo: row.memo ?? "",
+    });
+    setEditingId(row.id);
+    setDetail(null);
+    setFormOpen(true);
+  }
+
+  async function remove(row: StaffScheduleRow) {
+    if (!confirm("이 일정을 삭제하시겠습니까?")) return;
+    const result = await deleteStaffSchedule(row.id);
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success("일정을 삭제했습니다.");
+    setDetail(null);
+    router.refresh();
   }
 
   async function submit() {
@@ -92,7 +136,7 @@ export default function StaffScheduleMobileView({ staff, schedules, month, slug 
       return;
     }
     setSaving(true);
-    const result = await createStaffSchedule({
+    const payload = {
       title: form.title.trim(),
       category: form.category,
       startsAt: form.allDay ? `${form.date}T00:00:00+09:00` : `${form.date}T${start}:00+09:00`,
@@ -101,14 +145,18 @@ export default function StaffScheduleMobileView({ staff, schedules, month, slug 
       location: form.location.trim() || null,
       memo: form.memo.trim() || null,
       participantIds: [staff.id],
-    });
+    };
+    const result = editingId
+      ? await updateStaffSchedule(editingId, payload)
+      : await createStaffSchedule(payload);
     setSaving(false);
     if (result.error) {
       toast.error(result.error);
       return;
     }
-    toast.success("일정을 등록했습니다.");
+    toast.success(editingId ? "일정을 수정했습니다." : "일정을 등록했습니다.");
     setFormOpen(false);
+    setEditingId(null);
     router.refresh();
   }
 
@@ -192,12 +240,95 @@ export default function StaffScheduleMobileView({ staff, schedules, month, slug 
         <Plus size={18} /> 일정 등록
       </button>
 
+      {detail && (
+        <div
+          className="fixed inset-0 z-[90] flex items-end justify-center bg-black/40 sm:items-center sm:p-4"
+          onClick={() => setDetail(null)}
+        >
+          <div
+            className="flex max-h-[92dvh] w-full max-w-lg flex-col rounded-t-2xl bg-white sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+              <p className="text-lg font-bold text-slate-900">{detail.title}</p>
+              <button type="button" onClick={() => setDetail(null)} aria-label="닫기">
+                <X size={20} className="shrink-0 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-4">
+              <span
+                className={`inline-block w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                  CATEGORY_COLOR[detail.category] ?? CATEGORY_COLOR["기타"]
+                }`}
+              >
+                {detail.category}
+              </span>
+              <div>
+                <p className="text-xs font-semibold text-slate-400">일시</p>
+                <p className="text-[17px] font-bold text-slate-900 tabular-nums">
+                  {toDatePart(detail.starts_at).replace(/-/g, ".")}{" "}
+                  {detail.all_day
+                    ? "종일"
+                    : `${toTimePart(detail.starts_at)} ~ ${toTimePart(detail.ends_at)}`}
+                </p>
+              </div>
+              {detail.location && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-400">장소</p>
+                  <p className="text-[15px] text-slate-700">{detail.location}</p>
+                </div>
+              )}
+              {detail.participants.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-400">참석자</p>
+                  <p className="text-[15px] text-slate-700">
+                    {detail.participants.map((p) => p.name ?? "이름 미상").join(", ")}
+                  </p>
+                </div>
+              )}
+              {detail.memo && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-400">메모</p>
+                  <p className="text-[15px] leading-snug whitespace-pre-wrap text-slate-700">
+                    {detail.memo}
+                  </p>
+                </div>
+              )}
+              <p className="text-xs text-slate-400">
+                등록자: {detail.created_by_name ?? "알 수 없음"}
+              </p>
+            </div>
+
+            {/* 수정·삭제는 등록자 본인과 관리자만. 서버 액션도 같은 조건으로 막는다. */}
+            {canEdit(detail) && (
+              <div className="flex flex-shrink-0 gap-2 border-t border-slate-100 px-5 py-3 pb-6">
+                <button
+                  type="button"
+                  onClick={() => remove(detail)}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-red-200 py-3 text-[15px] font-semibold text-red-600"
+                >
+                  <Trash2 size={16} /> 삭제
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openEdit(detail)}
+                  className="flex flex-[2] items-center justify-center gap-1.5 rounded-xl bg-blue-600 py-3 text-[15px] font-bold text-white"
+                >
+                  <Pencil size={16} /> 수정
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {formOpen && (
         <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/40 sm:items-center sm:p-4">
           <div className="flex max-h-[92dvh] w-full max-w-lg flex-col rounded-t-2xl bg-white sm:rounded-2xl">
             <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4">
               <p className="text-base font-bold text-slate-900">
-                {staff.name ?? "이름 미상"}님 일정 등록
+                {staff.name ?? "이름 미상"}님 일정 {editingId ? "수정" : "등록"}
               </p>
               <button type="button" onClick={() => setFormOpen(false)} aria-label="닫기">
                 <X size={20} className="text-slate-400" />
@@ -384,9 +515,11 @@ export default function StaffScheduleMobileView({ staff, schedules, month, slug 
                 </p>
                 <div className="flex flex-col gap-3">
                   {events.map((ev) => (
-                    <div
+                    <button
                       key={ev.id}
-                      className={`rounded-r-lg border-l-4 py-1 pl-3 ${borderClass(ev.category)}`}
+                      type="button"
+                      onClick={() => setDetail(ev)}
+                      className={`w-full rounded-r-lg border-l-4 py-1 pl-3 text-left ${borderClass(ev.category)}`}
                     >
                       <span
                         className={`mb-1 inline-block rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
@@ -412,7 +545,7 @@ export default function StaffScheduleMobileView({ staff, schedules, month, slug 
                       {ev.memo && (
                         <p className="mt-0.5 text-sm leading-snug text-slate-500">{ev.memo}</p>
                       )}
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>

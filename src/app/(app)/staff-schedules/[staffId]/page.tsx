@@ -106,6 +106,9 @@ export default async function StaffScheduleMobilePage({ params, searchParams }: 
     );
   }
 
+  // 수정·삭제 버튼 노출을 위해 지금 로그인한 사람의 역할이 필요하다(서버 액션도 같은 조건으로 막는다).
+  const { data: meRow } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+
   const monthStart = `${month}-01`;
   const monthEnd = nextMonthStart(month);
 
@@ -155,6 +158,7 @@ export default async function StaffScheduleMobilePage({ params, searchParams }: 
       schedules={schedules}
       month={month}
       slug={staffId}
+      currentUser={{ id: user.id, role: (meRow?.role as string | null) ?? null }}
     />
   );
 }
