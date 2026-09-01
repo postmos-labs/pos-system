@@ -679,6 +679,49 @@ export default function InstallDetailDrawer({
                 {statusLabel(approval.target_status, installation.delivery_type)}{" "}
                 {approval.status === "requested" ? "1차 승인대기" : "최종 승인대기"}
               </span>
+              {/* 기사가 완료 전 확인한 체크리스트 — 승인자가 무엇을 확인하고 올렸는지 보고 판단한다. */}
+              {!!approval.request_payload?.checklist?.length && (
+                <Popover.Root>
+                  <Popover.Trigger asChild>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-emerald-200 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                    >
+                      확인 항목 {approval.request_payload.checklist.filter((c) => c.checked).length}
+                      /{approval.request_payload.checklist.length}
+                    </button>
+                  </Popover.Trigger>
+                  <Popover.Portal>
+                    <Popover.Content
+                      align="start"
+                      sideOffset={6}
+                      className="z-50 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg"
+                    >
+                      <p className="mb-2 text-xs font-semibold text-slate-500">
+                        기사 완료 전 확인 항목
+                      </p>
+                      <ul className="flex flex-col gap-1.5">
+                        {approval.request_payload.checklist.map((item, i) => (
+                          <li key={i} className="flex items-start gap-2 text-xs">
+                            <span
+                              className={
+                                item.checked
+                                  ? "font-bold text-emerald-600"
+                                  : "font-bold text-slate-300"
+                              }
+                            >
+                              {item.checked ? "✓" : "–"}
+                            </span>
+                            <span className={item.checked ? "text-slate-700" : "text-slate-400"}>
+                              {item.label}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </Popover.Content>
+                  </Popover.Portal>
+                </Popover.Root>
+              )}
               {canDecideApproval && (
                 <>
                   <button

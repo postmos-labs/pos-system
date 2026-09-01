@@ -159,6 +159,7 @@ export type CompletionApproval = {
     scheduled_time?: string;
     eta?: string;
     skip_notify?: boolean;
+    checklist?: { label: string; checked: boolean }[];
   };
   requested_by: string | null;
   requested_by_name: string;
@@ -1218,6 +1219,7 @@ export default function InstallsClient({
       id,
       approvalNote,
       skipNotify || !!skipCompleteSend,
+      checklistItems,
     );
     if (approvalResult.error) {
       toast.error("설치완료 승인요청 실패: " + approvalResult.error);

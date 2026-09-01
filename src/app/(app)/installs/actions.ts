@@ -405,6 +405,8 @@ export async function requestInstallationStatusApproval(input: {
   eta?: string;
   skipNotify?: boolean;
   note: string;
+  // 기사가 완료 전 확인한 체크리스트. 승인자가 무엇을 확인하고 올렸는지 볼 수 있도록 함께 남긴다.
+  checklist?: { label: string; checked: boolean }[];
 }) {
   if (validateApprovalNote(input.note) === null) {
     return { error: "비고는 2,000자 이하로 입력해주세요.", approvalId: null, approvalStatus: null };
@@ -489,6 +491,17 @@ export async function requestInstallationStatusApproval(input: {
         ...(input.scheduledTime ? { scheduled_time: input.scheduledTime } : {}),
         ...(input.eta ? { eta: input.eta } : {}),
         ...(input.skipNotify ? { skip_notify: true } : {}),
+        ...(input.checklist?.length
+          ? {
+              checklist: input.checklist
+                .filter((item) => typeof item?.label === "string")
+                .slice(0, 20)
+                .map((item) => ({
+                  label: String(item.label).slice(0, 100),
+                  checked: !!item.checked,
+                })),
+            }
+          : {}),
       },
       status: approvalStatus,
       requested_by: editor.user.id,
@@ -587,12 +600,14 @@ export async function requestInstallationCompletion(
   installationId: string,
   note: string,
   skipNotify = false,
+  checklist?: { label: string; checked: boolean }[],
 ) {
   return requestInstallationStatusApproval({
     installationId,
     targetStatus: "completed",
     note,
     skipNotify,
+    checklist,
   });
 }
 
