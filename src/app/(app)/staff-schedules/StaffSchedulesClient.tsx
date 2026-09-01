@@ -17,6 +17,13 @@ const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => {
 const MINUTE_VALUES = ["00", "10", "20", "30", "40", "50"];
 // 예전에 다른 방식으로 저장돼 목록에 없는 분(예: 15분)이면 그 값을 끼워 넣는다.
 // 그러지 않으면 수정 창에서 분이 빈칸으로 보인다.
+// 시작 시각을 뒤로 옮겼을 때 종료를 자동으로 맞춰주는 데 쓴다(한 시간 뒤, 자정 넘으면 23:59).
+function plusHour(time: string) {
+  const minutes = Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5)) + 60;
+  if (minutes >= 24 * 60) return "23:59";
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
 function minuteOptions(current: string) {
   const values = MINUTE_VALUES.includes(current)
     ? MINUTE_VALUES
@@ -928,15 +935,6 @@ export default function StaffSchedulesClient({
                 </div>
               </div>
 
-              <label className="flex items-center gap-2 text-sm text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={form.allDay}
-                  onChange={(e) => setForm((prev) => ({ ...prev, allDay: e.target.checked }))}
-                />
-                종일
-              </label>
-
               {!form.allDay && (
                 <div className="flex gap-2">
                   <div className="flex-1">
@@ -947,10 +945,16 @@ export default function StaffSchedulesClient({
                       <AppSelect
                         value={form.startTime.slice(0, 2)}
                         onValueChange={(value) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            startTime: `${value}:${prev.startTime.slice(3, 5)}`,
-                          }))
+                          setForm((prev) => {
+                            const startTime = `${value}:${prev.startTime.slice(3, 5)}`;
+                            // 종료가 시작보다 빨라지면 저장이 막히므로 한 시간 뒤로 따라오게 한다.
+                            return {
+                              ...prev,
+                              startTime,
+                              endTime:
+                                prev.endTime > startTime ? prev.endTime : plusHour(startTime),
+                            };
+                          })
                         }
                         aria-label="시작 시"
                         className="flex-1"
@@ -1003,6 +1007,16 @@ export default function StaffSchedulesClient({
                   </div>
                 </div>
               )}
+
+              {/* 종일은 가끔 쓰는 선택지라 시각 입력 아래에 둔다(기본은 시각 입력). */}
+              <label className="flex items-center gap-2 text-sm text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={form.allDay}
+                  onChange={(e) => setForm((prev) => ({ ...prev, allDay: e.target.checked }))}
+                />
+                하루 종일
+              </label>
 
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">장소 (선택)</label>

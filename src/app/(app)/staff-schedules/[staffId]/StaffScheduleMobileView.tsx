@@ -17,6 +17,13 @@ const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const CATEGORIES = ["미팅", "회의", "교육", "외출", "휴가", "기타"];
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
 const MINUTES = ["00", "10", "20", "30", "40", "50"];
+// 시작 시각을 뒤로 옮겼을 때 종료를 자동으로 맞춰주는 데 쓴다(한 시간 뒤, 자정 넘으면 23:59).
+function plusHour(time: string) {
+  const minutes = Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5)) + 60;
+  if (minutes >= 24 * 60) return "23:59";
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
 const selectClass =
   "w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-base outline-none focus:border-blue-400";
 
@@ -372,16 +379,6 @@ export default function StaffScheduleMobileView({
                 </div>
               </div>
 
-              <label className="flex items-center gap-2 text-[15px] text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={form.allDay}
-                  onChange={(e) => setForm((p) => ({ ...p, allDay: e.target.checked }))}
-                  className="size-5 accent-blue-600"
-                />
-                종일
-              </label>
-
               {!form.allDay && (
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -389,7 +386,21 @@ export default function StaffScheduleMobileView({
                     <div className="flex gap-1.5">
                       <select
                         value={form.startHour}
-                        onChange={(e) => setForm((p) => ({ ...p, startHour: e.target.value }))}
+                        onChange={(e) =>
+                          setForm((p) => {
+                            const startHour = e.target.value;
+                            // 종료가 시작보다 빨라지면 저장이 막히므로 한 시간 뒤로 따라오게 한다.
+                            const start = `${startHour}:${p.startMin}`;
+                            if (`${p.endHour}:${p.endMin}` > start) return { ...p, startHour };
+                            const next = plusHour(start);
+                            return {
+                              ...p,
+                              startHour,
+                              endHour: next.slice(0, 2),
+                              endMin: next.slice(3, 5),
+                            };
+                          })
+                        }
                         className={selectClass}
                       >
                         {HOURS.map((h) => (
@@ -432,6 +443,17 @@ export default function StaffScheduleMobileView({
                   </div>
                 </div>
               )}
+
+              {/* 종일은 가끔 쓰는 선택지라 시각 입력 아래에 둔다(기본은 시각 입력). */}
+              <label className="flex items-center gap-2 text-[15px] text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={form.allDay}
+                  onChange={(e) => setForm((p) => ({ ...p, allDay: e.target.checked }))}
+                  className="size-5 accent-blue-600"
+                />
+                하루 종일
+              </label>
 
               <div>
                 <label className="mb-1 block text-sm font-semibold text-slate-600">장소</label>
