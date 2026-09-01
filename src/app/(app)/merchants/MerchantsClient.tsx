@@ -25,6 +25,7 @@ import ContractCard from "./ContractCard";
 import QuickActions from "./QuickActions";
 import InstallCompositionSection from "./InstallCompositionSection";
 import MerchantMemoSection from "./MerchantMemoSection";
+import MerchantInventorySection from "./MerchantInventorySection";
 import MerchantHistorySection from "./MerchantHistorySection";
 import EmptyState from "@/components/ui/EmptyState";
 import BulkDeleteActions from "@/components/ui/BulkDeleteActions";
@@ -180,6 +181,7 @@ function MerchantDetailPanel({
         </div>
 
         <MerchantMemoSection merchantId={merchant.id} memos={memos} />
+        <MerchantInventorySection merchantId={merchant.id} />
         <MerchantHistorySection history={history} />
       </div>
     </section>

@@ -6,6 +6,7 @@ import { ko } from "date-fns/locale";
 import { ArrowLeft } from "lucide-react";
 import { loadMerchant360 } from "../loadMerchant360";
 import MerchantMemoSection from "../MerchantMemoSection";
+import MerchantInventorySection from "../MerchantInventorySection";
 import MerchantHistorySection from "../MerchantHistorySection";
 import {
   MERCHANT_OPERATION_STATUS_CLASS,
@@ -142,6 +143,7 @@ export default async function MerchantUnifiedPage({ params }: Props) {
       </div>
 
       <MerchantMemoSection merchantId={merchant.id} memos={memos} />
+      <MerchantInventorySection merchantId={merchant.id} />
       <MerchantHistorySection history={history} />
     </div>
   );

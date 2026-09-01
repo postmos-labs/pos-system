@@ -66,6 +66,25 @@ interface InventoryLog {
   reason: string;
   user: { name: string } | null;
   created_at: string;
+  merchant_name?: string | null;
+}
+
+interface MerchantSearchResult {
+  id: string;
+  business_name: string;
+  owner_name: string;
+  phone: string;
+}
+
+// 132번 마이그레이션(merchant_id/merchant_name 컬럼) 미적용 환경에서는 가맹점 정보 없이
+// 기존 방식대로 기록되도록 재시도한다.
+function isMissingInventoryMerchantColumn(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /column .* does not exist/i.test(error.message ?? "")
+  );
 }
 
 const EMPTY_FORM = {
@@ -119,11 +138,15 @@ export default function InventoryClient({
     item: InventoryItem;
     delta: number;
     reason: string;
+    merchant: { id: string; business_name: string } | null;
   } | null>(null);
   const [showLogs, setShowLogs] = useState(false);
   const [inlineEdit, setInlineEdit] = useState<{ id: string; value: string } | null>(null);
   const [exporting, setExporting] = useState(false);
   const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
+  const [merchantQuery, setMerchantQuery] = useState("");
+  const [merchantResults, setMerchantResults] = useState<MerchantSearchResult[]>([]);
+  const [merchantSearching, setMerchantSearching] = useState(false);
 
   const supabase = createClient();
 
@@ -170,9 +193,32 @@ export default function InventoryClient({
     setShowForm(false);
   }
 
+  async function searchMerchants() {
+    const term = merchantQuery.trim();
+    if (!term) return;
+    setMerchantSearching(true);
+    // PostgREST or() 값에 쉼표·괄호가 들어가면 필터 문법이 깨진다. 큰따옴표로 감싸고
+    // LIKE 와일드카드(%·_)와 따옴표·역슬래시를 이스케이프해 문자 그대로 검색되게 한다.
+    const escaped = term.replace(/[\\%_]/g, (m) => `\\${m}`).replace(/"/g, '\\"');
+    const pattern = `"%${escaped}%"`;
+    const { data } = await supabase
+      .from("merchants")
+      .select("id, business_name, owner_name, phone")
+      .or(`business_name.ilike.${pattern},owner_name.ilike.${pattern},phone.ilike.${pattern}`)
+      .limit(10);
+    setMerchantResults(data ?? []);
+    setMerchantSearching(false);
+  }
+
+  function closeAdjustModal() {
+    setAdjustModal(null);
+    setMerchantQuery("");
+    setMerchantResults([]);
+  }
+
   async function handleAdjust() {
     if (!adjustModal) return;
-    const { item, delta, reason } = adjustModal;
+    const { item, delta, reason, merchant } = adjustModal;
     const { data: updated, error } = await supabase
       .rpc("adjust_inventory_quantity", { p_item_id: item.id, p_delta: delta })
       .single();
@@ -182,12 +228,21 @@ export default function InventoryClient({
     }
     const newQty = (updated as InventoryItem).quantity;
 
-    const { error: logError } = await supabase.from("inventory_logs").insert({
+    const basePayload = {
       item_id: item.id,
       item_name: item.name,
       change: delta,
       reason: reason || null,
+    };
+    let { error: logError } = await supabase.from("inventory_logs").insert({
+      ...basePayload,
+      merchant_id: merchant?.id ?? null,
+      merchant_name: merchant?.business_name ?? null,
     });
+    if (logError && isMissingInventoryMerchantColumn(logError)) {
+      // 132번 마이그레이션 미적용 환경: 가맹점 정보 없이 기존처럼 기록한다.
+      ({ error: logError } = await supabase.from("inventory_logs").insert(basePayload));
+    }
     if (logError) toast.error("변동 이력 기록 실패: " + logError.message);
 
     setItems((prev) =>
@@ -204,10 +259,11 @@ export default function InventoryClient({
         reason,
         user: { name: currentUserName },
         created_at: new Date().toISOString(),
+        merchant_name: merchant?.business_name ?? null,
       },
       ...prev,
     ]);
-    setAdjustModal(null);
+    closeAdjustModal();
   }
 
   async function saveInlineQty(item: InventoryItem, newQtyStr: string) {
@@ -509,7 +565,14 @@ export default function InventoryClient({
                     {log.change > 0 ? `+${log.change}` : log.change}
                   </span>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-800">{log.item_name}</p>
+                    <p className="text-sm font-medium text-slate-800">
+                      {log.item_name}
+                      {log.merchant_name && (
+                        <span className="ml-1.5 text-xs font-normal text-blue-600">
+                          {log.merchant_name}
+                        </span>
+                      )}
+                    </p>
                     {log.reason && <p className="text-xs text-slate-500">{log.reason}</p>}
                   </div>
                   <div className="text-right">
@@ -656,14 +719,26 @@ export default function InventoryClient({
                                       -5
                                     </button>
                                     <button
-                                      onClick={() => setAdjustModal({ item, delta: 1, reason: "" })}
+                                      onClick={() =>
+                                        setAdjustModal({
+                                          item,
+                                          delta: 1,
+                                          reason: "",
+                                          merchant: null,
+                                        })
+                                      }
                                       className="text-xs px-2 py-1 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100"
                                     >
                                       +입고
                                     </button>
                                     <button
                                       onClick={() =>
-                                        setAdjustModal({ item, delta: -1, reason: "" })
+                                        setAdjustModal({
+                                          item,
+                                          delta: -1,
+                                          reason: "",
+                                          merchant: null,
+                                        })
                                       }
                                       className="text-xs px-2 py-1 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg hover:bg-orange-100"
                                     >
@@ -749,6 +824,79 @@ export default function InventoryClient({
                 className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-500">가맹점 (선택)</label>
+              {adjustModal.merchant ? (
+                <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                  <span className="font-medium text-slate-800">
+                    {adjustModal.merchant.business_name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAdjustModal((prev) => (prev ? { ...prev, merchant: null } : null))
+                    }
+                    className="text-xs text-slate-400 hover:text-slate-600"
+                  >
+                    해제
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-1.5">
+                    <input
+                      value={merchantQuery}
+                      onChange={(e) => setMerchantQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void searchMerchants();
+                        }
+                      }}
+                      placeholder="상호명, 대표자, 전화번호 검색"
+                      className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void searchMerchants()}
+                      disabled={merchantSearching}
+                      className="px-3 py-2 text-xs border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      검색
+                    </button>
+                  </div>
+                  {merchantResults.length > 0 && (
+                    <ul className="mt-1 flex flex-col gap-1 max-h-32 overflow-y-auto">
+                      {merchantResults.map((m) => (
+                        <li key={m.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAdjustModal((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      merchant: { id: m.id, business_name: m.business_name },
+                                    }
+                                  : null,
+                              );
+                              setMerchantQuery("");
+                              setMerchantResults([]);
+                            }}
+                            className="w-full text-left px-2.5 py-1.5 text-sm rounded-lg border border-transparent hover:bg-slate-50"
+                          >
+                            <span className="font-medium text-slate-800">{m.business_name}</span>
+                            <span className="ml-1.5 text-xs text-slate-400">
+                              {m.owner_name} · {m.phone}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </div>
             <p className="text-xs text-slate-400">
               현재 {adjustModal.item.quantity}
               {adjustModal.item.unit} →{" "}
@@ -765,7 +913,7 @@ export default function InventoryClient({
                 확정
               </button>
               <button
-                onClick={() => setAdjustModal(null)}
+                onClick={closeAdjustModal}
                 className="w-full py-2 rounded-lg text-slate-400 text-sm hover:text-slate-600"
               >
                 취소
