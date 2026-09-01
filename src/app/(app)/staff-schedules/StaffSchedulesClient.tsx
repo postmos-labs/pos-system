@@ -236,16 +236,23 @@ export default function StaffSchedulesClient({
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, width, height);
 
-    // 제목 — 어떤 조건으로 뽑은 달력인지 함께 적어야 받는 사람이 오해하지 않는다.
-    const staffName = staff ? (staffList.find((m) => m.id === staff)?.name ?? "") : "";
-    const conditions = [staffName, category].filter(Boolean).join(" · ");
+    // 제목 — 특정 직원을 골라 뽑았으면 "박은서 대표님 9월 일정"처럼 그 사람 이름을 앞에 세운다.
+    // 그래야 받는 사람이 전체 일정으로 오해하지 않는다.
+    const selected = staff ? staffList.find((m) => m.id === staff) : undefined;
+    const owner = selected
+      ? `${selected.name}${selected.position ? ` ${selected.position}님` : "님"}`
+      : "";
+    const heading = owner ? `${owner} ${monthNum}월 일정` : `${year}년 ${monthNum}월 일정`;
     ctx.fillStyle = "#0f172a";
     ctx.font = font(30, "700");
-    ctx.fillText(`${year}년 ${monthNum}월 일정`, PAD, PAD + 30);
-    if (conditions) {
+    ctx.fillText(heading, PAD, PAD + 30);
+
+    // 부제 — 연도(제목에서 빠졌을 때)와 걸어둔 구분을 적는다.
+    const subParts = [owner ? `${year}년` : "", category].filter(Boolean);
+    if (subParts.length) {
       ctx.fillStyle = "#64748b";
       ctx.font = font(16);
-      ctx.fillText(conditions, PAD, PAD + 58);
+      ctx.fillText(subParts.join(" · "), PAD, PAD + 58);
     }
 
     const gridTop = PAD + HEAD;
@@ -324,7 +331,7 @@ export default function StaffSchedulesClient({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `일정캘린더_${year}-${String(monthNum).padStart(2, "0")}.png`;
+      link.download = `${owner ? `${owner}_` : "일정캘린더_"}${year}-${String(monthNum).padStart(2, "0")}.png`;
       link.click();
       URL.revokeObjectURL(url);
       toast.warning("복사가 막혀 있어 이미지 파일로 내려받았습니다.");
