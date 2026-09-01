@@ -148,10 +148,8 @@ interface Props {
   staffList: StaffMember[];
   month: string;
   category: string;
-  mine: boolean;
-  staff: string;
-  staffCounts: Record<string, number>;
-  totalCount: number;
+  initialMine: boolean;
+  initialStaff: string;
   schemaReady: boolean;
   currentUser: CurrentUser;
 }
@@ -161,10 +159,8 @@ export default function StaffSchedulesClient({
   staffList,
   month,
   category,
-  mine,
-  staff,
-  staffCounts,
-  totalCount,
+  initialMine,
+  initialStaff,
   schemaReady,
   currentUser,
 }: Props) {
@@ -178,25 +174,53 @@ export default function StaffSchedulesClient({
   const [submitting, setSubmitting] = useState(false);
 
   const isAdmin = currentUser.role === "admin" || currentUser.role === "master";
+
+  // 직원 선택과 "내 일정만"은 화면 안에서 처리한다. 주소만 바꾸면 화면이 갱신되지 않아
+  // 버튼이 눌린 채로 남는 경우가 있었다. 둘은 함께 걸면 대개 빈 화면이 되므로 서로 배타적으로 둔다.
+  const [staff, setStaff] = useState(initialStaff);
+  const [mine, setMine] = useState(initialMine);
+  function selectStaff(next: string) {
+    setStaff(next);
+    if (next) setMine(false);
+  }
+  function toggleMine() {
+    setMine((prev) => {
+      const next = !prev;
+      if (next) setStaff("");
+      return next;
+    });
+  }
+
+  // 오른쪽 목록의 건수는 필터를 걸기 전 목록으로 센다. 필터 후에 세면 고른 직원 말고는 0이 된다.
+  const totalCount = schedules.length;
+  const staffCounts: Record<string, number> = {};
+  for (const member of staffList) {
+    staffCounts[member.id] = schedules.filter(
+      (row) => row.created_by === member.id || row.participants.some((p) => p.userId === member.id),
+    ).length;
+  }
+  const visibleSchedules = schedules.filter((row) => {
+    if (
+      mine &&
+      !(
+        row.created_by === currentUser.id ||
+        row.participants.some((p) => p.userId === currentUser.id)
+      )
+    )
+      return false;
+    if (staff && !(row.created_by === staff || row.participants.some((p) => p.userId === staff)))
+      return false;
+    return true;
+  });
   const [year, monthNum] = month.split("-").map(Number);
 
-  function updateQuery(next: {
-    month?: string;
-    category?: string;
-    mine?: boolean;
-    staff?: string;
-  }) {
+  // 달과 구분만 주소로 관리한다(조회 조건이라 서버를 다시 다녀와야 한다).
+  function updateQuery(next: { month?: string; category?: string }) {
     const nextMonth = next.month ?? month;
     const nextCategory = next.category ?? category;
-    // "내 일정만"과 "직원 선택"은 함께 걸면 교집합이 되어 대개 빈 화면이 된다.
-    // 한쪽을 고르면 다른 쪽을 자동으로 푼다.
-    const nextMine = next.staff !== undefined && next.staff !== "" ? false : (next.mine ?? mine);
-    const nextStaff = next.mine === true ? "" : (next.staff ?? staff);
     const params = new URLSearchParams();
     params.set("month", nextMonth);
     if (nextCategory) params.set("category", nextCategory);
-    if (nextMine) params.set("mine", "1");
-    if (nextStaff) params.set("staff", nextStaff);
     router.replace(`/staff-schedules?${params.toString()}`);
   }
 
@@ -209,13 +233,13 @@ export default function StaffSchedulesClient({
 
   const eventsByDate = useMemo(() => {
     const map: Record<string, StaffScheduleRow[]> = {};
-    for (const schedule of schedules) {
+    for (const schedule of visibleSchedules) {
       const date = toDatePart(schedule.starts_at);
       if (!map[date]) map[date] = [];
       map[date].push(schedule);
     }
     return map;
-  }, [schedules]);
+  }, [visibleSchedules]);
 
   const firstDay = new Date(year, monthNum - 1, 1).getDay();
   const daysInMonth = new Date(year, monthNum, 0).getDate();
@@ -547,7 +571,7 @@ export default function StaffSchedulesClient({
 
         <button
           type="button"
-          onClick={() => updateQuery({ mine: !mine })}
+          onClick={toggleMine}
           className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
             mine
               ? "border-blue-300 bg-blue-50 text-blue-700"
@@ -591,7 +615,7 @@ export default function StaffSchedulesClient({
             ))}
           </div>
 
-          {mine && schedules.length === 0 && (
+          {mine && visibleSchedules.length === 0 && (
             <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
               &apos;내 일정만&apos;이 켜져 있어 내가 등록했거나 참석하는 일정만 보입니다. 전체를
               보려면 버튼을 다시 눌러 끄세요.
@@ -679,7 +703,7 @@ export default function StaffSchedulesClient({
           <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
             <button
               type="button"
-              onClick={() => updateQuery({ staff: "" })}
+              onClick={() => selectStaff("")}
               className={`mb-0.5 flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${
                 staff === ""
                   ? "bg-blue-50 font-semibold text-blue-700"
@@ -703,7 +727,7 @@ export default function StaffSchedulesClient({
                 >
                   <button
                     type="button"
-                    onClick={() => updateQuery({ staff: active ? "" : member.id })}
+                    onClick={() => selectStaff(active ? "" : member.id)}
                     className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
                   >
                     <span className="min-w-0 truncate">
