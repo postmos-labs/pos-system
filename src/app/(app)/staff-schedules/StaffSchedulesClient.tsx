@@ -212,7 +212,13 @@ export default function StaffSchedulesClient({
   // 그래서 달력을 캔버스에 직접 그려 이미지를 만든다.
   async function copyAsImage() {
     const CELL_W = 260;
-    const CELL_H = 178;
+    // 그 달에 하루 최대 몇 건인지 보고 칸 높이를 정한다. 일정이 적은 달은 칸을 키워
+    // 글씨를 크게 뽑고, 많은 달은 지금 크기를 유지해 넘치지 않게 한다.
+    const busiest = Math.max(1, ...Object.values(eventsByDate).map((list) => list.length));
+    const MAX_CHIPS = Math.max(4, Math.min(busiest, 6));
+    const CHIP_H = busiest <= 1 ? 60 : busiest === 2 ? 46 : busiest === 3 ? 38 : 30;
+    const CHIP_FONT = busiest <= 1 ? 26 : busiest === 2 ? 21 : busiest === 3 ? 18 : 15;
+    const CELL_H = 46 + MAX_CHIPS * (CHIP_H + 5) + 8;
     const PAD = 36;
     const HEAD = 110;
     const DAY_H = 44;
@@ -289,11 +295,9 @@ export default function StaffSchedulesClient({
       ctx.fillText(String(day), x + 13, y + 28);
 
       const events = eventsByDate[dateStr(day)] ?? [];
-      const MAX = 4;
-      const CHIP_H = 30;
-      events.slice(0, MAX).forEach((ev, i) => {
+      events.slice(0, MAX_CHIPS).forEach((ev, i) => {
         const tone = CATEGORY_HEX[ev.category] ?? CATEGORY_HEX["기타"];
-        const cy = y + 40 + i * (CHIP_H + 4);
+        const cy = y + 40 + i * (CHIP_H + 5);
         const cx = x + 10;
         const cw = CELL_W - 20;
         // 칩 — 왼쪽에 구분 색 막대를 세워 종류가 한눈에 들어오게 한다.
@@ -302,15 +306,33 @@ export default function StaffSchedulesClient({
         ctx.strokeStyle = tone.border;
         ctx.strokeRect(cx + 0.5, cy + 0.5, cw - 1, CHIP_H - 1);
         ctx.fillStyle = tone.text;
-        ctx.fillRect(cx, cy, 4, CHIP_H);
+        ctx.fillRect(cx, cy, 5, CHIP_H);
 
         const timeLabel = ev.all_day ? "종일" : toTimePart(ev.starts_at);
-        ctx.font = font(15, "800");
-        const timeW = ctx.measureText(timeLabel).width;
-        ctx.fillText(timeLabel, cx + 12, cy + 20);
+        const pad = 14;
+        // 칩이 커지면 시간과 제목을 두 줄로 나눠 각각 더 크게 보여준다.
+        if (CHIP_H >= 46) {
+          ctx.font = font(CHIP_FONT, "800");
+          ctx.fillText(timeLabel, cx + pad, cy + CHIP_H / 2 - 2);
+          ctx.font = font(CHIP_FONT - 3, "500");
+          let text = ev.title;
+          const maxW = cw - pad * 2;
+          if (ctx.measureText(text).width > maxW) {
+            while (text.length > 1 && ctx.measureText(text + "…").width > maxW) {
+              text = text.slice(0, -1);
+            }
+            text += "…";
+          }
+          ctx.fillText(text, cx + pad, cy + CHIP_H - 12);
+          return;
+        }
 
-        ctx.font = font(15, "500");
-        const titleX = cx + 12 + timeW + 7;
+        ctx.font = font(CHIP_FONT, "800");
+        const timeW = ctx.measureText(timeLabel).width;
+        ctx.fillText(timeLabel, cx + pad, cy + CHIP_H / 2 + CHIP_FONT / 3);
+
+        ctx.font = font(CHIP_FONT, "500");
+        const titleX = cx + pad + timeW + 7;
         const maxW = cx + cw - 10 - titleX;
         let text = ev.title;
         if (ctx.measureText(text).width > maxW) {
@@ -319,12 +341,16 @@ export default function StaffSchedulesClient({
           }
           text += "…";
         }
-        ctx.fillText(text, titleX, cy + 20);
+        ctx.fillText(text, titleX, cy + CHIP_H / 2 + CHIP_FONT / 3);
       });
-      if (events.length > MAX) {
+      if (events.length > MAX_CHIPS) {
         ctx.fillStyle = "#64748b";
-        ctx.font = font(14, "700");
-        ctx.fillText(`+${events.length - MAX}건`, x + 13, y + 40 + MAX * (CHIP_H + 4) + 14);
+        ctx.font = font(15, "700");
+        ctx.fillText(
+          `+${events.length - MAX_CHIPS}건`,
+          x + 13,
+          y + 40 + MAX_CHIPS * (CHIP_H + 5) + 15,
+        );
       }
     }
 
@@ -445,6 +471,19 @@ export default function StaffSchedulesClient({
 
   const selectedEvents = selectedDate ? (eventsByDate[selectedDate] ?? []) : [];
 
+  // 그 달에 하루 최대 몇 건인지 보고 칩 크기를 정한다. 일정이 적은 달은 칸이 비어 있으니
+  // 글씨를 키워 잘 보이게 하고, 많은 달은 지금 크기를 유지해 넘치지 않게 한다.
+  const busiestDay = Math.max(1, ...Object.values(eventsByDate).map((list) => list.length));
+  const chipClass =
+    busiestDay <= 1
+      ? "text-[16px] px-2.5 py-2.5"
+      : busiestDay === 2
+        ? "text-[14px] px-2 py-2"
+        : "text-[12px] px-1.5 py-1";
+  const cellMinH =
+    busiestDay <= 1 ? "min-h-[132px]" : busiestDay === 2 ? "min-h-[126px]" : "min-h-[118px]";
+  const visibleChips = busiestDay <= 2 ? busiestDay : 3;
+
   return (
     <div className="flex flex-col h-full gap-4">
       {!schemaReady && (
@@ -535,7 +574,7 @@ export default function StaffSchedulesClient({
                 return (
                   <div
                     key={`empty-${idx}`}
-                    className="border-b border-r border-slate-200 bg-slate-100/60 min-h-[118px]"
+                    className={`border-b border-r border-slate-200 bg-slate-100/60 ${cellMinH}`}
                   />
                 );
               const ds = dateStr(day);
@@ -547,7 +586,7 @@ export default function StaffSchedulesClient({
                 <div
                   key={ds}
                   onClick={() => setSelectedDate(isSelected ? null : ds)}
-                  className={`border-b border-r border-slate-200 cursor-pointer transition-colors overflow-hidden min-h-[118px] p-2 ${
+                  className={`border-b border-r border-slate-200 cursor-pointer transition-colors overflow-hidden ${cellMinH} p-2 ${
                     isSelected
                       ? "bg-blue-50"
                       : dow === 0 || dow === 6
@@ -569,7 +608,7 @@ export default function StaffSchedulesClient({
                     {day}
                   </div>
                   <div className="flex flex-col gap-0.5">
-                    {events.slice(0, 3).map((ev) => (
+                    {events.slice(0, visibleChips).map((ev) => (
                       <button
                         key={ev.id}
                         type="button"
@@ -577,7 +616,7 @@ export default function StaffSchedulesClient({
                           e.stopPropagation();
                           setDetailSchedule(ev);
                         }}
-                        className={`block w-full text-left text-[12px] leading-tight rounded-md border-l-[3px] border px-1.5 py-1 ${
+                        className={`block w-full text-left leading-tight rounded-md border-l-[3px] border ${chipClass} ${
                           CATEGORY_COLOR[ev.category] ?? CATEGORY_COLOR["기타"]
                         }`}
                         title={`${ev.all_day ? "종일" : toTimePart(ev.starts_at)} ${ev.title}`}
@@ -588,9 +627,9 @@ export default function StaffSchedulesClient({
                         <span className="font-medium">{ev.title}</span>
                       </button>
                     ))}
-                    {events.length > 3 && (
+                    {events.length > visibleChips && (
                       <div className="text-slate-500 px-1 text-[11px] font-semibold">
-                        +{events.length - 3}건
+                        +{events.length - visibleChips}건
                       </div>
                     )}
                   </div>
