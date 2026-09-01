@@ -755,7 +755,9 @@ export async function approveInstallationStatusByTeamLead(installationId: string
 
   const { data: installation } = await admin
     .from("installations")
-    .select("status, scheduled_date, scheduled_time")
+    .select(
+      "status, scheduled_date, scheduled_time, items, customer_name, franchise_application_id",
+    )
     .eq("id", installationId)
     .single();
   if (!installation) return { error: "설치건을 찾을 수 없습니다.", notificationError: null };
@@ -876,6 +878,45 @@ export async function approveInstallationStatusByTeamLead(installationId: string
     };
   }
 
+  // 설치완료가 확정된 시점에만 재고를 깎는다. AS 건도 장비가 나가므로 배송유형은 가리지 않는다.
+  // 실패해도 승인 자체는 되돌리지 않는다(재고는 재고 실사에서 손으로 맞출 수 있다).
+  let inventoryWarning: string | null = null;
+  if (approval.target_status === "completed") {
+    const items = installation.items;
+    if (Array.isArray(items) && items.length > 0) {
+      // 어느 가맹점으로 나갔는지 함께 남겨 가맹점 360의 "장비 입출고"에 뜨게 한다.
+      const { data: merchantRow } = installation.franchise_application_id
+        ? await admin
+            .from("merchants")
+            .select("id, business_name")
+            .eq("franchise_application_id", installation.franchise_application_id)
+            .limit(1)
+            .maybeSingle()
+        : { data: null };
+
+      const { data: unmatched, error: deductError } = await admin.rpc(
+        "deduct_inventory_on_install",
+        {
+          p_items: items,
+          p_install_id: installationId,
+          p_note: `설치완료 자동차감 (${installation.customer_name ?? "미입력"})`,
+          p_merchant_id: merchantRow?.id ?? null,
+          p_merchant_name: merchantRow?.business_name ?? installation.customer_name ?? null,
+        },
+      );
+      if (deductError) {
+        inventoryWarning = "재고 자동차감에 실패했습니다: " + deductError.message;
+      } else if (Array.isArray(unmatched) && unmatched.length > 0) {
+        const names = unmatched
+          .map((row: { unmatched_name: string }) => row.unmatched_name)
+          .filter(Boolean);
+        if (names.length > 0) {
+          inventoryWarning = "재고에서 찾지 못해 차감되지 않은 품목: " + names.join(", ");
+        }
+      }
+    }
+  }
+
   const notification = payload.skip_notify
     ? { error: null }
     : await sendApprovedInstallNotification({
@@ -888,7 +929,8 @@ export async function approveInstallationStatusByTeamLead(installationId: string
   revalidatePath("/installs");
   revalidatePath("/installs/mine");
   revalidatePath("/calendar");
-  return { error: null, notificationError: notification.error };
+  revalidatePath("/inventory");
+  return { error: null, notificationError: notification.error, inventoryWarning };
 }
 
 export async function rescheduleInstallationByTeamLead(input: {

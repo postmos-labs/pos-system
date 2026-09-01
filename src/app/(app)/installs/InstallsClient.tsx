@@ -1335,6 +1335,10 @@ export default function InstallsClient({
       toast.error("승인 실패: " + result.error);
       return;
     }
+    // 재고 자동차감은 승인을 막지 않는다. 품목명이 재고와 다르거나 차감이 실패하면 알려만 준다.
+    const inventoryWarning =
+      "inventoryWarning" in result ? (result.inventoryWarning as string | null) : null;
+    if (inventoryWarning) toast.warning(inventoryWarning);
     if (isResponsible) {
       const approvalNotes = appendApprovalNote(
         approval.approval_notes,
