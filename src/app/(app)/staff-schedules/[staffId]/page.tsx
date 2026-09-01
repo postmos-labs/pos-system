@@ -149,6 +149,7 @@ export default async function StaffScheduleMobilePage({ params, searchParams }: 
       staff={{ id: staffRow.id, name: staffRow.name, position: staffRow.position ?? null }}
       schedules={schedules}
       month={month}
+      slug={staffId}
     />
   );
 }
