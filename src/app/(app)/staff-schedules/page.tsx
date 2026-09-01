@@ -9,7 +9,7 @@ import StaffSchedulesClient, {
 const STAFF_SCHEDULE_CATEGORIES = ["미팅", "회의", "교육", "외출", "휴가", "기타"] as const;
 
 interface Props {
-  searchParams: Promise<{ month?: string; category?: string; mine?: string }>;
+  searchParams: Promise<{ month?: string; category?: string; mine?: string; staff?: string }>;
 }
 
 // 134번 마이그레이션이 아직 적용되지 않은 환경에서는 staff_schedules 표가 없어
@@ -99,6 +99,17 @@ export default async function StaffSchedulesPage({ searchParams }: Props) {
 
   const staffList: StaffMember[] = staffRows ?? [];
 
+  // 특정 직원의 일정만 보기 — 그 사람이 등록했거나 참석자로 들어간 일정.
+  // 존재하지 않는 id가 들어오면 필터를 걸지 않는다(빈 화면 대신 전체를 보여준다).
+  const staffFilter =
+    params.staff && staffList.some((s) => s.id === params.staff) ? params.staff : "";
+  if (staffFilter) {
+    schedules = schedules.filter(
+      (row) =>
+        row.created_by === staffFilter || row.participants.some((p) => p.userId === staffFilter),
+    );
+  }
+
   return (
     <StaffSchedulesClient
       schedules={schemaReady ? schedules : []}
@@ -106,6 +117,7 @@ export default async function StaffSchedulesPage({ searchParams }: Props) {
       month={month}
       category={category}
       mine={mine}
+      staff={staffFilter}
       schemaReady={schemaReady}
       currentUser={{ id: user.id, name: profileRow?.name ?? null, role: profileRow?.role ?? null }}
     />

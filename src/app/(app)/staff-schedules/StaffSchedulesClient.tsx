@@ -93,6 +93,7 @@ interface Props {
   month: string;
   category: string;
   mine: boolean;
+  staff: string;
   schemaReady: boolean;
   currentUser: CurrentUser;
 }
@@ -103,6 +104,7 @@ export default function StaffSchedulesClient({
   month,
   category,
   mine,
+  staff,
   schemaReady,
   currentUser,
 }: Props) {
@@ -118,14 +120,21 @@ export default function StaffSchedulesClient({
   const isAdmin = currentUser.role === "admin" || currentUser.role === "master";
   const [year, monthNum] = month.split("-").map(Number);
 
-  function updateQuery(next: { month?: string; category?: string; mine?: boolean }) {
+  function updateQuery(next: {
+    month?: string;
+    category?: string;
+    mine?: boolean;
+    staff?: string;
+  }) {
     const nextMonth = next.month ?? month;
     const nextCategory = next.category ?? category;
     const nextMine = next.mine ?? mine;
+    const nextStaff = next.staff ?? staff;
     const params = new URLSearchParams();
     params.set("month", nextMonth);
     if (nextCategory) params.set("category", nextCategory);
     if (nextMine) params.set("mine", "1");
+    if (nextStaff) params.set("staff", nextStaff);
     router.replace(`/staff-schedules?${params.toString()}`);
   }
 
@@ -303,15 +312,28 @@ export default function StaffSchedulesClient({
           내 일정만
         </button>
 
-        {schemaReady && (
-          <button
-            type="button"
-            onClick={() => openCreateForm(selectedDate ?? todayStr)}
-            className="ml-auto flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={14} /> 일정 등록
-          </button>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          <div className="w-44">
+            <AppSelect
+              value={staff}
+              onValueChange={(value) => updateQuery({ staff: value })}
+              aria-label="직원 필터"
+              options={[
+                { value: "", label: "직원 전체" },
+                ...staffList.map((s) => ({ value: s.id, label: s.name })),
+              ]}
+            />
+          </div>
+          {schemaReady && (
+            <button
+              type="button"
+              onClick={() => openCreateForm(selectedDate ?? todayStr)}
+              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors whitespace-nowrap"
+            >
+              <Plus size={14} /> 일정 등록
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-7 mb-1">
