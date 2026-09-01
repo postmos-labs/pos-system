@@ -70,6 +70,7 @@ export interface StaffScheduleRow {
 export interface StaffMember {
   id: string;
   name: string | null;
+  position?: string | null;
 }
 
 interface CurrentUser {
@@ -604,7 +605,14 @@ export default function StaffSchedulesClient({
                       : "text-slate-600 hover:bg-slate-50"
                   }`}
                 >
-                  <span className="truncate">{member.name}</span>
+                  <span className="min-w-0 truncate">
+                    {member.name}
+                    {member.position && (
+                      <span className="ml-1 text-xs font-normal text-slate-400">
+                        {member.position}
+                      </span>
+                    )}
+                  </span>
                   {count > 0 && (
                     <span
                       className={`shrink-0 text-xs ${active ? "text-blue-500" : "text-slate-400"}`}

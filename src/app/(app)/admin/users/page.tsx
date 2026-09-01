@@ -5,6 +5,18 @@ import CreateUserForm from "./CreateUserForm";
 import UsersList from "./UsersList";
 import NoticeButton from "./NoticeButton";
 
+// 136번 마이그레이션이 아직 적용되지 않은 환경에서는 position 컬럼이 없어
+// 이 컬럼을 참조하는 쿼리가 "column does not exist"(42703)로 실패한다. 실패로 취급하지 않고
+// position 없는 컬럼셋으로 재조회한다.
+function isMissingPositionColumnError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /column .* does not exist/i.test(error.message ?? "")
+  );
+}
+
 export default async function UsersPage() {
   const supabase = await createClient();
   const {
@@ -12,12 +24,19 @@ export default async function UsersPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: users }] = await Promise.all([
+  const [{ data: profile }, usersResult] = await Promise.all([
     supabase.from("profiles").select("role").eq("id", user.id).single(),
-    supabase.from("profiles").select("*").order("role").order("name"),
+    supabase.from("profiles").select("*, position").order("role").order("name"),
   ]);
 
   if (!profile || (profile.role !== "admin" && profile.role !== "master")) redirect("/dashboard");
+
+  let users = usersResult.data;
+  const positionReady = !isMissingPositionColumnError(usersResult.error);
+  if (!positionReady) {
+    const fallback = await supabase.from("profiles").select("*").order("role").order("name");
+    users = fallback.data;
+  }
 
   const emailById: Record<string, string> = {};
   if (users?.length) {
@@ -50,7 +69,12 @@ export default async function UsersPage() {
 
       <CreateUserForm />
 
-      <UsersList users={usersWithEmail} currentUserId={user.id} currentUserRole={profile.role} />
+      <UsersList
+        users={usersWithEmail}
+        currentUserId={user.id}
+        currentUserRole={profile.role}
+        positionReady={positionReady}
+      />
     </div>
   );
 }

@@ -9,6 +9,21 @@ export type ApprovalRole =
   | "test_account";
 export type Team = "sales" | "cs" | "tech" | "dev";
 
+// 직급 — 조직상의 서열. 승인 권한(ApprovalRole)과는 별개 축이다.
+export type Position = "대표" | "상무" | "실장" | "팀장" | "팀원";
+export const POSITIONS: Position[] = ["대표", "상무", "실장", "팀장", "팀원"];
+// 숫자가 클수록 상위. 목록 정렬과 향후 "○○급 이상" 판정에 쓴다 (supabase/136의 position_rank와 같은 값).
+export const POSITION_RANK: Record<Position, number> = {
+  대표: 100,
+  상무: 80,
+  실장: 60,
+  팀장: 40,
+  팀원: 10,
+};
+export function positionRank(position?: string | null): number {
+  return position && position in POSITION_RANK ? POSITION_RANK[position as Position] : 0;
+}
+
 export type TicketStatus =
   | "sales"
   | "cs_pending"
@@ -46,6 +61,7 @@ export interface Profile {
   phone?: string;
   role: Role;
   team?: Team;
+  position?: Position | null;
   approval_role?: ApprovalRole | null;
   can_delete?: boolean;
   created_at: string;

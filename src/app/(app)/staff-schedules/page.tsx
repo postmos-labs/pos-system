@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { kstToday } from "@/lib/date";
+import { positionRank } from "@/types";
 import StaffSchedulesClient, {
   type StaffMember,
   type StaffScheduleRow,
@@ -21,6 +22,18 @@ function isMissingStaffSchedulesTable(error: { code?: string; message?: string }
     error.code === "42P01" ||
     error.code === "PGRST205" ||
     /staff_schedule|schema cache|relation .* does not exist/i.test(error.message ?? "")
+  );
+}
+
+// 136번 마이그레이션이 아직 적용되지 않은 환경에서는 position 컬럼이 없어
+// 이를 참조하는 쿼리가 "column does not exist"(42703)로 실패한다. 실패로 취급하지 않고
+// position 없는 컬럼셋으로 재조회한다.
+function isMissingPositionColumnError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /column .* does not exist/i.test(error.message ?? "")
   );
 }
 
@@ -60,14 +73,24 @@ export default async function StaffSchedulesPage({ searchParams }: Props) {
     .order("starts_at", { ascending: true });
   if (category) scheduleQuery = scheduleQuery.eq("category", category);
 
-  const [{ data: scheduleRows, error: scheduleError }, { data: staffRows }, { data: profileRow }] =
+  const [{ data: scheduleRows, error: scheduleError }, staffResult, { data: profileRow }] =
     await Promise.all([
       scheduleQuery,
-      supabase.from("profiles").select("id,name").order("name", { ascending: true }),
+      supabase.from("profiles").select("id,name,position").order("name", { ascending: true }),
       supabase.from("profiles").select("name,role").eq("id", user.id).single(),
     ]);
 
   const schemaReady = !isMissingStaffSchedulesTable(scheduleError);
+
+  let staffRows: { id: string; name: string | null; position?: string | null }[] | null =
+    staffResult.data;
+  if (isMissingPositionColumnError(staffResult.error)) {
+    const fallback = await supabase
+      .from("profiles")
+      .select("id,name")
+      .order("name", { ascending: true });
+    staffRows = fallback.data;
+  }
 
   const scheduleIds = (scheduleRows ?? []).map((row) => row.id);
   const participantsByScheduleId: Record<string, { userId: string; name: string | null }[]> = {};
@@ -97,7 +120,12 @@ export default async function StaffSchedulesPage({ searchParams }: Props) {
     );
   }
 
-  const staffList: StaffMember[] = staffRows ?? [];
+  // 직급 등급 내림차순 -> 이름 오름차순. position_rank(supabase/136)와 같은 등급표를 TS에서 재사용한다.
+  const staffList: StaffMember[] = [...(staffRows ?? [])].sort(
+    (a, b) =>
+      positionRank(b.position) - positionRank(a.position) ||
+      (a.name ?? "").localeCompare(b.name ?? "", "ko"),
+  );
 
   // 오른쪽 직원 목록에 띄울 건수는 직원 필터를 걸기 "전" 목록으로 센다.
   // 필터 후에 세면 고른 직원 말고는 전부 0으로 보인다.

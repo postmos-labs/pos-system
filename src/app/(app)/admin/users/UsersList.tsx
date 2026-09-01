@@ -9,6 +9,7 @@ import RoleSelect from "./RoleSelect";
 import NameEdit from "./NameEdit";
 import ApprovalRoleSelect from "./ApprovalRoleSelect";
 import TeamSelect from "./TeamSelect";
+import PositionSelect from "./PositionSelect";
 
 const ROLE_COLOR: Record<string, string> = {
   master: "bg-red-100 text-red-700",
@@ -28,6 +29,7 @@ interface UserRow {
   phone: string | null;
   role: string;
   team?: string | null;
+  position?: string | null;
   approval_role?: string | null;
   can_delete?: boolean | null;
   email: string | null;
@@ -38,9 +40,15 @@ interface Props {
   users: UserRow[];
   currentUserId: string;
   currentUserRole: string;
+  positionReady?: boolean;
 }
 
-export default function UsersList({ users, currentUserId, currentUserRole }: Props) {
+export default function UsersList({
+  users,
+  currentUserId,
+  currentUserRole,
+  positionReady = true,
+}: Props) {
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -112,6 +120,9 @@ export default function UsersList({ users, currentUserId, currentUserRole }: Pro
                       <div className="flex flex-wrap items-center justify-end gap-2">
                         <RoleSelect userId={u.id} initialRole={u.role} />
                         <TeamSelect userId={u.id} initialTeam={u.team ?? defaultTeam(u.role)} />
+                        {positionReady && (
+                          <PositionSelect userId={u.id} position={u.position ?? ""} />
+                        )}
                         <ApprovalRoleSelect userId={u.id} initialRole={u.approval_role ?? null} />
                       </div>
                     ) : (
@@ -122,6 +133,9 @@ export default function UsersList({ users, currentUserId, currentUserRole }: Pro
                           {roleName}
                         </span>
                         <TeamSelect userId={u.id} initialTeam={u.team ?? defaultTeam(u.role)} />
+                        {positionReady && (
+                          <PositionSelect userId={u.id} position={u.position ?? ""} />
+                        )}
                         <ApprovalRoleSelect userId={u.id} initialRole={u.approval_role ?? null} />
                       </div>
                     )}

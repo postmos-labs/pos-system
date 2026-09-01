@@ -16,6 +16,18 @@ const APPROVAL_ROLES = [
   "test_account",
 ];
 const TEAMS = ["sales", "cs", "tech", "dev"];
+const POSITIONS = ["대표", "상무", "실장", "팀장", "팀원"];
+
+// 136번 마이그레이션이 아직 적용되지 않은 환경에서는 position 컬럼이 없어
+// "column does not exist"(42703) 에러가 난다.
+function isMissingPositionColumnError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /column .* does not exist/i.test(error.message ?? "")
+  );
+}
 
 export async function createUserAccount(form: {
   name: string;
@@ -152,6 +164,28 @@ export async function setUserTeam(userId: string, team: string) {
   const supabase = createAdminClient();
   const { error } = await supabase.from("profiles").update({ team }).eq("id", userId);
   if (error) return { error: error.message };
+
+  revalidatePath("/admin/users");
+  return { error: null };
+}
+
+export async function setUserPosition(userId: string, position: string) {
+  const authError = await requireAdmin();
+  if (authError) return { error: authError };
+  if (position !== "" && !POSITIONS.includes(position))
+    return { error: "올바르지 않은 직급입니다." };
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({ position: position === "" ? null : position })
+    .eq("id", userId);
+  if (error) {
+    if (isMissingPositionColumnError(error)) {
+      return { error: "직급 마이그레이션(supabase/136)이 아직 적용되지 않았습니다." };
+    }
+    return { error: error.message };
+  }
 
   revalidatePath("/admin/users");
   return { error: null };
