@@ -42,7 +42,9 @@ export default function StaffScheduleMobileView({ staff, schedules, month, slug 
   function shiftMonth(delta: number) {
     const date = new Date(Date.UTC(year, monthNum - 1 + delta, 1));
     const nextMonth = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
-    router.replace(`/staff-schedules/${slug}?month=${nextMonth}`);
+    // slug는 주소에서 온 값이라 이미 인코딩돼 있을 수 있다. 한 번 풀었다가 넣어
+    // 주소창에 %EB%B0%95... 대신 한글이 그대로 남게 한다.
+    router.replace(`/staff-schedules/${decodeURIComponent(slug)}?month=${nextMonth}`);
   }
 
   const groups = useMemo(() => {

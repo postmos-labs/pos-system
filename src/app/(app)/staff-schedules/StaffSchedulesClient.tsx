@@ -756,10 +756,9 @@ export default function StaffSchedulesClient({
                         const sameName = staffList.filter(
                           (m) => (m.name ?? "") === (member.name ?? ""),
                         ).length;
-                        const slug =
-                          member.name && sameName === 1
-                            ? encodeURIComponent(member.name)
-                            : member.id;
+                        // 한글 이름을 encodeURIComponent로 감싸면 %EB%B0%95... 형태로 복사돼
+                        // 카톡에 붙였을 때 알아볼 수 없다. 브라우저가 알아서 처리하므로 그대로 둔다.
+                        const slug = member.name && sameName === 1 ? member.name : member.id;
                         await navigator.clipboard.writeText(
                           `${window.location.origin}/staff-schedules/${slug}`,
                         );
