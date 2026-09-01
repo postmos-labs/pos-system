@@ -74,7 +74,6 @@ export default async function TicketsPage({ searchParams }: Props) {
   const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
   if (!profile) redirect("/login");
   const p = profile as Profile;
-  const userId = user.id;
 
   // 검색은 서버에서 전체 범위로 수행한다 — 클라이언트에서 현재 페이지 50건만 거르면
   // 다른 페이지의 티켓이 검색되지 않는다. 가맹점명·기사명은 조인 테이블이라 or()에
@@ -111,9 +110,9 @@ export default async function TicketsPage({ searchParams }: Props) {
     // 062 마이그레이션(deleted_at) 미적용 환경에서는 이 필터가 42703을 내므로 뺄 수 있게 한다.
     if (useSoftDeleteFilter) q = q.is("deleted_at", null);
 
-    if (p.role === "sales") q = q.eq("sales_id", userId);
-    if (p.role === "cs") q = q.eq("cs_id", userId);
-    if (p.role === "tech") q = q.eq("tech_id", userId);
+    // 담당자 기준으로 본인 건만 걸러내지 않는다. 인입내역은 팀이 함께 보는 장부라
+    // 서로의 인입이 보여야 하고, 담당자가 아직 안 잡힌 건도 목록에서 빠지면 안 된다.
+    // 팀별로 나눠 볼 일은 아래 CS팀/기술지원 탭이 담당한다.
 
     if (useTeamFilter && (tab === "cs" || tab === "tech")) {
       q = q.eq("team", tab);
