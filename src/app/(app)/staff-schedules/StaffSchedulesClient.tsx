@@ -465,17 +465,16 @@ export default function StaffSchedulesClient({
       toast.error("제목을 입력해주세요.");
       return;
     }
-    // 종료 시각은 따로 받지 않는다. DB가 종료를 요구하므로 시작 한 시간 뒤로 채우고,
-    // 자정을 넘기면 그날 23:59로 맞춰 종료가 시작보다 빨라지지 않게 한다.
-    const startMinutes =
-      Number(form.startTime.slice(0, 2)) * 60 + Number(form.startTime.slice(3, 5));
-    const endMinutes = startMinutes + 60;
-    const computedEnd = `${String(Math.floor(endMinutes / 60) % 24).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
-    const safeEnd = computedEnd < form.startTime ? "23:59" : computedEnd;
+    if (!form.allDay && form.endTime < form.startTime) {
+      toast.error("종료 시각은 시작 시각보다 빠를 수 없습니다.");
+      return;
+    }
     const startsAt = form.allDay
       ? `${form.date}T00:00:00+09:00`
       : `${form.date}T${form.startTime}:00+09:00`;
-    const endsAt = form.allDay ? `${form.date}T23:59:00+09:00` : `${form.date}T${safeEnd}:00+09:00`;
+    const endsAt = form.allDay
+      ? `${form.date}T23:59:00+09:00`
+      : `${form.date}T${form.endTime}:00+09:00`;
 
     setSubmitting(true);
     const input = {
@@ -839,7 +838,9 @@ export default function StaffSchedulesClient({
               </div>
               <div className="text-slate-600">
                 {toDatePart(detailSchedule.starts_at)}{" "}
-                {detailSchedule.all_day ? "종일" : toTimePart(detailSchedule.starts_at)}
+                {detailSchedule.all_day
+                  ? "종일"
+                  : `${toTimePart(detailSchedule.starts_at)} ~ ${toTimePart(detailSchedule.ends_at)}`}
               </div>
               {detailSchedule.location && (
                 <div className="text-slate-600">장소: {detailSchedule.location}</div>
@@ -927,47 +928,81 @@ export default function StaffSchedulesClient({
                 </div>
               </div>
 
-              {!form.allDay && (
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">시각</label>
-                  <div className="flex gap-1.5">
-                    <AppSelect
-                      value={form.startTime.slice(0, 2)}
-                      onValueChange={(value) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          startTime: `${value}:${prev.startTime.slice(3, 5)}`,
-                        }))
-                      }
-                      aria-label="시"
-                      className="flex-1"
-                      options={HOUR_OPTIONS}
-                    />
-                    <AppSelect
-                      value={form.startTime.slice(3, 5)}
-                      onValueChange={(value) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          startTime: `${prev.startTime.slice(0, 2)}:${value}`,
-                        }))
-                      }
-                      aria-label="분"
-                      className="flex-1"
-                      options={minuteOptions(form.startTime.slice(3, 5))}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* 종일은 가끔 쓰는 선택지라 시각 입력 아래에 둔다(기본은 시각 입력). */}
               <label className="flex items-center gap-2 text-sm text-slate-600">
                 <input
                   type="checkbox"
                   checked={form.allDay}
                   onChange={(e) => setForm((prev) => ({ ...prev, allDay: e.target.checked }))}
                 />
-                하루 종일
+                종일
               </label>
+
+              {!form.allDay && (
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-slate-500 mb-1">
+                      시작 시각
+                    </label>
+                    <div className="flex gap-1.5">
+                      <AppSelect
+                        value={form.startTime.slice(0, 2)}
+                        onValueChange={(value) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            startTime: `${value}:${prev.startTime.slice(3, 5)}`,
+                          }))
+                        }
+                        aria-label="시작 시"
+                        className="flex-1"
+                        options={HOUR_OPTIONS}
+                      />
+                      <AppSelect
+                        value={form.startTime.slice(3, 5)}
+                        onValueChange={(value) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            startTime: `${prev.startTime.slice(0, 2)}:${value}`,
+                          }))
+                        }
+                        aria-label="시작 분"
+                        className="flex-1"
+                        options={minuteOptions(form.startTime.slice(3, 5))}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-slate-500 mb-1">
+                      종료 시각
+                    </label>
+                    <div className="flex gap-1.5">
+                      <AppSelect
+                        value={form.endTime.slice(0, 2)}
+                        onValueChange={(value) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            endTime: `${value}:${prev.endTime.slice(3, 5)}`,
+                          }))
+                        }
+                        aria-label="종료 시"
+                        className="flex-1"
+                        options={HOUR_OPTIONS}
+                      />
+                      <AppSelect
+                        value={form.endTime.slice(3, 5)}
+                        onValueChange={(value) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            endTime: `${prev.endTime.slice(0, 2)}:${value}`,
+                          }))
+                        }
+                        aria-label="종료 분"
+                        className="flex-1"
+                        options={minuteOptions(form.endTime.slice(3, 5))}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">장소 (선택)</label>
