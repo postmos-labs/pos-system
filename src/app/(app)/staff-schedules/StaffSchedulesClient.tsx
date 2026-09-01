@@ -95,12 +95,22 @@ function emptyForm(date: string): FormState {
   };
 }
 
+// starts_at/ends_at은 Supabase가 UTC 문자열로 돌려준다. 그대로 잘라 쓰면 한국시각보다
+// 9시간 이르게 보이므로(14:00 -> 05:00), 항상 Asia/Seoul로 변환해서 날짜·시각을 뽑는다.
+const KST_DATE_FMT = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" });
+const KST_TIME_FMT = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Asia/Seoul",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
 function toDatePart(iso: string) {
-  return iso.slice(0, 10);
+  return KST_DATE_FMT.format(new Date(iso));
 }
 
 function toTimePart(iso: string) {
-  return iso.slice(11, 16);
+  return KST_TIME_FMT.format(new Date(iso));
 }
 
 interface Props {
