@@ -130,17 +130,17 @@ export default function StaffScheduleMobileView({
       return;
     }
     const start = `${form.startHour}:${form.startMin}`;
-    const end = `${form.endHour}:${form.endMin}`;
-    if (!form.allDay && end < start) {
-      toast.error("종료 시각은 시작 시각보다 빠를 수 없습니다.");
-      return;
-    }
+    // 종료 시각은 따로 받지 않는다. DB가 종료를 요구하므로 시작 한 시간 뒤로 채운다.
+    const endMinutes = Number(form.startHour) * 60 + Number(form.startMin) + 60;
+    const end = `${String(Math.floor(endMinutes / 60) % 24).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
+    // 자정을 넘기면 그날 23:59로 맞춰 종료가 시작보다 빨라지지 않게 한다.
+    const safeEnd = end < start ? "23:59" : end;
     setSaving(true);
     const payload = {
       title: form.title.trim(),
       category: form.category,
       startsAt: form.allDay ? `${form.date}T00:00:00+09:00` : `${form.date}T${start}:00+09:00`,
-      endsAt: form.allDay ? `${form.date}T23:59:00+09:00` : `${form.date}T${end}:00+09:00`,
+      endsAt: form.allDay ? `${form.date}T23:59:00+09:00` : `${form.date}T${safeEnd}:00+09:00`,
       allDay: form.allDay,
       location: form.location.trim() || null,
       memo: form.memo.trim() || null,
@@ -268,9 +268,7 @@ export default function StaffScheduleMobileView({
                 <p className="text-xs font-semibold text-slate-400">일시</p>
                 <p className="text-[17px] font-bold text-slate-900 tabular-nums">
                   {toDatePart(detail.starts_at).replace(/-/g, ".")}{" "}
-                  {detail.all_day
-                    ? "종일"
-                    : `${toTimePart(detail.starts_at)} ~ ${toTimePart(detail.ends_at)}`}
+                  {detail.all_day ? "종일" : toTimePart(detail.starts_at)}
                 </p>
               </div>
               {detail.location && (
@@ -372,66 +370,42 @@ export default function StaffScheduleMobileView({
                 </div>
               </div>
 
-              <label className="flex items-center gap-2 text-[15px] text-slate-700">
+              {!form.allDay && (
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-600">시각</label>
+                  <div className="flex gap-1.5">
+                    <select
+                      value={form.startHour}
+                      onChange={(e) => setForm((p) => ({ ...p, startHour: e.target.value }))}
+                      className={selectClass}
+                    >
+                      {HOURS.map((h) => (
+                        <option key={h} value={h}>{`${h}시`}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={form.startMin}
+                      onChange={(e) => setForm((p) => ({ ...p, startMin: e.target.value }))}
+                      className={selectClass}
+                    >
+                      {MINUTES.map((m) => (
+                        <option key={m} value={m}>{`${m}분`}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* 종일은 가끔 쓰는 선택지라 시각 입력 아래에 둔다(기본은 시각 입력). */}
+              <label className="flex items-center gap-2 text-[15px] text-slate-600">
                 <input
                   type="checkbox"
                   checked={form.allDay}
                   onChange={(e) => setForm((p) => ({ ...p, allDay: e.target.checked }))}
                   className="size-5 accent-blue-600"
                 />
-                종일
+                하루 종일
               </label>
-
-              {!form.allDay && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="mb-1 block text-sm font-semibold text-slate-600">시작</label>
-                    <div className="flex gap-1.5">
-                      <select
-                        value={form.startHour}
-                        onChange={(e) => setForm((p) => ({ ...p, startHour: e.target.value }))}
-                        className={selectClass}
-                      >
-                        {HOURS.map((h) => (
-                          <option key={h} value={h}>{`${h}시`}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={form.startMin}
-                        onChange={(e) => setForm((p) => ({ ...p, startMin: e.target.value }))}
-                        className={selectClass}
-                      >
-                        {MINUTES.map((m) => (
-                          <option key={m} value={m}>{`${m}분`}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-semibold text-slate-600">종료</label>
-                    <div className="flex gap-1.5">
-                      <select
-                        value={form.endHour}
-                        onChange={(e) => setForm((p) => ({ ...p, endHour: e.target.value }))}
-                        className={selectClass}
-                      >
-                        {HOURS.map((h) => (
-                          <option key={h} value={h}>{`${h}시`}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={form.endMin}
-                        onChange={(e) => setForm((p) => ({ ...p, endMin: e.target.value }))}
-                        className={selectClass}
-                      >
-                        {MINUTES.map((m) => (
-                          <option key={m} value={m}>{`${m}분`}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               <div>
                 <label className="mb-1 block text-sm font-semibold text-slate-600">장소</label>
@@ -529,9 +503,7 @@ export default function StaffScheduleMobileView({
                         {ev.category}
                       </span>
                       <p className="text-[22px] leading-tight font-extrabold text-slate-900 tabular-nums">
-                        {ev.all_day
-                          ? "종일"
-                          : `${toTimePart(ev.starts_at)} ~ ${toTimePart(ev.ends_at)}`}
+                        {ev.all_day ? "종일" : toTimePart(ev.starts_at)}
                       </p>
                       <p className="mt-0.5 text-[17px] leading-snug font-semibold text-slate-800">
                         {ev.title}
