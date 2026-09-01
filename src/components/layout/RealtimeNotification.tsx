@@ -12,8 +12,21 @@ interface Props {
 
 const POLL_INTERVAL_MS = 60_000;
 
+// 버튼 문구는 알림 종류에 맞춰 정한다. 예전에는 이동할 곳이 있으면 무조건 "승인요청 보기"라
+// 적혀서, 공지처럼 승인과 무관한 알림에도 그 문구가 떴다.
+function actionLabelFor(type: string | null, href?: string) {
+  if (!href) return "확인";
+  if (type?.startsWith("approval_")) return "승인요청 보기";
+  return "알림 보기";
+}
+
 export default function RealtimeNotification({ userId }: Props) {
-  const [modal, setModal] = useState<{ title: string; body?: string; href?: string } | null>(null);
+  const [modal, setModal] = useState<{
+    title: string;
+    body?: string;
+    href?: string;
+    actionLabel: string;
+  } | null>(null);
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
@@ -37,20 +50,30 @@ export default function RealtimeNotification({ userId }: Props) {
       sinceRef.current = data[data.length - 1].created_at;
 
       let hasScheduleNotice = false;
-      const popups: { title: string; body?: string; href?: string }[] = [];
+      const popups: { title: string; body?: string; href?: string; actionLabel: string }[] = [];
       for (const row of data) {
         if ((row.type as string)?.startsWith("schedule_")) {
           hasScheduleNotice = true;
           continue;
         }
-        const href = row.installation_id
-          ? `/installs?id=${row.installation_id}`
-          : row.franchise_application_id
-            ? `/franchise?id=${row.franchise_application_id}`
-            : row.ticket_id
-              ? `/tickets/${row.ticket_id}`
-              : "/notifications";
-        popups.push({ title: row.title, body: row.body ?? undefined, href });
+        const type = (row.type as string | null) ?? null;
+        // 공지는 읽고 닫으면 끝이라 이동할 곳을 두지 않는다(버튼도 "확인"이 된다).
+        const href =
+          type === "notice"
+            ? undefined
+            : row.installation_id
+              ? `/installs?id=${row.installation_id}`
+              : row.franchise_application_id
+                ? `/franchise?id=${row.franchise_application_id}`
+                : row.ticket_id
+                  ? `/tickets/${row.ticket_id}`
+                  : "/notifications";
+        popups.push({
+          title: row.title,
+          body: row.body ?? undefined,
+          href,
+          actionLabel: actionLabelFor(type, href),
+        });
       }
       // 폴링 한 번에 여러 건이 오면 마지막 것만 남지 않도록, 2건 이상이면 묶음 모달 하나로 안내한다.
       if (popups.length === 1) {
@@ -60,6 +83,7 @@ export default function RealtimeNotification({ userId }: Props) {
           title: `새 알림 ${popups.length}건`,
           body: `${popups[0].title} 외 ${popups.length - 1}건`,
           href: "/notifications",
+          actionLabel: "알림 보기",
         });
       }
       if (hasScheduleNotice) router.refresh();
@@ -104,7 +128,7 @@ export default function RealtimeNotification({ userId }: Props) {
                 }}
                 className="w-full bg-blue-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors"
               >
-                {modal.href ? "승인요청 보기" : "확인"}
+                {modal.actionLabel}
               </button>
             </div>
           </div>
