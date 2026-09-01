@@ -211,11 +211,11 @@ export default function StaffSchedulesClient({
   // 화면을 그대로 캡처하는 라이브러리는 Tailwind 4의 oklch 색을 해석하지 못해 깨진다.
   // 그래서 달력을 캔버스에 직접 그려 이미지를 만든다.
   async function copyAsImage() {
-    const CELL_W = 200;
-    const CELL_H = 132;
-    const PAD = 28;
-    const HEAD = 92;
-    const DAY_H = 34;
+    const CELL_W = 260;
+    const CELL_H = 178;
+    const PAD = 36;
+    const HEAD = 110;
+    const DAY_H = 44;
     const rows = cells.length / 7;
     const width = PAD * 2 + CELL_W * 7;
     const height = PAD * 2 + HEAD + DAY_H + CELL_H * rows;
@@ -244,24 +244,26 @@ export default function StaffSchedulesClient({
       : "";
     const heading = owner ? `${owner} ${monthNum}월 일정` : `${year}년 ${monthNum}월 일정`;
     ctx.fillStyle = "#0f172a";
-    ctx.font = font(30, "700");
-    ctx.fillText(heading, PAD, PAD + 30);
+    ctx.font = font(38, "800");
+    ctx.fillText(heading, PAD, PAD + 36);
 
     // 부제 — 연도(제목에서 빠졌을 때)와 걸어둔 구분을 적는다.
     const subParts = [owner ? `${year}년` : "", category].filter(Boolean);
     if (subParts.length) {
       ctx.fillStyle = "#64748b";
-      ctx.font = font(16);
-      ctx.fillText(subParts.join(" · "), PAD, PAD + 58);
+      ctx.font = font(19);
+      ctx.fillText(subParts.join(" · "), PAD, PAD + 70);
     }
 
     const gridTop = PAD + HEAD;
-    // 요일
+    // 요일 머리글 — 옅은 띠를 깔아 본문과 구분한다.
+    ctx.fillStyle = "#f1f5f9";
+    ctx.fillRect(PAD, gridTop, CELL_W * 7, DAY_H);
     for (let i = 0; i < 7; i++) {
-      ctx.fillStyle = i === 0 ? "#f87171" : i === 6 ? "#60a5fa" : "#64748b";
-      ctx.font = font(15, "600");
+      ctx.fillStyle = i === 0 ? "#ef4444" : i === 6 ? "#3b82f6" : "#475569";
+      ctx.font = font(19, "700");
       ctx.textAlign = "center";
-      ctx.fillText(DAYS[i], PAD + CELL_W * i + CELL_W / 2, gridTop + 22);
+      ctx.fillText(DAYS[i], PAD + CELL_W * i + CELL_W / 2, gridTop + 29);
     }
     ctx.textAlign = "left";
 
@@ -271,49 +273,58 @@ export default function StaffSchedulesClient({
       const row = Math.floor(idx / 7);
       const x = PAD + col * CELL_W;
       const y = bodyTop + row * CELL_H;
-
-      ctx.strokeStyle = "#e2e8f0";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x, y, CELL_W, CELL_H);
-
       const day = cells[idx];
-      if (!day) {
-        ctx.fillStyle = "#f8fafc";
-        ctx.fillRect(x + 1, y + 1, CELL_W - 2, CELL_H - 2);
-        continue;
-      }
 
-      ctx.fillStyle = col === 0 ? "#ef4444" : col === 6 ? "#3b82f6" : "#334155";
-      ctx.font = font(14, "600");
-      ctx.fillText(String(day), x + 10, y + 22);
+      // 칸 바탕 — 주말은 옅게 깔아 주중과 구분한다.
+      ctx.fillStyle = !day ? "#f8fafc" : col === 0 || col === 6 ? "#fbfcfe" : "#ffffff";
+      ctx.fillRect(x, y, CELL_W, CELL_H);
+      ctx.strokeStyle = "#cbd5e1";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, CELL_W - 1, CELL_H - 1);
+
+      if (!day) continue;
+
+      ctx.fillStyle = col === 0 ? "#dc2626" : col === 6 ? "#2563eb" : "#0f172a";
+      ctx.font = font(19, "700");
+      ctx.fillText(String(day), x + 13, y + 28);
 
       const events = eventsByDate[dateStr(day)] ?? [];
       const MAX = 4;
+      const CHIP_H = 30;
       events.slice(0, MAX).forEach((ev, i) => {
         const tone = CATEGORY_HEX[ev.category] ?? CATEGORY_HEX["기타"];
-        const cy = y + 32 + i * 23;
+        const cy = y + 40 + i * (CHIP_H + 4);
+        const cx = x + 10;
+        const cw = CELL_W - 20;
+        // 칩 — 왼쪽에 구분 색 막대를 세워 종류가 한눈에 들어오게 한다.
         ctx.fillStyle = tone.bg;
+        ctx.fillRect(cx, cy, cw, CHIP_H);
         ctx.strokeStyle = tone.border;
-        ctx.fillRect(x + 7, cy, CELL_W - 14, 19);
-        ctx.strokeRect(x + 7, cy, CELL_W - 14, 19);
+        ctx.strokeRect(cx + 0.5, cy + 0.5, cw - 1, CHIP_H - 1);
         ctx.fillStyle = tone.text;
-        ctx.font = font(12, "600");
-        const label = `${ev.all_day ? "종일" : toTimePart(ev.starts_at)} ${ev.title}`;
-        // 칸을 넘치면 말줄임한다.
-        let text = label;
-        const maxW = CELL_W - 22;
+        ctx.fillRect(cx, cy, 4, CHIP_H);
+
+        const timeLabel = ev.all_day ? "종일" : toTimePart(ev.starts_at);
+        ctx.font = font(15, "800");
+        const timeW = ctx.measureText(timeLabel).width;
+        ctx.fillText(timeLabel, cx + 12, cy + 20);
+
+        ctx.font = font(15, "500");
+        const titleX = cx + 12 + timeW + 7;
+        const maxW = cx + cw - 10 - titleX;
+        let text = ev.title;
         if (ctx.measureText(text).width > maxW) {
           while (text.length > 1 && ctx.measureText(text + "…").width > maxW) {
             text = text.slice(0, -1);
           }
           text += "…";
         }
-        ctx.fillText(text, x + 12, cy + 13.5);
+        ctx.fillText(text, titleX, cy + 20);
       });
       if (events.length > MAX) {
-        ctx.fillStyle = "#94a3b8";
-        ctx.font = font(11);
-        ctx.fillText(`+${events.length - MAX}건`, x + 12, y + 32 + MAX * 23 + 11);
+        ctx.fillStyle = "#64748b";
+        ctx.font = font(14, "700");
+        ctx.fillText(`+${events.length - MAX}건`, x + 13, y + 40 + MAX * (CHIP_H + 4) + 14);
       }
     }
 
@@ -509,8 +520,8 @@ export default function StaffSchedulesClient({
             {DAYS.map((d, i) => (
               <div
                 key={d}
-                className={`text-center font-semibold text-xs py-2 ${
-                  i === 0 ? "text-red-400" : i === 6 ? "text-blue-400" : "text-slate-500"
+                className={`text-center font-bold text-[13px] py-2 ${
+                  i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-slate-600"
                 }`}
               >
                 {d}
@@ -524,7 +535,7 @@ export default function StaffSchedulesClient({
                 return (
                   <div
                     key={`empty-${idx}`}
-                    className="border-b border-r border-slate-200 bg-slate-50/50 min-h-[90px]"
+                    className="border-b border-r border-slate-200 bg-slate-100/60 min-h-[118px]"
                   />
                 );
               const ds = dateStr(day);
@@ -536,19 +547,23 @@ export default function StaffSchedulesClient({
                 <div
                   key={ds}
                   onClick={() => setSelectedDate(isSelected ? null : ds)}
-                  className={`border-b border-r border-slate-200 cursor-pointer transition-colors overflow-hidden min-h-[90px] p-1.5 ${
-                    isSelected ? "bg-blue-50" : "hover:bg-slate-50"
+                  className={`border-b border-r border-slate-200 cursor-pointer transition-colors overflow-hidden min-h-[118px] p-2 ${
+                    isSelected
+                      ? "bg-blue-50"
+                      : dow === 0 || dow === 6
+                        ? "bg-slate-50/70 hover:bg-slate-100/70"
+                        : "hover:bg-slate-50"
                   }`}
                 >
                   <div
-                    className={`flex items-center justify-center rounded-full font-semibold w-7 h-7 text-sm mb-1 ${
+                    className={`flex items-center justify-center rounded-full font-bold w-7 h-7 text-[15px] mb-1.5 ${
                       isToday
                         ? "bg-blue-600 text-white"
                         : dow === 0
                           ? "text-red-500"
                           : dow === 6
                             ? "text-blue-500"
-                            : "text-slate-700"
+                            : "text-slate-800"
                     }`}
                   >
                     {day}
@@ -562,16 +577,21 @@ export default function StaffSchedulesClient({
                           e.stopPropagation();
                           setDetailSchedule(ev);
                         }}
-                        className={`text-left text-[10px] font-medium rounded border px-1.5 py-0.5 truncate ${
+                        className={`block w-full text-left text-[12px] leading-tight rounded-md border-l-[3px] border px-1.5 py-1 ${
                           CATEGORY_COLOR[ev.category] ?? CATEGORY_COLOR["기타"]
                         }`}
                         title={`${ev.all_day ? "종일" : toTimePart(ev.starts_at)} ${ev.title}`}
                       >
-                        {ev.all_day ? "종일" : toTimePart(ev.starts_at)} {ev.title}
+                        <span className="font-bold tabular-nums">
+                          {ev.all_day ? "종일" : toTimePart(ev.starts_at)}
+                        </span>{" "}
+                        <span className="font-medium">{ev.title}</span>
                       </button>
                     ))}
                     {events.length > 3 && (
-                      <div className="text-slate-400 px-1 text-[10px]">+{events.length - 3}건</div>
+                      <div className="text-slate-500 px-1 text-[11px] font-semibold">
+                        +{events.length - 3}건
+                      </div>
                     )}
                   </div>
                 </div>
