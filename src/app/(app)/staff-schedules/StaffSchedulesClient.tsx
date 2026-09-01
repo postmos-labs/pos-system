@@ -8,6 +8,22 @@ import { DatePickerField } from "@/components/ui/DatePickerField";
 import { useToast } from "@/components/ui/Toast";
 import { createStaffSchedule, updateStaffSchedule, deleteStaffSchedule } from "./actions";
 
+// 시각은 24시간제로 고른다. <input type="time">은 브라우저 언어에 따라 "오후 2:00"으로 보여서
+// 직원마다 다르게 표시되고, 모달 안에서 기본 시계 UI가 잘리는 문제도 있다.
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => {
+  const value = String(i).padStart(2, "0");
+  return { value, label: `${value}시` };
+});
+const MINUTE_VALUES = ["00", "10", "20", "30", "40", "50"];
+// 예전에 다른 방식으로 저장돼 목록에 없는 분(예: 15분)이면 그 값을 끼워 넣는다.
+// 그러지 않으면 수정 창에서 분이 빈칸으로 보인다.
+function minuteOptions(current: string) {
+  const values = MINUTE_VALUES.includes(current)
+    ? MINUTE_VALUES
+    : [...MINUTE_VALUES, current].sort();
+  return values.map((value) => ({ value, label: `${value}분` }));
+}
+
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
 const CATEGORIES = ["미팅", "회의", "교육", "외출", "휴가", "기타"] as const;
@@ -615,23 +631,63 @@ export default function StaffSchedulesClient({
                     <label className="block text-xs font-medium text-slate-500 mb-1">
                       시작 시각
                     </label>
-                    <input
-                      type="time"
-                      value={form.startTime}
-                      onChange={(e) => setForm((prev) => ({ ...prev, startTime: e.target.value }))}
-                      className="w-full text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
-                    />
+                    <div className="flex gap-1.5">
+                      <AppSelect
+                        value={form.startTime.slice(0, 2)}
+                        onValueChange={(value) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            startTime: `${value}:${prev.startTime.slice(3, 5)}`,
+                          }))
+                        }
+                        aria-label="시작 시"
+                        className="flex-1"
+                        options={HOUR_OPTIONS}
+                      />
+                      <AppSelect
+                        value={form.startTime.slice(3, 5)}
+                        onValueChange={(value) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            startTime: `${prev.startTime.slice(0, 2)}:${value}`,
+                          }))
+                        }
+                        aria-label="시작 분"
+                        className="flex-1"
+                        options={minuteOptions(form.startTime.slice(3, 5))}
+                      />
+                    </div>
                   </div>
                   <div className="flex-1">
                     <label className="block text-xs font-medium text-slate-500 mb-1">
                       종료 시각
                     </label>
-                    <input
-                      type="time"
-                      value={form.endTime}
-                      onChange={(e) => setForm((prev) => ({ ...prev, endTime: e.target.value }))}
-                      className="w-full text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
-                    />
+                    <div className="flex gap-1.5">
+                      <AppSelect
+                        value={form.endTime.slice(0, 2)}
+                        onValueChange={(value) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            endTime: `${value}:${prev.endTime.slice(3, 5)}`,
+                          }))
+                        }
+                        aria-label="종료 시"
+                        className="flex-1"
+                        options={HOUR_OPTIONS}
+                      />
+                      <AppSelect
+                        value={form.endTime.slice(3, 5)}
+                        onValueChange={(value) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            endTime: `${prev.endTime.slice(0, 2)}:${value}`,
+                          }))
+                        }
+                        aria-label="종료 분"
+                        className="flex-1"
+                        options={minuteOptions(form.endTime.slice(3, 5))}
+                      />
+                    </div>
                   </div>
                 </div>
               )}

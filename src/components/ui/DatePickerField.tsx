@@ -73,7 +73,7 @@ export function CalendarPopoverButton({
           align="start"
           sideOffset={6}
           onClick={(event) => event.stopPropagation()}
-          className="z-[80] rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
+          className="z-[200] rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
         >
           <DayPicker
             mode="single"
@@ -149,7 +149,7 @@ export function DatePickerField({
         <Popover.Content
           align="start"
           sideOffset={6}
-          className="z-[80] rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
+          className="z-[200] rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
         >
           <DayPicker
             mode="single"
