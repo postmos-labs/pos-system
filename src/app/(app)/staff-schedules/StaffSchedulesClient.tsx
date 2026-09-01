@@ -188,8 +188,10 @@ export default function StaffSchedulesClient({
   }) {
     const nextMonth = next.month ?? month;
     const nextCategory = next.category ?? category;
-    const nextMine = next.mine ?? mine;
-    const nextStaff = next.staff ?? staff;
+    // "내 일정만"과 "직원 선택"은 함께 걸면 교집합이 되어 대개 빈 화면이 된다.
+    // 한쪽을 고르면 다른 쪽을 자동으로 푼다.
+    const nextMine = next.staff !== undefined && next.staff !== "" ? false : (next.mine ?? mine);
+    const nextStaff = next.mine === true ? "" : (next.staff ?? staff);
     const params = new URLSearchParams();
     params.set("month", nextMonth);
     if (nextCategory) params.set("category", nextCategory);
@@ -589,6 +591,12 @@ export default function StaffSchedulesClient({
             ))}
           </div>
 
+          {mine && schedules.length === 0 && (
+            <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              &apos;내 일정만&apos;이 켜져 있어 내가 등록했거나 참석하는 일정만 보입니다. 전체를
+              보려면 버튼을 다시 눌러 끄세요.
+            </div>
+          )}
           <div className="grid grid-cols-7 flex-1 min-h-0 border-t border-l border-slate-200 rounded-xl overflow-hidden">
             {cells.map((day, idx) => {
               if (!day)
