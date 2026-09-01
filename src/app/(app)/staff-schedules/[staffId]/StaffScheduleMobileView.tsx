@@ -5,9 +5,16 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, MapPin, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { kstToday } from "@/lib/date";
 import { useToast } from "@/components/ui/Toast";
-import { createStaffSchedule, updateStaffSchedule, deleteStaffSchedule } from "../actions";
+import {
+  createStaffSchedule,
+  updateStaffSchedule,
+  deleteStaffSchedule,
+  respondToStaffSchedule,
+} from "../actions";
 import {
   CATEGORY_COLOR,
+  RESPONSE_LABEL,
+  RESPONSE_COLOR,
   toDatePart,
   toTimePart,
   type StaffScheduleRow,
@@ -39,6 +46,7 @@ interface Props {
   month: string;
   // 주소에 쓰인 값(이름 또는 id). 월을 넘겨도 들어온 형태를 그대로 유지한다.
   slug: string;
+  responseReady: boolean;
   currentUser: { id: string; role: string | null };
 }
 
@@ -54,6 +62,7 @@ export default function StaffScheduleMobileView({
   schedules,
   month,
   slug,
+  responseReady,
   currentUser,
 }: Props) {
   const router = useRouter();
@@ -67,6 +76,9 @@ export default function StaffScheduleMobileView({
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState<StaffScheduleRow | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [responding, setResponding] = useState(false);
+  // 이미 응답한 뒤 "응답 변경"을 눌렀을 때 다시 참석/불참 버튼을 보여주는 데 쓴다.
+  const [respondEditing, setRespondEditing] = useState(false);
   const isAdmin = currentUser.role === "admin" || currentUser.role === "master";
   const canEdit = (row: StaffScheduleRow) => row.created_by === currentUser.id || isAdmin;
   const [form, setForm] = useState({
@@ -131,6 +143,36 @@ export default function StaffScheduleMobileView({
     router.refresh();
   }
 
+  function openDetail(row: StaffScheduleRow) {
+    setRespondEditing(false);
+    setDetail(row);
+  }
+
+  async function handleRespond(response: "accepted" | "declined") {
+    if (!detail) return;
+    setResponding(true);
+    const result = await respondToStaffSchedule(detail.id, response);
+    setResponding(false);
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    setRespondEditing(false);
+    // 시트를 다시 열지 않아도 바로 바뀐 응답이 보이도록 열려 있는 상세의 내 응답만 갱신한다.
+    setDetail((prev) =>
+      prev
+        ? {
+            ...prev,
+            participants: prev.participants.map((p) =>
+              p.userId === currentUser.id ? { ...p, response } : p,
+            ),
+          }
+        : prev,
+    );
+    toast.success(response === "accepted" ? "참석으로 응답했습니다." : "불참으로 응답했습니다.");
+    router.refresh();
+  }
+
   async function submit() {
     if (!form.title.trim()) {
       toast.error("제목을 입력해주세요.");
@@ -189,6 +231,7 @@ export default function StaffScheduleMobileView({
   const isThisMonth = today.slice(0, 7) === month;
 
   const heading = `${staff.name ?? "이름 미상"}${staff.position ? ` ${staff.position}님` : "님"}`;
+  const myParticipant = detail?.participants.find((p) => p.userId === currentUser.id) ?? null;
 
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col gap-4 px-4 py-5 pb-24">
@@ -289,9 +332,30 @@ export default function StaffScheduleMobileView({
               {detail.participants.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-slate-400">참석자</p>
-                  <p className="text-[15px] text-slate-700">
-                    {detail.participants.map((p) => p.name ?? "이름 미상").join(", ")}
-                  </p>
+                  {responseReady ? (
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {detail.participants.map((p) => {
+                        const response = p.response ?? "pending";
+                        return (
+                          <span
+                            key={p.userId}
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${
+                              RESPONSE_COLOR[response] ?? RESPONSE_COLOR.pending
+                            }`}
+                          >
+                            {p.name ?? "이름 미상"}
+                            <span className="font-semibold">
+                              {RESPONSE_LABEL[response] ?? "대기"}
+                            </span>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-[15px] text-slate-700">
+                      {detail.participants.map((p) => p.name ?? "이름 미상").join(", ")}
+                    </p>
+                  )}
                 </div>
               )}
               {detail.memo && (
@@ -306,6 +370,49 @@ export default function StaffScheduleMobileView({
                 등록자: {detail.created_by_name ?? "알 수 없음"}
               </p>
             </div>
+
+            {/* 참석/불참 응답은 수정·삭제 버튼 위에 둬서 참석자가 먼저 누르게 한다. */}
+            {responseReady && myParticipant && (
+              <div className="flex flex-shrink-0 flex-col gap-2 border-t border-slate-100 px-5 py-3">
+                {myParticipant.response &&
+                myParticipant.response !== "pending" &&
+                !respondEditing ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[15px] font-medium text-slate-600">
+                      {myParticipant.response === "accepted"
+                        ? "참석으로 응답함"
+                        : "불참으로 응답함"}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setRespondEditing(true)}
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600"
+                    >
+                      응답 변경
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleRespond("declined")}
+                      disabled={responding}
+                      className="flex-1 rounded-xl border border-red-200 py-3 text-[15px] font-semibold text-red-600 disabled:opacity-50"
+                    >
+                      불참
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRespond("accepted")}
+                      disabled={responding}
+                      className="flex-1 rounded-xl bg-blue-600 py-3 text-[15px] font-bold text-white disabled:opacity-50"
+                    >
+                      참석
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 수정·삭제는 등록자 본인과 관리자만. 서버 액션도 같은 조건으로 막는다. */}
             {canEdit(detail) && (
@@ -540,7 +647,7 @@ export default function StaffScheduleMobileView({
                     <button
                       key={ev.id}
                       type="button"
-                      onClick={() => setDetail(ev)}
+                      onClick={() => openDetail(ev)}
                       className={`w-full rounded-r-lg border-l-4 py-1 pl-3 text-left ${borderClass(ev.category)}`}
                     >
                       <span

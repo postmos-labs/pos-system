@@ -6,7 +6,12 @@ import { ChevronLeft, ChevronRight, Plus, X, Trash2, Pencil, ImageDown, Link2 } 
 import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField } from "@/components/ui/DatePickerField";
 import { useToast } from "@/components/ui/Toast";
-import { createStaffSchedule, updateStaffSchedule, deleteStaffSchedule } from "./actions";
+import {
+  createStaffSchedule,
+  updateStaffSchedule,
+  deleteStaffSchedule,
+  respondToStaffSchedule,
+} from "./actions";
 
 // 시각은 24시간제로 고른다. <input type="time">은 브라우저 언어에 따라 "오후 2:00"으로 보여서
 // 직원마다 다르게 표시되고, 모달 안에서 기본 시계 UI가 잘리는 문제도 있다.
@@ -35,6 +40,26 @@ const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
 const CATEGORIES = ["미팅", "회의", "교육", "외출", "휴가", "기타"] as const;
 
+// 팀 단위 초대 버튼에 쓰는 라벨. team 컬럼(profiles.team)의 값과 짝을 맞춘다(supabase/081).
+const TEAM_LABELS: Record<string, string> = {
+  sales: "영업",
+  cs: "CS팀",
+  tech: "기술지원",
+  dev: "개발",
+};
+
+// 참석 응답 배지 라벨/색.
+export const RESPONSE_LABEL: Record<string, string> = {
+  accepted: "수락",
+  declined: "거절",
+  pending: "대기",
+};
+export const RESPONSE_COLOR: Record<string, string> = {
+  accepted: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  declined: "bg-rose-50 text-rose-700 border-rose-200",
+  pending: "bg-slate-50 text-slate-500 border-slate-200",
+};
+
 export const CATEGORY_COLOR: Record<string, string> = {
   미팅: "bg-blue-50 text-blue-700 border-blue-200",
   회의: "bg-violet-50 text-violet-700 border-violet-200",
@@ -58,6 +83,7 @@ const CATEGORY_HEX: Record<string, { bg: string; border: string; text: string }>
 export interface StaffScheduleParticipant {
   userId: string;
   name: string | null;
+  response?: string | null;
 }
 
 export interface StaffScheduleRow {
@@ -96,6 +122,7 @@ export interface StaffMember {
   id: string;
   name: string | null;
   position?: string | null;
+  team?: string | null;
 }
 
 interface CurrentUser {
@@ -158,6 +185,7 @@ interface Props {
   initialMine: boolean;
   initialStaff: string;
   schemaReady: boolean;
+  responseReady: boolean;
   currentUser: CurrentUser;
 }
 
@@ -169,6 +197,7 @@ export default function StaffSchedulesClient({
   initialMine,
   initialStaff,
   schemaReady,
+  responseReady,
   currentUser,
 }: Props) {
   const router = useRouter();
@@ -179,6 +208,10 @@ export default function StaffSchedulesClient({
   const [form, setForm] = useState<FormState>(() => emptyForm(`${month}-01`));
   const [participantSearch, setParticipantSearch] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [responding, setResponding] = useState(false);
+  // 이미 응답한 뒤 "응답 변경"을 눌렀을 때 다시 참석/불참 버튼을 보여주는 데 쓴다.
+  // 상세 모달을 새로 열 때마다 초기화한다.
+  const [respondEditing, setRespondEditing] = useState(false);
 
   const isAdmin = currentUser.role === "admin" || currentUser.role === "master";
 
@@ -467,6 +500,26 @@ export default function StaffSchedulesClient({
     }));
   }
 
+  // 팀 버튼을 누르면 그 팀 전원을 추가하고, 이미 전원이 들어가 있으면 그 팀만 뺀다.
+  function toggleTeam(team: string) {
+    const teamMemberIds = staffList.filter((s) => s.team === team).map((s) => s.id);
+    if (!teamMemberIds.length) return;
+    setForm((prev) => {
+      const allSelected = teamMemberIds.every((id) => prev.participantIds.includes(id));
+      return {
+        ...prev,
+        participantIds: allSelected
+          ? prev.participantIds.filter((id) => !teamMemberIds.includes(id))
+          : Array.from(new Set([...prev.participantIds, ...teamMemberIds])),
+      };
+    });
+  }
+
+  function openDetail(schedule: StaffScheduleRow) {
+    setRespondEditing(false);
+    setDetailSchedule(schedule);
+  }
+
   async function handleSubmit() {
     if (!form.title.trim()) {
       toast.error("제목을 입력해주세요.");
@@ -519,11 +572,38 @@ export default function StaffSchedulesClient({
     router.refresh();
   }
 
+  async function handleRespond(response: "accepted" | "declined") {
+    if (!detailSchedule) return;
+    setResponding(true);
+    const result = await respondToStaffSchedule(detailSchedule.id, response);
+    setResponding(false);
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    setRespondEditing(false);
+    // 모달을 다시 열지 않아도 바로 바뀐 응답이 보이도록 열려 있는 상세의 내 응답만 갱신한다.
+    setDetailSchedule((prev) =>
+      prev
+        ? {
+            ...prev,
+            participants: prev.participants.map((p) =>
+              p.userId === currentUser.id ? { ...p, response } : p,
+            ),
+          }
+        : prev,
+    );
+    toast.success(response === "accepted" ? "참석으로 응답했습니다." : "불참으로 응답했습니다.");
+    router.refresh();
+  }
+
   const filteredStaffList = staffList.filter((s) =>
     (s.name ?? "").toLowerCase().includes(participantSearch.toLowerCase()),
   );
 
   const selectedEvents = selectedDate ? (eventsByDate[selectedDate] ?? []) : [];
+  const myParticipant =
+    detailSchedule?.participants.find((p) => p.userId === currentUser.id) ?? null;
 
   // 그 달에 하루 최대 몇 건인지 보고 칩 크기를 정한다. 일정이 적은 달은 칸이 비어 있으니
   // 글씨를 키워 잘 보이게 하고, 많은 달은 지금 크기를 유지해 넘치지 않게 한다.
@@ -674,7 +754,7 @@ export default function StaffSchedulesClient({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setDetailSchedule(ev);
+                          openDetail(ev);
                         }}
                         className={`block w-full text-left leading-tight rounded-md border-l-[3px] border ${chipClass} ${
                           CATEGORY_COLOR[ev.category] ?? CATEGORY_COLOR["기타"]
@@ -807,7 +887,7 @@ export default function StaffSchedulesClient({
                 <button
                   key={ev.id}
                   type="button"
-                  onClick={() => setDetailSchedule(ev)}
+                  onClick={() => openDetail(ev)}
                   className={`text-left text-xs font-medium rounded-lg border px-3 py-2 ${
                     CATEGORY_COLOR[ev.category] ?? CATEGORY_COLOR["기타"]
                   }`}
@@ -854,9 +934,30 @@ export default function StaffSchedulesClient({
               )}
               <div className="text-slate-600">
                 참석자:{" "}
-                {detailSchedule.participants.length
-                  ? detailSchedule.participants.map((p) => p.name ?? "이름 미상").join(", ")
-                  : "없음"}
+                {detailSchedule.participants.length === 0 ? (
+                  "없음"
+                ) : responseReady ? (
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {detailSchedule.participants.map((p) => {
+                      const response = p.response ?? "pending";
+                      return (
+                        <span
+                          key={p.userId}
+                          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${
+                            RESPONSE_COLOR[response] ?? RESPONSE_COLOR.pending
+                          }`}
+                        >
+                          {p.name ?? "이름 미상"}
+                          <span className="font-semibold">
+                            {RESPONSE_LABEL[response] ?? "대기"}
+                          </span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  detailSchedule.participants.map((p) => p.name ?? "이름 미상").join(", ")
+                )}
               </div>
               {detailSchedule.memo && (
                 <div className="text-slate-600 whitespace-pre-wrap">
@@ -867,6 +968,47 @@ export default function StaffSchedulesClient({
                 등록자: {detailSchedule.created_by_name ?? "알 수 없음"}
               </div>
             </div>
+            {responseReady && myParticipant && (
+              <div className="flex flex-shrink-0 flex-col gap-2 border-t border-slate-100 px-5 py-3">
+                {myParticipant.response &&
+                myParticipant.response !== "pending" &&
+                !respondEditing ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-slate-600">
+                      {myParticipant.response === "accepted"
+                        ? "참석으로 응답함"
+                        : "불참으로 응답함"}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setRespondEditing(true)}
+                      className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors font-medium"
+                    >
+                      응답 변경
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleRespond("declined")}
+                      disabled={responding}
+                      className="flex-1 rounded-lg border border-red-200 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                    >
+                      불참
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRespond("accepted")}
+                      disabled={responding}
+                      className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    >
+                      참석
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             {(detailSchedule.created_by === currentUser.id || isAdmin) && (
               <div className="flex flex-shrink-0 justify-end gap-2 px-5 py-3 border-t border-slate-100">
                 <button
@@ -1037,6 +1179,34 @@ export default function StaffSchedulesClient({
                   rows={2}
                   placeholder="메모"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">
+                  팀 단위 초대
+                </label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {Object.entries(TEAM_LABELS).map(([team, label]) => {
+                    const teamMemberIds = staffList.filter((s) => s.team === team).map((s) => s.id);
+                    const allSelected =
+                      teamMemberIds.length > 0 &&
+                      teamMemberIds.every((id) => form.participantIds.includes(id));
+                    return (
+                      <button
+                        key={team}
+                        type="button"
+                        onClick={() => toggleTeam(team)}
+                        className={`text-xs px-2.5 py-1.5 rounded-lg border font-medium transition-colors ${
+                          allSelected
+                            ? "border-blue-300 bg-blue-50 text-blue-700"
+                            : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div>

@@ -76,36 +76,66 @@ export default async function StaffSchedulesPage({ searchParams }: Props) {
   const [{ data: scheduleRows, error: scheduleError }, staffResult, { data: profileRow }] =
     await Promise.all([
       scheduleQuery,
-      supabase.from("profiles").select("id,name,position").order("name", { ascending: true }),
+      supabase.from("profiles").select("id,name,position,team").order("name", { ascending: true }),
       supabase.from("profiles").select("name,role").eq("id", user.id).single(),
     ]);
 
   const schemaReady = !isMissingStaffSchedulesTable(scheduleError);
 
-  let staffRows: { id: string; name: string | null; position?: string | null }[] | null =
+  let staffRows:
+    { id: string; name: string | null; position?: string | null; team?: string | null }[] | null =
     staffResult.data;
   if (isMissingPositionColumnError(staffResult.error)) {
     const fallback = await supabase
       .from("profiles")
-      .select("id,name")
+      .select("id,name,team")
       .order("name", { ascending: true });
     staffRows = fallback.data;
   }
 
+  // 137번 마이그레이션(참석 응답) 적용 여부를 미리 확인해 둔다. 스케줄이 하나도 없는 달에도
+  // 참석/불참 버튼 노출 여부를 정해야 하므로, 참석자 조회와 별개로 가벼운 조회로 확인한다.
+  let responseReady = schemaReady;
+  if (schemaReady) {
+    const probe = await supabase.from("staff_schedule_participants").select("response").limit(0);
+    responseReady = !isMissingPositionColumnError(probe.error);
+  }
+
   const scheduleIds = (scheduleRows ?? []).map((row) => row.id);
-  const participantsByScheduleId: Record<string, { userId: string; name: string | null }[]> = {};
+  const participantsByScheduleId: Record<
+    string,
+    { userId: string; name: string | null; response?: string | null }[]
+  > = {};
   if (schemaReady && scheduleIds.length) {
-    const { data: participantRows } = await supabase
+    type ParticipantRow = {
+      schedule_id: string;
+      user_id: string;
+      response?: string | null;
+      profiles: { name: string | null }[] | { name: string | null } | null;
+    };
+    const participantResult = await supabase
       .from("staff_schedule_participants")
-      .select("schedule_id,user_id,profiles(name)")
+      .select("schedule_id,user_id,response,profiles(name)")
       .in("schedule_id", scheduleIds);
+    let participantRows = participantResult.data as ParticipantRow[] | null;
+    if (isMissingPositionColumnError(participantResult.error)) {
+      const fallback = await supabase
+        .from("staff_schedule_participants")
+        .select("schedule_id,user_id,profiles(name)")
+        .in("schedule_id", scheduleIds);
+      participantRows = fallback.data as ParticipantRow[] | null;
+    }
     for (const row of participantRows ?? []) {
       const name = profileName(
         row.profiles as { name: string | null }[] | { name: string | null } | null,
       );
       if (!participantsByScheduleId[row.schedule_id])
         participantsByScheduleId[row.schedule_id] = [];
-      participantsByScheduleId[row.schedule_id].push({ userId: row.user_id, name });
+      participantsByScheduleId[row.schedule_id].push({
+        userId: row.user_id,
+        name,
+        response: row.response ?? null,
+      });
     }
   }
 
@@ -136,6 +166,7 @@ export default async function StaffSchedulesPage({ searchParams }: Props) {
       initialMine={mine}
       initialStaff={initialStaff}
       schemaReady={schemaReady}
+      responseReady={responseReady}
       currentUser={{ id: user.id, name: profileRow?.name ?? null, role: profileRow?.role ?? null }}
     />
   );

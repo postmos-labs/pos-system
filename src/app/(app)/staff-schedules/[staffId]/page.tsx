@@ -121,20 +121,48 @@ export default async function StaffScheduleMobilePage({ params, searchParams }: 
 
   const schemaReady = !isMissingStaffSchedulesTable(scheduleError);
 
+  // 137번 마이그레이션(참석 응답) 적용 여부를 미리 확인해 둔다.
+  let responseReady = schemaReady;
+  if (schemaReady) {
+    const probe = await supabase.from("staff_schedule_participants").select("response").limit(0);
+    responseReady = !isMissingPositionColumnError(probe.error);
+  }
+
   const scheduleIds = (scheduleRows ?? []).map((row) => row.id);
-  const participantsByScheduleId: Record<string, { userId: string; name: string | null }[]> = {};
+  const participantsByScheduleId: Record<
+    string,
+    { userId: string; name: string | null; response?: string | null }[]
+  > = {};
   if (schemaReady && scheduleIds.length) {
-    const { data: participantRows } = await supabase
+    type ParticipantRow = {
+      schedule_id: string;
+      user_id: string;
+      response?: string | null;
+      profiles: { name: string | null }[] | { name: string | null } | null;
+    };
+    const participantResult = await supabase
       .from("staff_schedule_participants")
-      .select("schedule_id,user_id,profiles(name)")
+      .select("schedule_id,user_id,response,profiles(name)")
       .in("schedule_id", scheduleIds);
+    let participantRows = participantResult.data as ParticipantRow[] | null;
+    if (isMissingPositionColumnError(participantResult.error)) {
+      const fallback = await supabase
+        .from("staff_schedule_participants")
+        .select("schedule_id,user_id,profiles(name)")
+        .in("schedule_id", scheduleIds);
+      participantRows = fallback.data as ParticipantRow[] | null;
+    }
     for (const row of participantRows ?? []) {
       const name = profileName(
         row.profiles as { name: string | null }[] | { name: string | null } | null,
       );
       if (!participantsByScheduleId[row.schedule_id])
         participantsByScheduleId[row.schedule_id] = [];
-      participantsByScheduleId[row.schedule_id].push({ userId: row.user_id, name });
+      participantsByScheduleId[row.schedule_id].push({
+        userId: row.user_id,
+        name,
+        response: row.response ?? null,
+      });
     }
   }
 
@@ -158,6 +186,7 @@ export default async function StaffScheduleMobilePage({ params, searchParams }: 
       schedules={schedules}
       month={month}
       slug={staffId}
+      responseReady={responseReady}
       currentUser={{ id: user.id, role: (meRow?.role as string | null) ?? null }}
     />
   );
