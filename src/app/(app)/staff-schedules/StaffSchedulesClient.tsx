@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Plus, X, Trash2, Pencil, ImageDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X, Trash2, Pencil, ImageDown, Link2 } from "lucide-react";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField } from "@/components/ui/DatePickerField";
 import { useToast } from "@/components/ui/Toast";
@@ -28,7 +28,7 @@ const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
 const CATEGORIES = ["미팅", "회의", "교육", "외출", "휴가", "기타"] as const;
 
-const CATEGORY_COLOR: Record<string, string> = {
+export const CATEGORY_COLOR: Record<string, string> = {
   미팅: "bg-blue-50 text-blue-700 border-blue-200",
   회의: "bg-violet-50 text-violet-700 border-violet-200",
   교육: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -69,7 +69,7 @@ export interface StaffScheduleRow {
 
 // 일정이 누구 것인지 한 줄로 만든다. 등록자 + 참석자를 합쳐 중복을 없애고,
 // 여럿이면 "박은서 외 2"처럼 줄인다. 전체 보기에서 칩에 붙인다.
-function ownerLabel(schedule: {
+export function ownerLabel(schedule: {
   created_by_name: string | null;
   participants: { name: string | null }[];
 }): string {
@@ -135,11 +135,11 @@ const KST_TIME_FMT = new Intl.DateTimeFormat("en-GB", {
   hour12: false,
 });
 
-function toDatePart(iso: string) {
+export function toDatePart(iso: string) {
   return KST_DATE_FMT.format(new Date(iso));
 }
 
-function toTimePart(iso: string) {
+export function toTimePart(iso: string) {
   return KST_TIME_FMT.format(new Date(iso));
 }
 
@@ -685,32 +685,54 @@ export default function StaffSchedulesClient({
               const active = staff === member.id;
               const count = staffCounts[member.id] ?? 0;
               return (
-                <button
+                <div
                   key={member.id}
-                  type="button"
-                  onClick={() => updateQuery({ staff: active ? "" : member.id })}
-                  className={`mb-0.5 flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${
+                  className={`mb-0.5 flex w-full items-center gap-1 rounded-lg px-2.5 py-2 text-sm transition-colors ${
                     active
                       ? "bg-blue-50 font-semibold text-blue-700"
                       : "text-slate-600 hover:bg-slate-50"
                   }`}
                 >
-                  <span className="min-w-0 truncate">
-                    {member.name}
-                    {member.position && (
-                      <span className="ml-1 text-xs font-normal text-slate-400">
-                        {member.position}
+                  <button
+                    type="button"
+                    onClick={() => updateQuery({ staff: active ? "" : member.id })}
+                    className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
+                  >
+                    <span className="min-w-0 truncate">
+                      {member.name}
+                      {member.position && (
+                        <span className="ml-1 text-xs font-normal text-slate-400">
+                          {member.position}
+                        </span>
+                      )}
+                    </span>
+                    {count > 0 && (
+                      <span
+                        className={`shrink-0 text-xs ${active ? "text-blue-500" : "text-slate-400"}`}
+                      >
+                        {count}
                       </span>
                     )}
-                  </span>
-                  {count > 0 && (
-                    <span
-                      className={`shrink-0 text-xs ${active ? "text-blue-500" : "text-slate-400"}`}
-                    >
-                      {count}
-                    </span>
-                  )}
-                </button>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        await navigator.clipboard.writeText(
+                          `${window.location.origin}/staff-schedules/${member.id}`,
+                        );
+                        toast.success("링크를 복사했습니다.");
+                      } catch {
+                        toast.error("링크 복사에 실패했습니다.");
+                      }
+                    }}
+                    className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                    title="일정 링크 복사"
+                  >
+                    <Link2 size={13} />
+                  </button>
+                </div>
               );
             })}
           </div>
