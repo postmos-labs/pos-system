@@ -67,6 +67,24 @@ export interface StaffScheduleRow {
   participants: StaffScheduleParticipant[];
 }
 
+// 일정이 누구 것인지 한 줄로 만든다. 등록자 + 참석자를 합쳐 중복을 없애고,
+// 여럿이면 "박은서 외 2"처럼 줄인다. 전체 보기에서 칩에 붙인다.
+function ownerLabel(schedule: {
+  created_by_name: string | null;
+  participants: { name: string | null }[];
+}): string {
+  const names = Array.from(
+    new Set(
+      [schedule.created_by_name, ...schedule.participants.map((p) => p.name)].filter(
+        (n): n is string => !!n && n.trim().length > 0,
+      ),
+    ),
+  );
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0];
+  return `${names[0]} 외 ${names.length - 1}`;
+}
+
 export interface StaffMember {
   id: string;
   name: string | null;
@@ -311,9 +329,11 @@ export default function StaffSchedulesClient({
         const timeLabel = ev.all_day ? "종일" : toTimePart(ev.starts_at);
         const pad = 14;
         // 칩이 커지면 시간과 제목을 두 줄로 나눠 각각 더 크게 보여준다.
+        // 전체 보기에서는 누구 일정인지 함께 적는다(직원을 골라 뽑았으면 제목에 이미 있다).
+        const who = staff ? "" : ownerLabel(ev);
         if (CHIP_H >= 46) {
           ctx.font = font(CHIP_FONT, "800");
-          ctx.fillText(timeLabel, cx + pad, cy + CHIP_H / 2 - 2);
+          ctx.fillText(who ? `${who} · ${timeLabel}` : timeLabel, cx + pad, cy + CHIP_H / 2 - 2);
           ctx.font = font(CHIP_FONT - 3, "500");
           let text = ev.title;
           const maxW = cw - pad * 2;
@@ -327,9 +347,10 @@ export default function StaffSchedulesClient({
           return;
         }
 
+        const leadLabel = who ? `${who} ${timeLabel}` : timeLabel;
         ctx.font = font(CHIP_FONT, "800");
-        const timeW = ctx.measureText(timeLabel).width;
-        ctx.fillText(timeLabel, cx + pad, cy + CHIP_H / 2 + CHIP_FONT / 3);
+        const timeW = ctx.measureText(leadLabel).width;
+        ctx.fillText(leadLabel, cx + pad, cy + CHIP_H / 2 + CHIP_FONT / 3);
 
         ctx.font = font(CHIP_FONT, "500");
         const titleX = cx + pad + timeW + 7;
@@ -621,6 +642,9 @@ export default function StaffSchedulesClient({
                         }`}
                         title={`${ev.all_day ? "종일" : toTimePart(ev.starts_at)} ${ev.title}`}
                       >
+                        {!staff && ownerLabel(ev) && (
+                          <span className="mr-1 font-bold opacity-70">{ownerLabel(ev)}</span>
+                        )}
                         <span className="font-bold tabular-nums">
                           {ev.all_day ? "종일" : toTimePart(ev.starts_at)}
                         </span>{" "}
