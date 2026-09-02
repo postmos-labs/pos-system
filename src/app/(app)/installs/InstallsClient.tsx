@@ -640,6 +640,8 @@ export default function InstallsClient({
     { id: string; business_name?: string; owner_name?: string }[]
   >([]);
   const [statusFilter, setStatusFilter] = useState("");
+  // 승인 요청이 올라간 건만 추려 보는 필터. 승인이 밀리면 현장이 멈추므로 눈에 띄게 둔다.
+  const [pendingOnly, setPendingOnly] = useState(false);
   const [techFilter, setTechFilter] = useState("");
   const [showRejected, setShowRejected] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
@@ -1804,6 +1806,12 @@ export default function InstallsClient({
     return Object.values(stats).sort((a, b) => b.completed - a.completed);
   }, [installs]);
 
+  // 승인 대기 건수 — 버튼과 강조 표시에 함께 쓴다.
+  const pendingCount = useMemo(
+    () => installs.filter((i) => !!completionApprovals[i.id]).length,
+    [installs, completionApprovals],
+  );
+
   const filteredInstalls = useMemo(() => {
     const q = search.trim().toLowerCase();
     return installs.filter((i) => {
@@ -1818,6 +1826,7 @@ export default function InstallsClient({
       if (!showRejected && i.status === "rejected" && statusFilter !== "rejected") return false;
       if (!showCompleted && i.status === "completed" && statusFilter !== "completed") return false;
       if (statusFilter && i.status !== statusFilter) return false;
+      if (pendingOnly && !completionApprovals[i.id]) return false;
       if (techFilter && i.assigned_to !== techFilter) return false;
       if (dateFrom && i.created_at < dateFrom) return false;
       if (dateTo && i.created_at > dateTo + "T23:59:59") return false;
@@ -1837,6 +1846,8 @@ export default function InstallsClient({
     installs,
     search,
     statusFilter,
+    pendingOnly,
+    completionApprovals,
     techFilter,
     showRejected,
     showCompleted,
@@ -2444,6 +2455,19 @@ export default function InstallsClient({
             </button>
           ) : null,
         )}
+        {/* 승인 대기 건만 추려 보는 버튼. 건수를 함께 띄워 밀린 승인이 있는지 바로 알 수 있게 한다. */}
+        <button
+          onClick={() => setPendingOnly((v) => !v)}
+          className={`text-xs font-medium px-3 py-1 rounded-full border transition-all ${
+            pendingOnly
+              ? "border-red-300 bg-red-100 text-red-700"
+              : pendingCount > 0
+                ? "animate-pulse border-red-200 bg-red-50 text-red-600"
+                : "border-slate-200 bg-white text-slate-400"
+          }`}
+        >
+          승인 대기{pendingCount > 0 ? ` ${pendingCount}` : ""}
+        </button>
         <button
           onClick={() => setShowRejected((v) => !v)}
           className={`text-xs font-medium px-3 py-1 rounded-full border transition-all ${showRejected ? "bg-red-100 text-red-700 border-red-200" : "bg-white border-slate-200 text-slate-400"}`}
@@ -2661,7 +2685,11 @@ export default function InstallsClient({
                 <div
                   key={inst.id}
                   id={`install-card-${inst.id}`}
-                  className="bg-white rounded-2xl border border-slate-200 overflow-hidden"
+                  className={`overflow-hidden rounded-2xl border bg-white ${
+                    completionApprovals[inst.id]
+                      ? "animate-pulse border-red-300 bg-red-50"
+                      : "border-slate-200"
+                  }`}
                 >
                   <button
                     onClick={() => setMobileExpandedId(expanded ? null : inst.id)}
@@ -2915,7 +2943,12 @@ export default function InstallsClient({
                   <Fragment key={inst.id}>
                     <tr
                       id={`install-row-${inst.id}`}
-                      className={`hover:bg-blue-50/40 transition cursor-pointer ${rowDragId === inst.id ? "opacity-40" : ""}`}
+                      // 승인 대기 건은 붉게 깜빡여 눈에 띄게 한다. 승인이 밀리면 현장이 멈춘다.
+                      className={`hover:bg-blue-50/40 transition cursor-pointer ${rowDragId === inst.id ? "opacity-40" : ""} ${
+                        completionApprovals[inst.id]
+                          ? "animate-pulse bg-red-50 ring-1 ring-inset ring-red-200"
+                          : ""
+                      }`}
                       onClick={() => {
                         if (detailInst?.id === inst.id) closeInstallDetail();
                         else openInstallDetail(inst);
