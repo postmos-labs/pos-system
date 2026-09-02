@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { canApproveFirst, canApproveFinal } from "@/lib/auth/installApproval";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, ClipboardCheck } from "lucide-react";
@@ -71,18 +72,29 @@ export default async function ApprovalsPage() {
   const p = profile as Profile;
   const userId = user.id;
 
-  const isApprover = ["cs_responsible", "tech_responsible", "team_lead"].includes(
-    p.approval_role ?? "",
-  );
+  // 설치 단계 승인은 직급으로 갈린다(팀장 1차 → 실장 최종). 가맹접수 이관 승인은
+  // 기존대로 승인 직책을 쓰므로 두 기준을 함께 본다.
+  const canFirst = canApproveFirst(p.position);
+  const canFinal = canApproveFinal(p.position);
+  const isApprover =
+    ["cs_responsible", "tech_responsible", "team_lead"].includes(p.approval_role ?? "") ||
+    canFirst ||
+    canFinal;
+
+  // 상위 직급은 아래 단계도 대신 처리할 수 있어야 결재가 한 사람 부재로 멈추지 않는다.
+  const completionStatuses = [
+    ...(canFinal ? ["responsible_approved"] : []),
+    ...(canFirst ? ["requested"] : []),
+  ];
 
   const completionApprovalQuery =
-    p.approval_role === "tech_responsible" || p.approval_role === "team_lead"
+    completionStatuses.length > 0
       ? supabase
           .from("installation_completion_approvals")
           .select(
             "installation_id, target_status, status, requested_by, requested_by_name, requested_at, approval_notes, installation:installations(id, customer_name, address)",
           )
-          .in("status", p.approval_role === "team_lead" ? ["responsible_approved"] : ["requested"])
+          .in("status", completionStatuses)
           // 요청자 계정이 삭제되면 requested_by가 NULL이 된다. neq만 쓰면 NULL 행이
           // 통째로 걸러져(NULL <> x → NULL) 승인함에서 사라지므로 NULL도 함께 남긴다.
           .or(`requested_by.is.null,requested_by.neq.${userId}`)
