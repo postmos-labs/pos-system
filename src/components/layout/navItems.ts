@@ -2,6 +2,7 @@ import {
   CalendarClock,
   CalendarDays,
   Building2,
+  ClipboardCheck,
   ClipboardList,
   Code2,
   Database,
@@ -46,6 +47,7 @@ export const COMMON_NAV: NavItem[] = [
   { href: "/staff-schedules", label: "일정 캘린더", icon: CalendarClock },
   { href: "/merchants", label: "가맹점", icon: Store },
   { href: "/tickets", label: "인입내역", icon: Ticket },
+  { href: "/tickets/revisions", label: "수정 요청", icon: ClipboardCheck },
   { href: "/contracts", label: "계약서 / 서명", icon: PenLine },
   { href: "/dev-requests", label: "개발요청", icon: Code2 },
 ];

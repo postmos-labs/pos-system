@@ -12,6 +12,17 @@ import { revalidatePath } from "next/cache";
 
 const CHUNK_SIZE = 100;
 
+// 42P01: relation does not exist / PGRST205: PostgREST 스키마 캐시에 표가 없음.
+// 139번 마이그레이션(ticket_revision_requests)이 아직 적용되지 않은 환경에서 쓴다.
+function isMissingRevisionTable(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "42P01" ||
+    error.code === "PGRST205" ||
+    /ticket_revision_requests|schema cache|relation .* does not exist/i.test(error.message ?? "")
+  );
+}
+
 export async function deleteTickets(ids: string[]) {
   const authError = await requireDeletePermission();
   if (authError) return { error: authError };
@@ -100,6 +111,23 @@ export async function requestTicketRevision(ticketId: string, message: string) {
   }
 
   const admin = createAdminClient();
+
+  // 기록은 부가 기능이라 표가 없어도(마이그레이션 미적용) 알림 발송은 그대로 진행한다.
+  const { data: requesterProfile } = await supabase
+    .from("profiles")
+    .select("name")
+    .eq("id", user.id)
+    .single();
+  const { error: recordError } = await admin.from("ticket_revision_requests").insert({
+    ticket_id: ticketId,
+    message: trimmed,
+    requested_by: user.id,
+    requested_by_name: requesterProfile?.name ?? null,
+  });
+  if (recordError && !isMissingRevisionTable(recordError)) {
+    return { error: recordError.message };
+  }
+
   const { error } = await admin.from("notifications").insert(
     recipientIds.map((userId) => ({
       user_id: userId,
@@ -113,4 +141,48 @@ export async function requestTicketRevision(ticketId: string, message: string) {
 
   revalidatePath(`/tickets/${ticketId}`);
   return { error: null, sentCount: recipientIds.length };
+}
+
+export async function resolveTicketRevision(requestId: string, note: string) {
+  const authError = await requireMaster();
+  if (authError) return { error: authError };
+
+  const trimmedNote = note.trim();
+  if (trimmedNote.length > 500) return { error: "메모는 500자 이내로 입력해주세요." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요합니다." };
+
+  const { data: resolverProfile } = await supabase
+    .from("profiles")
+    .select("name")
+    .eq("id", user.id)
+    .single();
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("ticket_revision_requests")
+    .update({
+      status: "resolved",
+      resolved_by: user.id,
+      resolved_by_name: resolverProfile?.name ?? null,
+      resolved_at: new Date().toISOString(),
+      resolved_note: trimmedNote || null,
+    })
+    .eq("id", requestId)
+    .eq("status", "open")
+    .select("id");
+  if (error) {
+    if (isMissingRevisionTable(error)) {
+      return { error: "수정 요청 마이그레이션(supabase/139)이 아직 적용되지 않았습니다." };
+    }
+    return { error: error.message };
+  }
+  if (!data || data.length === 0) return { error: "이미 처리된 요청입니다." };
+
+  revalidatePath("/tickets/revisions");
+  return { error: null };
 }

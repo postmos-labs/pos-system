@@ -27,6 +27,17 @@ interface Props {
   params: Promise<{ id: string }>;
 }
 
+// 42P01: relation does not exist / PGRST205: PostgREST 스키마 캐시에 표가 없음.
+// 139번 마이그레이션(ticket_revision_requests)이 아직 적용되지 않은 환경에서 쓴다.
+function isMissingRevisionTable(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "42P01" ||
+    error.code === "PGRST205" ||
+    /ticket_revision_requests|schema cache|relation .* does not exist/i.test(error.message ?? "")
+  );
+}
+
 export default async function TicketDetailPage({ params }: Props) {
   const { id } = await params;
   const supabase = await createClient();
@@ -36,7 +47,7 @@ export default async function TicketDetailPage({ params }: Props) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: ticket }, { data: logs }] = await Promise.all([
+  const [{ data: profile }, { data: ticket }, { data: logs }, revisionRes] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).single(),
     supabase
       .from("tickets")
@@ -56,13 +67,32 @@ export default async function TicketDetailPage({ params }: Props) {
       .select("*, user:profiles(*)")
       .eq("ticket_id", id)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("ticket_revision_requests")
+      .select("message")
+      .eq("ticket_id", id)
+      .eq("status", "open")
+      .order("requested_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   if (!profile) redirect("/login");
   if (!ticket) notFound();
 
+  const openRevisionMessage = !isMissingRevisionTable(revisionRes.error)
+    ? ((revisionRes.data as { message: string } | null)?.message ?? null)
+    : null;
+
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
+      {openRevisionMessage && (
+        <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="mb-1 font-semibold">수정 요청 대기 중</p>
+          <p className="whitespace-pre-wrap">{openRevisionMessage}</p>
+        </div>
+      )}
+
       {}
       <div className="mb-5">
         <div className="flex items-center gap-2 mb-2 flex-wrap">
