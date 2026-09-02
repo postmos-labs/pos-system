@@ -1615,11 +1615,18 @@ export default function InstallsClient({
       ),
     );
     if (assignedTo && assignedTo !== prev?.assigned_to) {
+      // 일정이 잡혀 있으면 함께 알려 기사가 알림만 보고도 언제 가는지 알 수 있게 한다.
+      const when = prev?.scheduled_date
+        ? ` (${prev.scheduled_date}${prev.scheduled_time ? ` ${prev.scheduled_time}` : ""})`
+        : "";
       const { error: notifyError } = await supabase.from("notifications").insert({
         user_id: assignedTo,
+        // 설치건 id를 넣어야 알림 팝업이 그 설치건으로 이동한다. 없으면 알림 목록으로만 가서
+        // 기사가 어느 건인지 직접 찾아 들어가야 한다.
+        installation_id: id,
         type: "install_assigned",
         title: "설치 배정",
-        body: `${prev?.customer_name ?? "고객"} 설치건이 배정되었습니다.`,
+        body: `${prev?.customer_name ?? "고객"} 설치건이 배정되었습니다.${when}`,
       });
       if (notifyError) console.error("배정 알림 발송 실패:", notifyError.message);
     }
