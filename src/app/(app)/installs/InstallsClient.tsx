@@ -29,6 +29,7 @@ import RateBadge from "@/components/ui/RateBadge";
 import InstallationActivityHistory from "@/components/ui/InstallationActivityHistory";
 import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
 import { appendApprovalNote, type ApprovalNote } from "@/lib/approvalNotes";
+import { canApproveFirst, canApproveFinal, skipsFirstApproval } from "@/lib/auth/installApproval";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField, CalendarPopoverButton } from "@/components/ui/DatePickerField";
 import { VanBadge } from "@/components/ui/VanBadge";
@@ -915,10 +916,9 @@ export default function InstallsClient({
     };
   }
 
-  const approvalRequestPrompt =
-    profile.approval_role === "tech_responsible"
-      ? "팀장에게 전달할 비고를 입력해주세요."
-      : "기술지원책임에게 전달할 비고를 입력해주세요.";
+  const approvalRequestPrompt = skipsFirstApproval(profile.position)
+    ? "실장에게 전달할 비고를 입력해주세요."
+    : "팀장에게 전달할 비고를 입력해주세요.";
 
   // 승인요청(requestInstallationStatusApproval/requestInstallationCompletion)으로 이어지는 상태는
   // 서버가 tech/admin/master만 허용하므로, CS에게는 드롭다운에서부터 노출하지 않는다.
@@ -1024,7 +1024,7 @@ export default function InstallsClient({
     setSendingSchedule(true);
     const effectiveSkipNotify = isReschedule ? true : skipNotify;
 
-    if (profile.approval_role === "team_lead") {
+    if (canApproveFinal(profile.position)) {
       const note = await promptNote("변경 사유를 입력해주세요.");
       if (note === null) {
         setSendingSchedule(false);
@@ -1298,8 +1298,8 @@ export default function InstallsClient({
     completingRef.current = false;
     toast.success(
       approvalResult.approvalStatus === "responsible_approved"
-        ? "설치완료 최종 승인을 요청했습니다. 팀장 승인이 필요합니다."
-        : "설치완료 승인을 요청했습니다. 기술지원책임 1차 승인과 팀장 최종 승인이 필요합니다.",
+        ? "설치완료 최종 승인을 요청했습니다. 실장 승인이 필요합니다."
+        : "설치완료 승인을 요청했습니다. 팀장 1차 승인과 실장 최종 승인이 필요합니다.",
     );
     return;
     /* Legacy direct-completion side effects are intentionally deferred until approval. */
@@ -1348,10 +1348,9 @@ export default function InstallsClient({
   async function approveCompletion(id: string) {
     const approval = completionApprovals[id];
     if (!approval || !["requested", "responsible_approved"].includes(approval.status)) return;
-    const isResponsible =
-      approval.status === "requested" && profile.approval_role === "tech_responsible";
+    const isResponsible = approval.status === "requested" && canApproveFirst(profile.position);
     const isTeamLead =
-      profile.approval_role === "team_lead" && approval.status === "responsible_approved";
+      canApproveFinal(profile.position) && approval.status === "responsible_approved";
     if (!isResponsible && !isTeamLead) {
       toast.warning("현재 승인 단계의 권한이 없습니다.");
       return;
@@ -1361,7 +1360,7 @@ export default function InstallsClient({
       return;
     }
     const note = await promptNote(
-      isResponsible ? "팀장에게 전달할 비고를 입력해주세요." : "최종 전달 비고를 입력해주세요.",
+      isResponsible ? "실장에게 전달할 비고를 입력해주세요." : "최종 전달 비고를 입력해주세요.",
     );
     if (note === null) return;
     setCompleting(true);
@@ -1380,7 +1379,7 @@ export default function InstallsClient({
     if (isResponsible) {
       const approvalNotes = appendApprovalNote(
         approval.approval_notes,
-        { id: profile.id, name: profile.name, role: profile.approval_role ?? "tech_responsible" },
+        { id: profile.id, name: profile.name, role: "팀장" },
         note,
         "first_approval",
       );
@@ -1405,7 +1404,7 @@ export default function InstallsClient({
     } else {
       const approvalNotes = appendApprovalNote(
         approval.approval_notes,
-        { id: profile.id, name: profile.name, role: "team_lead" },
+        { id: profile.id, name: profile.name, role: "실장" },
         note,
         "final_approval",
       );
@@ -1443,12 +1442,12 @@ export default function InstallsClient({
     setCompleting(false);
     if (result.notificationError)
       toast.warning(
-        `${isResponsible ? "팀장 팝업 알림" : "알림톡"} 처리에 실패했습니다: ` +
+        `${isResponsible ? "실장 팝업 알림" : "알림톡"} 처리에 실패했습니다: ` +
           result.notificationError,
       );
     toast.success(
       isResponsible
-        ? "1차 승인 완료. 팀장 최종 승인을 기다립니다."
+        ? "1차 승인 완료. 실장 최종 승인을 기다립니다."
         : `${statusLabel(approval.target_status)} 최종 승인 및 상태 반영이 완료됐습니다.`,
     );
   }
@@ -1457,8 +1456,8 @@ export default function InstallsClient({
     const approval = completionApprovals[id];
     if (!approval || !["requested", "responsible_approved"].includes(approval.status)) return;
     const canReject =
-      (approval.status === "requested" && profile.approval_role === "tech_responsible") ||
-      (profile.approval_role === "team_lead" && approval.status === "responsible_approved");
+      (approval.status === "requested" && canApproveFirst(profile.position)) ||
+      (canApproveFinal(profile.position) && approval.status === "responsible_approved");
     if (!canReject) {
       toast.warning("현재 승인 단계의 권한이 없습니다.");
       return;
@@ -1595,10 +1594,30 @@ export default function InstallsClient({
       toast.success("변경사항이 없습니다");
       return;
     }
+    // 일정이 바뀌면 이미 배정된 기사에게 알린다. 배정 알림은 처음 한 번만 가므로
+    // 알려주지 않으면 기사가 예전 일정으로 갈 수 있다.
+    const scheduleChanged =
+      detailDraft.scheduled_date !== (inst.scheduled_date ?? "") ||
+      detailDraft.scheduled_time !== (inst.scheduled_time ?? "");
+
     setSavingRowId(id);
     const results = await Promise.all(tasks);
     setSavingRowId(null);
     if (results.every(Boolean)) toast.success("저장되었습니다");
+
+    if (scheduleChanged && inst.assigned_to && results.every(Boolean)) {
+      const when = detailDraft.scheduled_date
+        ? `${detailDraft.scheduled_date}${detailDraft.scheduled_time ? ` ${detailDraft.scheduled_time}` : ""}`
+        : "미정";
+      const { error: notifyError } = await supabase.from("notifications").insert({
+        user_id: inst.assigned_to,
+        installation_id: id,
+        type: "install_assigned",
+        title: "설치 일정 변경",
+        body: `${inst.customer_name ?? "고객"} 설치 일정이 ${when}(으)로 변경되었습니다.`,
+      });
+      if (notifyError) console.error("일정 변경 알림 발송 실패:", notifyError.message);
+    }
   }
 
   async function handleAssign(id: string, assignedTo: string) {
@@ -3224,9 +3243,9 @@ export default function InstallsClient({
               >
                 {completing ? "처리 중..." : "완료 처리"}
               </button>
-              {/* 팀장은 승인 절차 없이 바로 끝낼 수 있다. 담당기사가 없으면 실적을 추적할 수
+              {/* 실장급 이상은 승인 절차 없이 바로 끝낼 수 있다. 담당기사가 없으면 실적을 추적할 수
                   없으므로 배정 전에는 내보내지 않는다(서버도 같은 조건으로 막는다). */}
-              {profile.approval_role === "team_lead" &&
+              {canApproveFinal(profile.position) &&
                 !!installs.find((i) => i.id === completeModal.id)?.assigned_to && (
                   <button
                     onClick={() => submitCompletion(false, true)}

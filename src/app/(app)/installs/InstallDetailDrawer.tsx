@@ -14,6 +14,7 @@ import { NotificationHistory } from "@/components/ui/NotificationHistory";
 import InstallationActivityHistory from "@/components/ui/InstallationActivityHistory";
 import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
 import type { ApprovalNote } from "@/lib/approvalNotes";
+import { canApproveFirst, canApproveFinal } from "@/lib/auth/installApproval";
 import { InstallItemsEditor } from "./InstallItemsEditor";
 import InstallCompositionSection from "../merchants/InstallCompositionSection";
 import {
@@ -243,8 +244,8 @@ export default function InstallDetailDrawer({
   const canDecideApproval =
     !!approval &&
     approval.requested_by !== profile.id &&
-    ((approval.status === "requested" && profile.approval_role === "tech_responsible") ||
-      (profile.approval_role === "team_lead" && approval.status === "responsible_approved"));
+    ((approval.status === "requested" && canApproveFirst(profile.position)) ||
+      (canApproveFinal(profile.position) && approval.status === "responsible_approved"));
   const showReschedule =
     canEdit && installation.status !== "completed" && installation.status !== "rejected";
   // 표(데스크톱)에는 이 버튼과 동등한 단독 조작이 없다 — "이동중" 상태로 select를 바꾸면

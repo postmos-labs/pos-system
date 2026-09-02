@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { sendApprovedInstallNotification } from "@/lib/installNotifications";
 import { appendApprovalNote, parseApprovalNotes, validateApprovalNote } from "@/lib/approvalNotes";
 import { recordDeletions } from "@/lib/deletionLog";
+import { canApproveFirst, canApproveFinal, skipsFirstApproval } from "@/lib/auth/installApproval";
 
 const INSTALL_STATUSES = new Set([
   "received",
@@ -35,7 +36,7 @@ async function getInstallationEditor() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, name, role, approval_role")
+    .select("id, name, role, approval_role, position")
     .eq("id", user.id)
     .single();
   if (!profile || !["tech", "cs", "admin", "master"].includes(profile.role)) {
@@ -248,7 +249,7 @@ export async function changeInstallationStatus(input: {
     return { error: "잘못된 상태 변경 요청입니다.", notificationError: null };
   }
   if (APPROVAL_STATUSES.has(input.status)) {
-    return { error: "이 단계는 승인요청 후 팀장 최종 승인이 필요합니다.", notificationError: null };
+    return { error: "이 단계는 승인요청 후 실장 최종 승인이 필요합니다.", notificationError: null };
   }
   if (input.status === "scheduled" && !input.scheduledDate) {
     return { error: "일정 날짜가 필요합니다.", notificationError: null };
@@ -441,7 +442,7 @@ export async function requestInstallationStatusApproval(input: {
     };
   }
   const requestedAt = new Date().toISOString();
-  const requestedByResponsible = editor.profile.approval_role === "tech_responsible";
+  const requestedByResponsible = skipsFirstApproval(editor.profile.position);
   const approvalStatus: "requested" | "responsible_approved" = requestedByResponsible
     ? "responsible_approved"
     : "requested";
@@ -568,11 +569,13 @@ export async function requestInstallationStatusApproval(input: {
       approvalStatus: null,
     };
   }
-  const nextApprovalRole = requestedByResponsible ? "team_lead" : "tech_responsible";
+  const approverPositions = requestedByResponsible
+    ? ["실장", "상무", "대표"]
+    : ["팀장", "실장", "상무", "대표"];
   const { data: approvers } = await admin
     .from("profiles")
     .select("id")
-    .eq("approval_role", nextApprovalRole)
+    .in("position", approverPositions)
     .neq("id", editor.user.id);
   const { error: notificationError } = approvers?.length
     ? await admin.from("notifications").insert(
@@ -622,10 +625,10 @@ export async function approveInstallationCompletion(installationId: string, note
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, name, approval_role")
+    .select("id, name, approval_role, position")
     .eq("id", user.id)
     .single();
-  if (!profile || !["tech_responsible"].includes(profile.approval_role ?? "")) {
+  if (!profile || !canApproveFirst(profile.position)) {
     return { error: "승인 권한이 없습니다.", notificationError: null };
   }
 
@@ -656,7 +659,7 @@ export async function approveInstallationCompletion(installationId: string, note
         {
           id: user.id,
           name: profile.name,
-          role: profile.approval_role ?? "tech_responsible",
+          role: "팀장",
         },
         note,
         "first_approval",
@@ -700,7 +703,7 @@ export async function approveInstallationCompletion(installationId: string, note
   let teamLeadQuery = admin
     .from("profiles")
     .select("id")
-    .eq("approval_role", "team_lead")
+    .in("position", ["실장", "상무", "대표"])
     .neq("id", user.id);
   // 요청자 계정이 삭제되면 requested_by가 NULL이다. neq에 NULL을 넘기면 조건이 NULL로
   // 평가돼 대상이 0명이 되고 알림이 통째로 빠지므로, 값이 있을 때만 제외한다.
@@ -713,7 +716,7 @@ export async function approveInstallationCompletion(installationId: string, note
           installation_id: installationId,
           type: "approval_install_step_final",
           title: "[최종 승인요청] 기술지원 단계",
-          body: `${profile.name}님이 1차 승인했습니다. 팀장 최종 승인이 필요합니다.`,
+          body: `${profile.name}님이 1차 승인했습니다. 실장 최종 승인이 필요합니다.`,
         })),
       )
     : { error: null };
@@ -734,11 +737,11 @@ export async function approveInstallationStatusByTeamLead(installationId: string
   if (!user) return { error: "로그인이 필요합니다.", notificationError: null };
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name, approval_role")
+    .select("name, approval_role, position")
     .eq("id", user.id)
     .single();
-  if (!profile || profile.approval_role !== "team_lead")
-    return { error: "팀장 최종 승인 권한이 없습니다.", notificationError: null };
+  if (!profile || !canApproveFinal(profile.position))
+    return { error: "실장 최종 승인 권한이 없습니다.", notificationError: null };
 
   const admin = createAdminClient();
   const { data: approval } = await admin
@@ -780,7 +783,7 @@ export async function approveInstallationStatusByTeamLead(installationId: string
         {
           id: user.id,
           name: profile.name,
-          role: "team_lead",
+          role: "실장",
         },
         note,
         "final_approval",
@@ -946,11 +949,11 @@ export async function completeInstallationByTeamLead(installationId: string, not
   if (!user) return { error: "로그인이 필요합니다.", notificationError: null };
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name, approval_role")
+    .select("name, approval_role, position")
     .eq("id", user.id)
     .single();
-  if (!profile || profile.approval_role !== "team_lead")
-    return { error: "팀장만 승인 없이 완료 처리할 수 있습니다.", notificationError: null };
+  if (!profile || !canApproveFinal(profile.position))
+    return { error: "실장급 이상만 승인 없이 완료 처리할 수 있습니다.", notificationError: null };
 
   const admin = createAdminClient();
   const { data: installation } = await admin
@@ -1067,11 +1070,14 @@ export async function rescheduleInstallationByTeamLead(input: {
   if (!user) return { error: "로그인이 필요합니다.", notificationError: null };
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name, approval_role")
+    .select("name, approval_role, position")
     .eq("id", user.id)
     .single();
-  if (!profile || profile.approval_role !== "team_lead")
-    return { error: "팀장만 승인 없이 바로 일정을 변경할 수 있습니다.", notificationError: null };
+  if (!profile || !canApproveFinal(profile.position))
+    return {
+      error: "실장급 이상만 승인 없이 바로 일정을 변경할 수 있습니다.",
+      notificationError: null,
+    };
   if (!input.scheduledDate) return { error: "일정 날짜가 필요합니다.", notificationError: null };
 
   const admin = createAdminClient();
@@ -1159,7 +1165,7 @@ export async function rejectInstallationStatusApproval(installationId: string, r
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, name, approval_role")
+    .select("id, name, approval_role, position")
     .eq("id", user.id)
     .single();
 
@@ -1175,8 +1181,8 @@ export async function rejectInstallationStatusApproval(installationId: string, r
   if (!approval) return { error: "처리할 승인 요청이 없습니다.", notificationError: null };
   const expectedStatus = approval.status;
   const canReject =
-    (expectedStatus === "requested" && profile?.approval_role === "tech_responsible") ||
-    (expectedStatus === "responsible_approved" && profile?.approval_role === "team_lead");
+    (expectedStatus === "requested" && canApproveFirst(profile?.position)) ||
+    (expectedStatus === "responsible_approved" && canApproveFinal(profile?.position));
   if (!canReject) return { error: "반려 권한이 없습니다.", notificationError: null };
   if (approval.requested_by === user.id)
     return { error: "요청자는 직접 반려할 수 없습니다.", notificationError: null };
@@ -1191,9 +1197,7 @@ export async function rejectInstallationStatusApproval(installationId: string, r
             {
               id: user.id,
               name: profile!.name,
-              role:
-                profile?.approval_role ??
-                (expectedStatus === "requested" ? "tech_responsible" : "team_lead"),
+              role: expectedStatus === "requested" ? "팀장" : "실장",
             },
             reason,
             "rejection",
