@@ -21,6 +21,7 @@ import TicketActions from "./TicketActions";
 import TicketMerchantCard from "./TicketMerchantCard";
 import TicketLogs from "./TicketLogs";
 import TicketInfoEdit from "./TicketInfoEdit";
+import RevisionRequestButton from "./RevisionRequestButton";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -94,7 +95,12 @@ export default async function TicketDetailPage({ params }: Props) {
             </span>
           )}
         </div>
-        <h1 className="text-xl font-bold text-gray-900">{ticket.title}</h1>
+        <div className="flex items-start justify-between gap-2">
+          <h1 className="text-xl font-bold text-gray-900">{ticket.title}</h1>
+          {(profile as Profile).role === "master" && (
+            <RevisionRequestButton ticketId={ticket.id as string} />
+          )}
+        </div>
         <p className="text-sm text-gray-500 mt-1">
           등록 {format(new Date(ticket.created_at), "yyyy.M.d HH:mm", { locale: ko })}
         </p>

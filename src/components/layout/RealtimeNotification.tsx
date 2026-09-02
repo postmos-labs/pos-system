@@ -18,6 +18,7 @@ function actionLabelFor(type: string | null, href?: string) {
   if (!href) return "확인";
   if (type?.startsWith("approval_")) return "승인요청 보기";
   if (type === "install_transfer") return "설치건 보기";
+  if (type === "ticket_revision") return "수정 요청 보기";
   return "알림 보기";
 }
 
@@ -101,13 +102,13 @@ export default function RealtimeNotification({ userId }: Props) {
     <>
       {}
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-black/30 backdrop-blur-sm"
             onClick={() => setModal(null)}
           />
-          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm mx-4 overflow-hidden">
-            <div className="bg-blue-600 px-5 py-4 flex items-center gap-3">
+          <div className="relative flex max-h-[85dvh] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="bg-blue-600 px-5 py-4 flex flex-shrink-0 items-center gap-3">
               <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
                 <Bell size={18} className="text-white" />
               </div>
@@ -116,11 +117,16 @@ export default function RealtimeNotification({ userId }: Props) {
                 <X size={18} />
               </button>
             </div>
-            <div className="px-5 py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
               <p className="text-slate-900 font-bold text-base mb-1">{modal.title}</p>
-              {modal.body && <p className="text-slate-500 text-sm">{modal.body}</p>}
+              {/* 공지처럼 긴 글도 줄바꿈 그대로 보이고, 넘치면 이 영역만 스크롤된다. */}
+              {modal.body && (
+                <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap break-words">
+                  {modal.body}
+                </p>
+              )}
             </div>
-            <div className="px-5 pb-5">
+            <div className="flex-shrink-0 px-5 pb-5">
               <button
                 onClick={() => {
                   const href = modal.href;

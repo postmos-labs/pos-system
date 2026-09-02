@@ -38,7 +38,9 @@ export default function NotificationRow({ id, href, title, body, createdAtLabel,
         <p className={`text-sm ${!isRead ? "font-semibold text-gray-900" : "text-gray-700"}`}>
           {title}
         </p>
-        {body && <p className="text-xs text-gray-500 mt-0.5">{body}</p>}
+        {body && (
+          <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-wrap break-words">{body}</p>
+        )}
         <p className="text-xs text-gray-400 mt-1">{createdAtLabel}</p>
       </div>
     </button>
