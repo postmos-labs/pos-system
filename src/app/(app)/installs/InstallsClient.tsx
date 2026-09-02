@@ -1160,9 +1160,10 @@ export default function InstallsClient({
     }
   }
 
-  async function submitCompletion(skipCompleteSend?: boolean) {
+  async function submitCompletion(skipCompleteSend?: boolean, skipApproval?: boolean) {
     if (!completeModal) return;
-    if (!["tech", "admin", "master"].includes(profile.role)) {
+    // 팀장이 승인 없이 바로 끝내는 경우는 기술지원 역할 제한을 받지 않는다.
+    if (!skipApproval && !["tech", "admin", "master"].includes(profile.role)) {
       toast.warning("설치완료 승인요청은 기술지원팀만 등록할 수 있습니다.");
       return;
     }
@@ -1213,6 +1214,42 @@ export default function InstallsClient({
       toast.error("완료정보 저장 실패: " + error.message);
       setCompleting(false);
       completingRef.current = false;
+      return;
+    }
+
+    if (skipApproval) {
+      const directResult = await completeInstallationByTeamLead(id, approvalNote);
+      if (directResult.error) {
+        toast.error("완료 처리 실패: " + directResult.error);
+        setCompleting(false);
+        completingRef.current = false;
+        return;
+      }
+      if (directResult.inventoryWarning) toast.warning(directResult.inventoryWarning);
+      if (directResult.notificationError)
+        toast.warning("알림톡 처리에 실패했습니다: " + directResult.notificationError);
+      setInstalls((prev) =>
+        prev.map((i) =>
+          i.id === id
+            ? {
+                ...i,
+                status: "completed",
+                notes: saveValue ?? undefined,
+                completion_photo_urls: mergedPhotoUrls,
+              }
+            : i,
+        ),
+      );
+      setCompletionApprovals((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setCompleteModal(null);
+      setCompletePhotos([]);
+      setCompleting(false);
+      completingRef.current = false;
+      toast.success("승인 없이 완료 처리했습니다.");
       return;
     }
 
@@ -1414,38 +1451,6 @@ export default function InstallsClient({
         ? "1차 승인 완료. 팀장 최종 승인을 기다립니다."
         : `${statusLabel(approval.target_status)} 최종 승인 및 상태 반영이 완료됐습니다.`,
     );
-  }
-
-  // 팀장이 승인 절차 없이 바로 완료 처리한다. 현장에서 이미 끝난 건을 승인 단계 때문에
-  // 며칠씩 묶어두지 않기 위한 우회로다.
-  async function completeWithoutApproval(id: string) {
-    const inst = installs.find((i) => i.id === id);
-    if (!inst) return;
-    if (!inst.assigned_to) {
-      toast.warning("담당기사를 먼저 배정해주세요.");
-      return;
-    }
-    const note = await promptNote("승인 없이 완료 처리하는 사유를 남겨주세요.");
-    if (note === null) return;
-    setCompleting(true);
-    const result = await completeInstallationByTeamLead(id, note);
-    setCompleting(false);
-    if (result.error) {
-      toast.error("완료 처리 실패: " + result.error);
-      return;
-    }
-    if (result.inventoryWarning) toast.warning(result.inventoryWarning);
-    if (result.notificationError)
-      toast.warning("알림톡 처리에 실패했습니다: " + result.notificationError);
-    setInstalls((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status: "completed" } : item)),
-    );
-    setCompletionApprovals((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    toast.success("승인 없이 완료 처리했습니다.");
   }
 
   async function rejectCompletion(id: string) {
@@ -1990,7 +1995,6 @@ export default function InstallsClient({
           completing={completing}
           onApproveCompletion={() => approveCompletion(activeDetailInst.id)}
           onRejectCompletion={() => rejectCompletion(activeDetailInst.id)}
-          onCompleteWithoutApproval={() => completeWithoutApproval(activeDetailInst.id)}
           onCopyLink={() => copyLink(activeDetailInst.status_token)}
           onReschedule={() => handleStatusChange(activeDetailInst.id, "reschedule")}
           onTechReject={() => setRejectModal({ id: activeDetailInst.id, reason: "" })}
@@ -3213,6 +3217,18 @@ export default function InstallsClient({
               >
                 {completing ? "처리 중..." : "완료 처리"}
               </button>
+              {/* 팀장은 승인 절차 없이 바로 끝낼 수 있다. 담당기사가 없으면 실적을 추적할 수
+                  없으므로 배정 전에는 내보내지 않는다(서버도 같은 조건으로 막는다). */}
+              {profile.approval_role === "team_lead" &&
+                !!installs.find((i) => i.id === completeModal.id)?.assigned_to && (
+                  <button
+                    onClick={() => submitCompletion(false, true)}
+                    disabled={completing || checklistItems.some((c) => !c.checked)}
+                    className="w-full py-2 rounded-lg border border-emerald-600 bg-emerald-50 text-emerald-700 text-sm font-semibold hover:bg-emerald-100 disabled:opacity-50"
+                  >
+                    {completing ? "처리 중..." : "승인 없이 바로 완료"}
+                  </button>
+                )}
               <button
                 onClick={() => submitCompletion(true)}
                 disabled={completing || checklistItems.some((c) => !c.checked)}
