@@ -15,6 +15,8 @@ interface Install {
   id: string;
   customer_name: string;
   delivery_type?: string;
+  // 승인이 끝나기 전 사진도 함께 보여주므로 상태를 구분해 표시한다.
+  status?: string;
   completion_photo_urls: string[];
   notes?: string | null;
   created_at: string;
@@ -211,6 +213,11 @@ export default function PhotosClient({ profile, installs: initialInstalls }: Pro
                   <span className="font-semibold text-slate-900 break-words">
                     {inst.customer_name}
                   </span>
+                  {inst.status && inst.status !== "completed" && (
+                    <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                      승인 대기
+                    </span>
+                  )}
                 </label>
                 <span
                   className={`text-xs font-medium rounded-lg border px-2 py-0.5 shrink-0 ${(inst.delivery_type ?? "install") === "as" ? "bg-purple-50 text-purple-600 border-purple-200" : "bg-blue-50 text-blue-600 border-blue-200"}`}
