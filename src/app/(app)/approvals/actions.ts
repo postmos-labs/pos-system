@@ -547,12 +547,19 @@ export async function approveFranchiseTransfer(
     return { error: "감사 로그 저장에 실패해 이관을 취소했습니다: " + logError.message };
   }
 
-  const { data: techProfiles } = await admin.from("profiles").select("id").eq("role", "tech");
+  // 이관 알림은 기술지원팀이 받는다. 팀장·관리자도 이관 현황을 봐야 하므로 함께 넣는다.
+  const { data: techProfiles } = await admin
+    .from("profiles")
+    .select("id")
+    .in("role", ["tech", "admin", "master"]);
   const { error: notificationError } = techProfiles?.length
     ? await admin.from("notifications").insert(
         techProfiles.map((tech) => ({
           user_id: tech.id,
           franchise_application_id: franchise.id,
+          // 설치건 id를 함께 넣어야 알림 팝업이 설치관리로 이동한다.
+          // 넣지 않으면 가맹접수로 가버려 이관받은 사람이 다시 찾아 들어가야 한다.
+          installation_id: savedInstall.id,
           type: "install_transfer",
           title: `[${franchise.business_name || franchise.owner_name || "미입력"}] 기술지원 ${existingInstall ? "재이관" : "이관"}`,
           body: `팀장 최종 승인으로 ${INSTALLATION_DELIVERY_TYPE_LABEL[deliveryType]} 구분의 설치건이 ${existingInstall ? "재이관" : "이관"}되었습니다.`,

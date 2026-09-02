@@ -17,6 +17,7 @@ const POLL_INTERVAL_MS = 60_000;
 function actionLabelFor(type: string | null, href?: string) {
   if (!href) return "확인";
   if (type?.startsWith("approval_")) return "승인요청 보기";
+  if (type === "install_transfer") return "설치건 보기";
   return "알림 보기";
 }
 

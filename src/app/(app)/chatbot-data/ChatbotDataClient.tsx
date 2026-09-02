@@ -7,6 +7,7 @@ import FormModal from "@/components/ui/FormModal";
 import { useToast } from "@/components/ui/Toast";
 import type { Profile } from "@/types";
 import ChatbotDataDetailDrawer from "./ChatbotDataDetailDrawer";
+import ChatbotExportImport from "./ChatbotExportImport";
 
 export interface ChatbotDataRow {
   id: string;
@@ -16,6 +17,8 @@ export interface ChatbotDataRow {
   registrant_name: string;
   company_name: string | null;
   phone: string | null;
+  // 인입내역에서 정제해 들어온 건이면 출처 티켓 id (138번 마이그레이션 이후)
+  source_ticket_ids?: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -216,10 +219,13 @@ export default function ChatbotDataClient({ rows, profile }: Props) {
             className="w-72 rounded-lg border border-slate-200 py-2 pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <div className="ml-auto flex items-center gap-3">
-          <div className="text-sm text-slate-500">
+        <div className="ml-auto flex items-center gap-2">
+          <div className="mr-1 text-sm text-slate-500">
             전체 {filteredRows.length.toLocaleString()}건
           </div>
+          <ChatbotExportImport
+            onImported={(imported) => setLocalRows((previous) => [...imported, ...previous])}
+          />
           <button
             type="button"
             onClick={() => setShowForm(true)}
