@@ -59,6 +59,10 @@ const INSTALL_STEP_LABEL: Record<string, string> = {
   completed: "완료",
 };
 
+// 승인 대기 목록에 몇 건까지 보일지. 5건이면 밀린 승인이 화면 밖으로 빠져
+// 있는 줄도 모르고 지나치게 된다.
+const APPROVAL_LIST_LIMIT = 50;
+
 export default async function ApprovalsPage() {
   const supabase = await createClient();
   const {
@@ -81,11 +85,14 @@ export default async function ApprovalsPage() {
     canFirst ||
     canFinal;
 
-  // 상위 직급은 아래 단계도 대신 처리할 수 있어야 결재가 한 사람 부재로 멈추지 않는다.
-  const completionStatuses = [
-    ...(canFinal ? ["responsible_approved"] : []),
-    ...(canFirst ? ["requested"] : []),
-  ];
+  // 단계별로 담당 직급만 처리한다 — 팀장은 1차, 실장은 최종.
+  // 실장이 1차까지 하면 두 단계가 사실상 한 사람에게 몰려 검토가 형식이 된다.
+  const isFinalApprover = canFinal;
+  const completionStatuses = isFinalApprover
+    ? ["responsible_approved"]
+    : canFirst
+      ? ["requested"]
+      : [];
 
   const completionApprovalQuery =
     completionStatuses.length > 0
@@ -99,7 +106,7 @@ export default async function ApprovalsPage() {
           // 통째로 걸러져(NULL <> x → NULL) 승인함에서 사라지므로 NULL도 함께 남긴다.
           .or(`requested_by.is.null,requested_by.neq.${userId}`)
           .order("requested_at", { ascending: true })
-          .limit(5)
+          .limit(APPROVAL_LIST_LIMIT)
       : null;
 
   const transferApprovalQuery =
@@ -116,7 +123,7 @@ export default async function ApprovalsPage() {
           // 위와 같은 이유로 요청자가 삭제된 건(NULL)도 승인함에 남긴다.
           .or(`requested_by.is.null,requested_by.neq.${userId}`)
           .order("requested_at", { ascending: true })
-          .limit(5)
+          .limit(APPROVAL_LIST_LIMIT)
       : null;
 
   const rejectedTransferQuery = supabase
@@ -127,7 +134,7 @@ export default async function ApprovalsPage() {
     .eq("status", "rejected")
     .eq("requested_by", userId)
     .order("updated_at", { ascending: false })
-    .limit(5);
+    .limit(APPROVAL_LIST_LIMIT);
 
   const [completionApprovalsResult, transferApprovalsResult, rejectedTransfersResult] =
     await Promise.all([
