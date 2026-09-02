@@ -933,6 +933,124 @@ export async function approveInstallationStatusByTeamLead(installationId: string
   return { error: null, notificationError: notification.error, inventoryWarning };
 }
 
+// 팀장이 승인 절차 없이 바로 완료 처리한다. 현장에서 이미 끝났는데 승인 단계 때문에
+// 며칠씩 걸리는 경우를 위한 우회로다. 승인을 거친 완료와 같은 부수효과(재고 차감·알림톡·
+// 활동 로그)를 그대로 수행하되, 누가 승인 없이 처리했는지 로그에 남긴다.
+export async function completeInstallationByTeamLead(installationId: string, note: string) {
+  if (validateApprovalNote(note) === null)
+    return { error: "비고는 2,000자 이하로 입력해주세요.", notificationError: null };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요합니다.", notificationError: null };
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("name, approval_role")
+    .eq("id", user.id)
+    .single();
+  if (!profile || profile.approval_role !== "team_lead")
+    return { error: "팀장만 승인 없이 완료 처리할 수 있습니다.", notificationError: null };
+
+  const admin = createAdminClient();
+  const { data: installation } = await admin
+    .from("installations")
+    .select("status, items, customer_name, franchise_application_id, assigned_to")
+    .eq("id", installationId)
+    .single();
+  if (!installation) return { error: "설치건을 찾을 수 없습니다.", notificationError: null };
+  if (installation.status === "completed")
+    return { error: "이미 완료된 설치건입니다.", notificationError: null };
+  // 승인을 건너뛰더라도 누가 처리한 건인지는 남아야 한다. 담당기사 없이 완료되면
+  // 나중에 실적·이력을 추적할 수 없다.
+  if (!installation.assigned_to)
+    return { error: "담당기사를 먼저 배정해주세요.", notificationError: null };
+
+  const completedAt = new Date().toISOString();
+  const { data: updated, error: updateError } = await admin
+    .from("installations")
+    .update({ status: "completed", updated_at: completedAt })
+    .eq("id", installationId)
+    .eq("status", installation.status)
+    .select("id")
+    .maybeSingle();
+  if (updateError || !updated)
+    return {
+      error: updateError?.message ?? "설치 상태가 변경되어 처리할 수 없습니다.",
+      notificationError: null,
+    };
+
+  const { error: logError } = await admin.from("installation_activity_logs").insert({
+    installation_id: installationId,
+    user_id: user.id,
+    action: "step_final_approved",
+    from_status: installation.status,
+    to_status: "completed",
+    details: { skipped_approval: true, note },
+  });
+  if (logError) {
+    // 기록이 남지 않는 완료 처리는 두지 않는다. 상태를 되돌리고 알린다.
+    await admin
+      .from("installations")
+      .update({ status: installation.status })
+      .eq("id", installationId)
+      .eq("status", "completed");
+    return {
+      error: "감사 로그 저장에 실패해 완료 처리를 취소했습니다: " + logError.message,
+      notificationError: null,
+    };
+  }
+
+  // 승인을 거친 완료와 같은 부수효과 — 대기 중인 승인요청이 있으면 함께 정리한다.
+  await admin
+    .from("installation_completion_approvals")
+    .update({ status: "approved", approved_by: user.id, approved_by_name: profile.name })
+    .eq("installation_id", installationId)
+    .in("status", ["requested", "responsible_approved"]);
+
+  let inventoryWarning: string | null = null;
+  const items = installation.items;
+  if (Array.isArray(items) && items.length > 0) {
+    const { data: merchantRow } = installation.franchise_application_id
+      ? await admin
+          .from("merchants")
+          .select("id, business_name")
+          .eq("franchise_application_id", installation.franchise_application_id)
+          .limit(1)
+          .maybeSingle()
+      : { data: null };
+    const { data: unmatched, error: deductError } = await admin.rpc("deduct_inventory_on_install", {
+      p_items: items,
+      p_install_id: installationId,
+      p_note: `설치완료 자동차감 (${installation.customer_name ?? "미입력"})`,
+      p_merchant_id: merchantRow?.id ?? null,
+      p_merchant_name: merchantRow?.business_name ?? installation.customer_name ?? null,
+    });
+    if (deductError) {
+      inventoryWarning = "재고 자동차감에 실패했습니다: " + deductError.message;
+    } else if (Array.isArray(unmatched) && unmatched.length > 0) {
+      const names = unmatched
+        .map((row: { unmatched_name: string }) => row.unmatched_name)
+        .filter(Boolean);
+      if (names.length > 0)
+        inventoryWarning = "재고에서 찾지 못해 차감되지 않은 품목: " + names.join(", ");
+    }
+  }
+
+  const notification = await sendApprovedInstallNotification({
+    installationId,
+    status: "completed",
+    userId: user.id,
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/installs");
+  revalidatePath("/installs/mine");
+  revalidatePath("/calendar");
+  revalidatePath("/inventory");
+  return { error: null, notificationError: notification.error, inventoryWarning };
+}
+
 export async function rescheduleInstallationByTeamLead(input: {
   installationId: string;
   scheduledDate: string;

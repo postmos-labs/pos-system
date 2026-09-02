@@ -42,6 +42,7 @@ import {
   deleteInstallations,
   rejectInstallationStatusApproval,
   requestInstallationCompletion,
+  completeInstallationByTeamLead,
   requestInstallationStatusApproval,
   rescheduleInstallationByTeamLead,
   sendInstallTransitNotice,
@@ -1415,6 +1416,38 @@ export default function InstallsClient({
     );
   }
 
+  // 팀장이 승인 절차 없이 바로 완료 처리한다. 현장에서 이미 끝난 건을 승인 단계 때문에
+  // 며칠씩 묶어두지 않기 위한 우회로다.
+  async function completeWithoutApproval(id: string) {
+    const inst = installs.find((i) => i.id === id);
+    if (!inst) return;
+    if (!inst.assigned_to) {
+      toast.warning("담당기사를 먼저 배정해주세요.");
+      return;
+    }
+    const note = await promptNote("승인 없이 완료 처리하는 사유를 남겨주세요.");
+    if (note === null) return;
+    setCompleting(true);
+    const result = await completeInstallationByTeamLead(id, note);
+    setCompleting(false);
+    if (result.error) {
+      toast.error("완료 처리 실패: " + result.error);
+      return;
+    }
+    if (result.inventoryWarning) toast.warning(result.inventoryWarning);
+    if (result.notificationError)
+      toast.warning("알림톡 처리에 실패했습니다: " + result.notificationError);
+    setInstalls((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status: "completed" } : item)),
+    );
+    setCompletionApprovals((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    toast.success("승인 없이 완료 처리했습니다.");
+  }
+
   async function rejectCompletion(id: string) {
     const approval = completionApprovals[id];
     if (!approval || !["requested", "responsible_approved"].includes(approval.status)) return;
@@ -1957,6 +1990,7 @@ export default function InstallsClient({
           completing={completing}
           onApproveCompletion={() => approveCompletion(activeDetailInst.id)}
           onRejectCompletion={() => rejectCompletion(activeDetailInst.id)}
+          onCompleteWithoutApproval={() => completeWithoutApproval(activeDetailInst.id)}
           onCopyLink={() => copyLink(activeDetailInst.status_token)}
           onReschedule={() => handleStatusChange(activeDetailInst.id, "reschedule")}
           onTechReject={() => setRejectModal({ id: activeDetailInst.id, reason: "" })}

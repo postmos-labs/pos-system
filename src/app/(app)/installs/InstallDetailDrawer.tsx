@@ -94,6 +94,7 @@ interface Props {
   completing: boolean;
   onApproveCompletion: () => void;
   onRejectCompletion: () => void;
+  onCompleteWithoutApproval: () => void;
 
   onCopyLink: () => void;
   onReschedule: () => void;
@@ -228,6 +229,7 @@ export default function InstallDetailDrawer({
   completing,
   onApproveCompletion,
   onRejectCompletion,
+  onCompleteWithoutApproval,
   onCopyLink,
   onReschedule,
   onTechReject,
@@ -673,6 +675,20 @@ export default function InstallDetailDrawer({
               도착시간 알림 발송
             </button>
           )}
+          {/* 팀장은 승인 절차 없이 바로 완료 처리할 수 있다. 담당기사가 없으면 실적을 추적할 수
+              없으므로 배정 전에는 버튼을 내보내지 않는다(서버도 같은 조건으로 막는다). */}
+          {profile.approval_role === "team_lead" &&
+            installation.status !== "completed" &&
+            installation.assigned_to && (
+              <button
+                type="button"
+                onClick={onCompleteWithoutApproval}
+                disabled={completing}
+                className="rounded-lg border border-emerald-600 bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                승인 없이 완료
+              </button>
+            )}
           {approval && (
             <>
               <span className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700">
