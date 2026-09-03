@@ -30,6 +30,7 @@ import {
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
+import { saveRowOrder } from "@/lib/reorderRows";
 import { formatPhone, formatBusinessNumber, formatDateText } from "@/lib/format";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { mergeRowsPreservingIdentity } from "@/lib/mergeRows";
@@ -1451,17 +1452,17 @@ export default function FranchiseClient({
       const next = [...localRows];
       const [moved] = next.splice(from, 1);
       next.splice(to, 0, moved);
+      const prevOrder = localRows;
       setLocalRows(next);
-      const n = next.length;
-      const supabase = createClient();
-      Promise.all(
-        next.map((r, i) =>
-          supabase
-            .from("franchise_applications")
-            .update({ sort_order: (n - i) * 1000 })
-            .eq("id", r.id),
-        ),
-      ).catch(() => toast.error("순서 저장에 실패했습니다."));
+      void saveRowOrder(
+        "franchise_applications",
+        next.map((r) => r.id),
+      ).then(({ error }) => {
+        if (!error) return;
+        // 저장되지 않은 순서가 화면에 남으면 새로고침 때 어긋난다 — 원래 순서로 되돌린다.
+        setLocalRows(prevOrder);
+        toast.error("순서 저장에 실패했습니다.");
+      });
     },
     [localRows, toast],
   );
