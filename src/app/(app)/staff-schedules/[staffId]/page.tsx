@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { kstToday } from "@/lib/date";
 import StaffScheduleMobileView from "./StaffScheduleMobileView";
 import type { StaffScheduleRow } from "../StaffSchedulesClient";
+import { isAllStaffSlug } from "../scheduleSlug";
 
 interface Props {
   params: Promise<{ staffId: string }>;
@@ -62,9 +63,10 @@ export default async function StaffScheduleMobilePage({ params, searchParams }: 
   // 둘 다 받는다. 이름이 겹치는 직원이 있으면 누구인지 정할 수 없으므로 id 주소만 쓴다.
   const decoded = decodeURIComponent(staffId);
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decoded);
+  // 전 직원 일정을 한 화면에서 보는 모드. 직원 조회·동명이인 검사·필터를 모두 건너뛴다.
+  const isAll = isAllStaffSlug(staffId);
 
   let staffRow: { id: string; name: string | null; position?: string | null } | null = null;
-  let duplicateName = false;
 
   async function lookup(columns: string) {
     return isUuid
@@ -72,38 +74,41 @@ export default async function StaffScheduleMobilePage({ params, searchParams }: 
       : supabase.from("profiles").select(columns).eq("name", decoded).limit(2);
   }
 
-  const staffResult = await lookup("id,name,position");
-  let rows = staffResult.data as unknown as
-    { id: string; name: string | null; position?: string | null }[] | null;
-  if (isMissingPositionColumnError(staffResult.error)) {
-    const fallback = await lookup("id,name");
-    rows = fallback.data as unknown as { id: string; name: string | null }[] | null;
-  }
-  if (rows && rows.length > 1) {
-    duplicateName = true;
-  } else {
-    staffRow = rows?.[0] ?? null;
-  }
+  if (!isAll) {
+    let duplicateName = false;
+    const staffResult = await lookup("id,name,position");
+    let rows = staffResult.data as unknown as
+      { id: string; name: string | null; position?: string | null }[] | null;
+    if (isMissingPositionColumnError(staffResult.error)) {
+      const fallback = await lookup("id,name");
+      rows = fallback.data as unknown as { id: string; name: string | null }[] | null;
+    }
+    if (rows && rows.length > 1) {
+      duplicateName = true;
+    } else {
+      staffRow = rows?.[0] ?? null;
+    }
 
-  if (duplicateName) {
-    return (
-      <div className="mx-auto flex w-full max-w-lg flex-col items-center justify-center gap-2 px-4 py-16 text-center">
-        <p className="text-base font-medium text-slate-600">
-          같은 이름의 직원이 여러 명이라 일정을 특정할 수 없습니다.
-        </p>
-        <p className="text-sm text-slate-400">
-          일정 캘린더에서 해당 직원의 링크를 다시 복사해 주세요.
-        </p>
-      </div>
-    );
-  }
+    if (duplicateName) {
+      return (
+        <div className="mx-auto flex w-full max-w-lg flex-col items-center justify-center gap-2 px-4 py-16 text-center">
+          <p className="text-base font-medium text-slate-600">
+            같은 이름의 직원이 여러 명이라 일정을 특정할 수 없습니다.
+          </p>
+          <p className="text-sm text-slate-400">
+            일정 캘린더에서 해당 직원의 링크를 다시 복사해 주세요.
+          </p>
+        </div>
+      );
+    }
 
-  if (!staffRow) {
-    return (
-      <div className="mx-auto flex w-full max-w-lg flex-col items-center justify-center gap-2 px-4 py-16 text-center">
-        <p className="text-base font-medium text-slate-600">직원을 찾을 수 없습니다.</p>
-      </div>
-    );
+    if (!staffRow) {
+      return (
+        <div className="mx-auto flex w-full max-w-lg flex-col items-center justify-center gap-2 px-4 py-16 text-center">
+          <p className="text-base font-medium text-slate-600">직원을 찾을 수 없습니다.</p>
+        </div>
+      );
+    }
   }
 
   // 수정·삭제 버튼 노출을 위해 지금 로그인한 사람의 역할이 필요하다(서버 액션도 같은 조건으로 막는다).
@@ -171,18 +176,25 @@ export default async function StaffScheduleMobilePage({ params, searchParams }: 
     participants: participantsByScheduleId[row.id] ?? [],
   }));
 
-  // 그 직원이 등록했거나 참석자로 들어간 일정만 남긴다 (기존 page.tsx의 staff 필터와 동일한 판정).
+  // 전체 모드는 필터 없이 그 달 전체 일정을 보여준다. 개인 모드는 그 직원이 등록했거나
+  // 참석자로 들어간 일정만 남긴다 (기존 page.tsx의 staff 필터와 동일한 판정).
   const schedules = schemaReady
-    ? allSchedules.filter(
-        (row) =>
-          row.created_by === staffRow!.id ||
-          row.participants.some((p) => p.userId === staffRow!.id),
-      )
+    ? isAll
+      ? allSchedules
+      : allSchedules.filter(
+          (row) =>
+            row.created_by === staffRow!.id ||
+            row.participants.some((p) => p.userId === staffRow!.id),
+        )
     : [];
 
   return (
     <StaffScheduleMobileView
-      staff={{ id: staffRow.id, name: staffRow.name, position: staffRow.position ?? null }}
+      staff={
+        staffRow
+          ? { id: staffRow.id, name: staffRow.name, position: staffRow.position ?? null }
+          : null
+      }
       schedules={schedules}
       month={month}
       slug={staffId}

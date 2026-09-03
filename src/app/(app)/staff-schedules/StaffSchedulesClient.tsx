@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Plus, X, Trash2, Pencil, ImageDown, Link2 } 
 import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField } from "@/components/ui/DatePickerField";
 import { useToast } from "@/components/ui/Toast";
+import { ALL_STAFF_SLUG } from "./scheduleSlug";
 import {
   createStaffSchedule,
   updateStaffSchedule,
@@ -788,18 +789,44 @@ export default function StaffSchedulesClient({
             <p className="text-xs font-bold text-slate-900">직원</p>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
-            <button
-              type="button"
-              onClick={() => selectStaff("")}
-              className={`mb-0.5 flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${
+            <div
+              className={`mb-0.5 flex w-full items-center gap-1 rounded-lg px-2.5 py-2 text-sm transition-colors ${
                 staff === ""
                   ? "bg-blue-50 font-semibold text-blue-700"
                   : "text-slate-600 hover:bg-slate-50"
               }`}
             >
-              <span>전체</span>
-              <span className="text-xs text-slate-400">{totalCount}</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => selectStaff("")}
+                className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
+              >
+                <span className="min-w-0 truncate">전체</span>
+                <span
+                  className={`shrink-0 text-xs ${staff === "" ? "text-blue-500" : "text-slate-400"}`}
+                >
+                  {totalCount}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  try {
+                    await navigator.clipboard.writeText(
+                      `${window.location.origin}/staff-schedules/${ALL_STAFF_SLUG}`,
+                    );
+                    toast.success("링크를 복사했습니다.");
+                  } catch {
+                    toast.error("링크 복사에 실패했습니다.");
+                  }
+                }}
+                className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                title="전체 일정 링크 복사"
+              >
+                <Link2 size={13} />
+              </button>
+            </div>
             {staffList.map((member) => {
               const active = staff === member.id;
               const count = staffCounts[member.id] ?? 0;
@@ -840,12 +867,16 @@ export default function StaffSchedulesClient({
                       try {
                         // 주소는 읽기 쉽게 이름으로 만든다. 같은 이름이 여러 명이면
                         // 누구인지 정할 수 없으므로 그 사람만 id 주소를 쓴다.
+                        // 이름이 "전체"인 직원은 전체 보기 주소와 겹치므로 마찬가지로 id를 쓴다.
                         const sameName = staffList.filter(
                           (m) => (m.name ?? "") === (member.name ?? ""),
                         ).length;
                         // 한글 이름을 encodeURIComponent로 감싸면 %EB%B0%95... 형태로 복사돼
                         // 카톡에 붙였을 때 알아볼 수 없다. 브라우저가 알아서 처리하므로 그대로 둔다.
-                        const slug = member.name && sameName === 1 ? member.name : member.id;
+                        const slug =
+                          member.name && sameName === 1 && member.name !== ALL_STAFF_SLUG
+                            ? member.name
+                            : member.id;
                         await navigator.clipboard.writeText(
                           `${window.location.origin}/staff-schedules/${slug}`,
                         );

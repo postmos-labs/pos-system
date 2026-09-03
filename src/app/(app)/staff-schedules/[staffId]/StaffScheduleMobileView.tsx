@@ -17,6 +17,7 @@ import {
   RESPONSE_COLOR,
   toDatePart,
   toTimePart,
+  ownerLabel,
   type StaffScheduleRow,
 } from "../StaffSchedulesClient";
 
@@ -41,7 +42,7 @@ interface StaffInfo {
 }
 
 interface Props {
-  staff: StaffInfo;
+  staff: StaffInfo | null;
   schedules: StaffScheduleRow[];
   month: string;
   // 주소에 쓰인 값(이름 또는 id). 월을 넘겨도 들어온 형태를 그대로 유지한다.
@@ -65,6 +66,8 @@ export default function StaffScheduleMobileView({
   responseReady,
   currentUser,
 }: Props) {
+  // staff가 없으면 전체 보기(조회와 참석 응답만 가능, 등록·수정·삭제는 없음).
+  const isAll = staff === null;
   const router = useRouter();
   const toast = useToast();
   const [year, monthNum] = month.split("-").map(Number);
@@ -193,7 +196,7 @@ export default function StaffScheduleMobileView({
       allDay: form.allDay,
       location: form.location.trim() || null,
       memo: form.memo.trim() || null,
-      participantIds: [staff.id],
+      participantIds: staff ? [staff.id] : [],
     };
     const result = editingId
       ? await updateStaffSchedule(editingId, payload)
@@ -230,7 +233,9 @@ export default function StaffScheduleMobileView({
   const todayCount = groups.find(([date]) => date === today)?.[1].length ?? 0;
   const isThisMonth = today.slice(0, 7) === month;
 
-  const heading = `${staff.name ?? "이름 미상"}${staff.position ? ` ${staff.position}님` : "님"}`;
+  const heading = isAll
+    ? "전체 일정"
+    : `${staff.name ?? "이름 미상"}${staff.position ? ` ${staff.position}님` : "님"}`;
   const myParticipant = detail?.participants.find((p) => p.userId === currentUser.id) ?? null;
 
   return (
@@ -282,13 +287,16 @@ export default function StaffScheduleMobileView({
       </div>
 
       {/* 폰에서 엄지로 닿는 자리에 등록 버튼을 띄운다. 하단 메뉴에 가리지 않게 위로 올린다. */}
-      <button
-        type="button"
-        onClick={openForm}
-        className="fixed bottom-20 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-blue-600 px-5 py-3 text-[15px] font-bold text-white shadow-lg active:bg-blue-700"
-      >
-        <Plus size={18} /> 일정 등록
-      </button>
+      {/* 전체 보기는 조회 전용이라 등록 버튼을 띄우지 않는다. */}
+      {!isAll && (
+        <button
+          type="button"
+          onClick={openForm}
+          className="fixed bottom-20 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-blue-600 px-5 py-3 text-[15px] font-bold text-white shadow-lg active:bg-blue-700"
+        >
+          <Plus size={18} /> 일정 등록
+        </button>
+      )}
 
       {detail && (
         <div
@@ -414,8 +422,8 @@ export default function StaffScheduleMobileView({
               </div>
             )}
 
-            {/* 수정·삭제는 등록자 본인과 관리자만. 서버 액션도 같은 조건으로 막는다. */}
-            {canEdit(detail) && (
+            {/* 수정·삭제는 등록자 본인과 관리자만, 전체 보기는 조회 전용이라 항상 숨긴다. 서버 액션도 같은 조건으로 막는다. */}
+            {!isAll && canEdit(detail) && (
               <div className="flex flex-shrink-0 gap-2 border-t border-slate-100 px-5 py-3 pb-6">
                 <button
                   type="button"
@@ -442,7 +450,7 @@ export default function StaffScheduleMobileView({
           <div className="flex max-h-[92dvh] w-full max-w-lg flex-col rounded-t-2xl bg-white sm:rounded-2xl">
             <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4">
               <p className="text-base font-bold text-slate-900">
-                {staff.name ?? "이름 미상"}님 일정 {editingId ? "수정" : "등록"}
+                {staff?.name ?? "이름 미상"}님 일정 {editingId ? "수정" : "등록"}
               </p>
               <button type="button" onClick={() => setFormOpen(false)} aria-label="닫기">
                 <X size={20} className="text-slate-400" />
@@ -657,6 +665,11 @@ export default function StaffScheduleMobileView({
                       >
                         {ev.category}
                       </span>
+                      {isAll && ownerLabel(ev) && (
+                        <span className="mb-1 ml-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                          {ownerLabel(ev)}
+                        </span>
+                      )}
                       <p className="text-[22px] leading-tight font-extrabold text-slate-900 tabular-nums">
                         {ev.all_day
                           ? "종일"
