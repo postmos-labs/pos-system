@@ -556,6 +556,23 @@ export default function InstallsClient({
   const [completing, setCompleting] = useState(false);
   const [completionApprovals, setCompletionApprovals] = useState(initialCompletionApprovals);
   const [approvalNoteHistory, setApprovalNoteHistory] = useState(initialApprovalNoteHistory);
+
+  // 삭제된 설치건의 승인 상태를 화면에서도 걷어낸다. DB에서는 FK ON DELETE CASCADE로 함께
+  // 사라지지만, 화면 상태에 남으면 승인 대기 건수가 지운 건을 계속 세고 붉은 강조도 남는다.
+  const removeApprovalState = useCallback((ids: string[]) => {
+    if (!ids.length) return;
+    const drop = new Set(ids);
+    setCompletionApprovals((prev) =>
+      ids.some((id) => id in prev)
+        ? Object.fromEntries(Object.entries(prev).filter(([id]) => !drop.has(id)))
+        : prev,
+    );
+    setApprovalNoteHistory((prev) =>
+      ids.some((id) => id in prev)
+        ? Object.fromEntries(Object.entries(prev).filter(([id]) => !drop.has(id)))
+        : prev,
+    );
+  }, []);
   const completingRef = useRef(false);
   const [rejectModal, setRejectModal] = useState<{ id: string; reason: string } | null>(null);
   const [rejecting, setRejecting] = useState(false);
@@ -1667,6 +1684,9 @@ export default function InstallsClient({
       return;
     }
     setInstalls((prev) => prev.filter((i) => i.id !== id));
+    // 설치건이 사라지면 승인 요청도 DB에서 함께 지워진다(FK ON DELETE CASCADE).
+    // 화면 상태에 남겨두면 승인 대기 건수와 강조 표시가 지운 건을 계속 세게 된다.
+    removeApprovalState([id]);
     setSelected((prev) => {
       const next = new Set(prev);
       next.delete(id);
@@ -1710,6 +1730,7 @@ export default function InstallsClient({
       return;
     }
     setInstalls((prev) => prev.filter((i) => !selected.has(i.id)));
+    removeApprovalState([...selected]);
     setSelected(new Set());
   }
 
