@@ -1061,18 +1061,15 @@ export async function completeInstallationByTeamLead(installationId: string, not
     }
   }
 
-  const notification = await sendApprovedInstallNotification({
-    installationId,
-    status: "completed",
-    userId: user.id,
-  });
-
+  // 승인 절차를 건너뛰고 마무리하는 경로라 고객 알림톡은 보내지 않는다.
+  // 정상 완료(requestInstallationCompletion → 최종 승인)는 지금처럼 발송하며,
+  // 여기서 안내가 필요하면 완료 후 알림톡 이력 화면에서 따로 보낸다.
   revalidatePath("/dashboard");
   revalidatePath("/installs");
   revalidatePath("/installs/mine");
   revalidatePath("/calendar");
   revalidatePath("/inventory");
-  return { error: null, notificationError: notification.error, inventoryWarning };
+  return { error: null, notificationError: null, inventoryWarning };
 }
 
 export async function rescheduleInstallationByTeamLead(input: {
