@@ -29,7 +29,13 @@ import RateBadge from "@/components/ui/RateBadge";
 import InstallationActivityHistory from "@/components/ui/InstallationActivityHistory";
 import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
 import { appendApprovalNote, type ApprovalNote } from "@/lib/approvalNotes";
-import { canApproveFirst, canApproveFinal, skipsFirstApproval } from "@/lib/auth/installApproval";
+import {
+  canApproveFirst,
+  canApproveFinal,
+  skipsFirstApproval,
+  canForceCompleteBy,
+  blocksForceComplete,
+} from "@/lib/auth/installApproval";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField, CalendarPopoverButton } from "@/components/ui/DatePickerField";
 import { VanBadge } from "@/components/ui/VanBadge";
@@ -3276,10 +3282,11 @@ export default function InstallsClient({
               >
                 {completing ? "처리 중..." : "완료 처리"}
               </button>
-              {/* 실장급 이상은 승인 절차 없이 바로 끝낼 수 있다. 담당기사가 없으면 실적을 추적할 수
-                  없으므로 배정 전에는 내보내지 않는다(서버도 같은 조건으로 막는다). */}
-              {canApproveFinal(profile.position) &&
-                !!installs.find((i) => i.id === completeModal.id)?.assigned_to && (
+              {/* 팀장급 이상은 승인 절차 없이 바로 끝낼 수 있다. 담당기사가 없으면 실적을 추적할 수
+                  없고, 이미 승인 요청이 올라온 건은 팀장급이 건너뛸 수 없다(서버도 같은 조건으로 막는다). */}
+              {canForceCompleteBy(profile) &&
+                !!installs.find((i) => i.id === completeModal.id)?.assigned_to &&
+                !blocksForceComplete(profile, completionApprovals[completeModal.id]?.status) && (
                   <button
                     onClick={() => submitCompletion(false, true)}
                     disabled={completing || checklistItems.some((c) => !c.checked)}

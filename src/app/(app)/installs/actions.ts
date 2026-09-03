@@ -7,7 +7,14 @@ import { createClient } from "@/lib/supabase/server";
 import { sendApprovedInstallNotification } from "@/lib/installNotifications";
 import { appendApprovalNote, parseApprovalNotes, validateApprovalNote } from "@/lib/approvalNotes";
 import { recordDeletions } from "@/lib/deletionLog";
-import { canApproveFirst, canApproveFinal, skipsFirstApproval } from "@/lib/auth/installApproval";
+import {
+  canApproveFirst,
+  canApproveFinal,
+  skipsFirstApproval,
+  canForceCompleteBy,
+  blocksForceComplete,
+  FORCE_COMPLETE_BLOCKING_STATUSES,
+} from "@/lib/auth/installApproval";
 
 const INSTALL_STATUSES = new Set([
   "received",
@@ -949,13 +956,27 @@ export async function completeInstallationByTeamLead(installationId: string, not
   if (!user) return { error: "로그인이 필요합니다.", notificationError: null };
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name, approval_role, position")
+    .select("name, role, approval_role, position")
     .eq("id", user.id)
     .single();
-  if (!profile || !canApproveFinal(profile.position))
-    return { error: "실장급 이상만 승인 없이 완료 처리할 수 있습니다.", notificationError: null };
+  if (!profile || !canForceCompleteBy(profile))
+    return { error: "팀장급 이상만 승인 없이 완료 처리할 수 있습니다.", notificationError: null };
 
   const admin = createAdminClient();
+  const { data: latestApproval } = await admin
+    .from("installation_completion_approvals")
+    .select("status")
+    .eq("installation_id", installationId)
+    .in("status", FORCE_COMPLETE_BLOCKING_STATUSES)
+    .order("requested_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (blocksForceComplete(profile, latestApproval?.status))
+    return {
+      error: "이미 승인 요청이 올라온 건입니다. 승인 절차로 처리해주세요.",
+      notificationError: null,
+    };
+
   const { data: installation } = await admin
     .from("installations")
     .select("status, items, customer_name, franchise_application_id, assigned_to")

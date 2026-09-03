@@ -29,3 +29,54 @@ export function canApproveFinal(position?: string | null): boolean {
 export function skipsFirstApproval(position?: string | null): boolean {
   return canApproveFinal(position);
 }
+
+// ── 강제완료(승인 절차 없이 바로 완료) ───────────────────────────────────────
+//
+// 승인 판정을 approval_role에서 직급으로 옮길 때(d0a760a) 기존 데이터를 옮기지 않아,
+// 직급이 비어 있거나 "팀장"으로 지정된 사람이 강제완료 권한을 통째로 잃었다.
+// 예전 approval_role의 team_lead가 최종 승인자였는데 직급 축의 최종 승인은 실장이라,
+// 같은 "팀장"이라는 말이 다른 등급을 가리키게 된 탓이다.
+//
+// 강제완료는 팀장급 이상으로 되돌린다. 다만 그대로 두면 팀장이 자기가 1차 승인해야 할
+// 건을 강제완료로 끝내버려 "팀장 1차 → 실장 최종" 분리가 무의미해지므로,
+// 이미 승인 요청이 올라온 건은 팀장급의 강제완료를 막는다(blocksForceComplete).
+
+export type ApprovalActor = { role?: string | null; position?: string | null };
+
+/**
+ * 직급과 무관하게 결재를 풀 수 있는 계정.
+ * 직급 지정이 빠지면 판정이 전부 0점이 되어 아무도 결재를 못 푸는 잠금 상태가 되는데,
+ * 그때 되돌릴 사람이 하나는 있어야 한다.
+ */
+export function isApprovalOverrider(role?: string | null): boolean {
+  return role === "master" || role === "admin";
+}
+
+/** 최종 승인 권한자인지 — 직급 판정에 관리자 안전망을 더한 것. */
+export function canApproveFinalBy(actor: ApprovalActor): boolean {
+  return isApprovalOverrider(actor.role) || canApproveFinal(actor.position);
+}
+
+/** 강제완료 가능 여부 — 팀장급 이상. 단 건별 제한은 blocksForceComplete로 따로 본다. */
+export function canForceCompleteBy(actor: ApprovalActor): boolean {
+  return (
+    isApprovalOverrider(actor.role) ||
+    positionRank(actor.position) >= positionRank(FIRST_APPROVAL_POSITION)
+  );
+}
+
+/** 강제완료로 건너뛰면 안 되는 승인 상태 — 이미 결재가 돌고 있는 단계. */
+export const FORCE_COMPLETE_BLOCKING_STATUSES = ["requested", "responsible_approved"];
+
+/**
+ * 이 건을 강제완료로 처리하면 안 되는지.
+ * 실장급 이상(과 관리자)은 최종 승인 권한이 있어 제한하지 않는다.
+ * 팀장급은 이미 승인 요청이 올라온 건을 강제완료로 건너뛸 수 없다.
+ *
+ * 화면의 버튼 노출 조건과 서버 가드가 이 함수 하나를 함께 쓴다 — 갈라지면
+ * "버튼은 보이는데 누르면 에러"가 된다.
+ */
+export function blocksForceComplete(actor: ApprovalActor, approvalStatus?: string | null): boolean {
+  if (canApproveFinalBy(actor)) return false;
+  return FORCE_COMPLETE_BLOCKING_STATUSES.includes(approvalStatus ?? "");
+}
