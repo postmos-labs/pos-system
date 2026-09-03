@@ -3282,19 +3282,43 @@ export default function InstallsClient({
               >
                 {completing ? "처리 중..." : "완료 처리"}
               </button>
-              {/* 팀장급 이상은 승인 절차 없이 바로 끝낼 수 있다. 담당기사가 없으면 실적을 추적할 수
-                  없고, 이미 승인 요청이 올라온 건은 팀장급이 건너뛸 수 없다(서버도 같은 조건으로 막는다). */}
+              {/* 팀장급 이상은 승인 절차 없이 바로 끝낼 수 있다(서버도 같은 조건으로 막는다).
+                  조건이 안 맞을 때 버튼을 지워버리면 왜 못 쓰는지 알 수가 없어, 버튼은 그대로 두고
+                  사유를 적어 비활성화한다. 직급 자체가 모자라면 애초에 대상이 아니므로 그때만 숨긴다. */}
               {canForceCompleteBy(profile) &&
-                !!installs.find((i) => i.id === completeModal.id)?.assigned_to &&
-                !blocksForceComplete(profile, completionApprovals[completeModal.id]?.status) && (
-                  <button
-                    onClick={() => submitCompletion(false, true)}
-                    disabled={completing || checklistItems.some((c) => !c.checked)}
-                    className="w-full py-2 rounded-lg border border-emerald-600 bg-emerald-50 text-emerald-700 text-sm font-semibold hover:bg-emerald-100 disabled:opacity-50"
-                  >
-                    {completing ? "처리 중..." : "승인 없이 바로 완료"}
-                  </button>
-                )}
+                (() => {
+                  const target = installs.find((i) => i.id === completeModal.id);
+                  const blockedReason = !target?.assigned_to
+                    ? "담당기사를 먼저 배정해주세요"
+                    : blocksForceComplete(profile, completionApprovals[completeModal.id]?.status)
+                      ? "승인 요청이 올라온 건은 승인 절차로 처리해주세요"
+                      : null;
+                  return (
+                    <div className="flex flex-col gap-1">
+                      <button
+                        onClick={() => submitCompletion(false, true)}
+                        disabled={
+                          completing ||
+                          checklistItems.some((c) => !c.checked) ||
+                          blockedReason !== null
+                        }
+                        title={blockedReason ?? undefined}
+                        className="w-full py-2 rounded-lg border border-emerald-600 bg-emerald-50 text-emerald-700 text-sm font-semibold hover:bg-emerald-100 disabled:opacity-50"
+                      >
+                        {completing ? "처리 중..." : "승인 없이 바로 완료"}
+                      </button>
+                      {blockedReason && (
+                        <p className="text-center text-xs text-slate-400">{blockedReason}</p>
+                      )}
+                    </div>
+                  );
+                })()}
+              {!canForceCompleteBy(profile) && (
+                <p className="text-center text-xs text-slate-400">
+                  승인 없이 바로 완료: 팀장급 이상만 가능 (현재 직급{" "}
+                  {profile.position ? `'${profile.position}'` : "미지정"})
+                </p>
+              )}
               <button
                 onClick={() => submitCompletion(true)}
                 disabled={completing || checklistItems.some((c) => !c.checked)}
