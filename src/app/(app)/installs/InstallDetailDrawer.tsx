@@ -34,6 +34,7 @@ import {
   statusOrderFor,
 } from "./installStatus";
 import type { Installation, CompletionApproval } from "./InstallsClient";
+import { openBadge, effectiveOpenDate } from "@/lib/openSchedule";
 
 // franchise_applications를 "*"로 select한 뒤 sales/cs 조인의 name만 붙인 결과 중,
 // 이 드로어가 실제로 쓰는 필드만 추린 타입. select 컬럼 근거: InstallsClient.tsx의
@@ -62,6 +63,7 @@ export interface InstallDetailDraft {
   address: string;
   scheduled_date: string;
   scheduled_time: string;
+  open_date: string;
   items: { name: string; quantity: number }[];
   notes: string;
 }
@@ -324,12 +326,23 @@ export default function InstallDetailDrawer({
               <XIcon className="size-4" />
             </button>
           </div>
-          <div className="mt-3.5">
+          <div className="mt-3.5 flex items-center gap-2 flex-wrap">
             <span
               className={`inline-flex w-fit items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${STATUS_COLORS[installation.status]}`}
             >
               {statusLabel(installation.status, installation.delivery_type)}
             </span>
+            {(() => {
+              const badge = openBadge(installation);
+              return badge ? (
+                <span
+                  className={`inline-flex w-fit items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${badge.className}`}
+                >
+                  오픈 {badge.label}
+                  {badge.hint ? ` · ${badge.hint}` : ""}
+                </span>
+              ) : null;
+            })()}
           </div>
           <div className="mt-4">
             <InstallStageProgress
@@ -443,6 +456,18 @@ export default function InstallDetailDrawer({
                     />
                   ) : (
                     <ReadValue>{installation.scheduled_date || "-"}</ReadValue>
+                  )}
+                </Field>
+                <Field label="오픈일">
+                  {canEdit ? (
+                    <DatePickerField
+                      value={draft?.open_date ?? installation.open_date ?? ""}
+                      onChange={(value) => onDraftChange({ open_date: value })}
+                      ariaLabel="오픈일"
+                      className="w-full"
+                    />
+                  ) : (
+                    <ReadValue>{effectiveOpenDate(installation) || "-"}</ReadValue>
                   )}
                 </Field>
                 <Field label="희망 시간대">

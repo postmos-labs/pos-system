@@ -18,7 +18,7 @@ export default async function InstallsDeliveryPage() {
       supabase
         .from("installations")
         .select(
-          "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name)",
+          "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications(open_date)",
         )
         .eq("delivery_type", "delivery")
         .order("sort_order", { ascending: false, nullsFirst: false })

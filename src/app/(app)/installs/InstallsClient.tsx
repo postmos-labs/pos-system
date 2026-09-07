@@ -37,6 +37,7 @@ import {
   blocksForceComplete,
 } from "@/lib/auth/installApproval";
 import { AppSelect } from "@/components/ui/AppSelect";
+import { openBadge, isOpenSoon, effectiveOpenDate } from "@/lib/openSchedule";
 import { DatePickerField, CalendarPopoverButton } from "@/components/ui/DatePickerField";
 import { VanBadge } from "@/components/ui/VanBadge";
 import { PRODUCT_CATALOG, QtyStepper, InstallItemsEditor } from "./InstallItemsEditor";
@@ -131,13 +132,14 @@ export interface Installation {
   assignee?: { name: string } | null;
   creator?: { name: string } | null;
   // page.tsx / fetchInstalls에서 franchise_applications를 조인해 가져온다.
-  franchise?: { van_company: string | null } | null;
+  franchise?: { van_company: string | null; open_date?: string | null } | null;
   franchise_application_id?: string;
   woo_customer_id?: string;
   address?: string;
   delivery_type?: string;
   scheduled_date?: string;
   scheduled_time?: string;
+  open_date?: string | null;
   tracking_number?: string;
   sort_order?: number | null;
   last_notify_status?: string;
@@ -183,6 +185,7 @@ const FETCH_LIMIT = 300;
 const MAIN_COLUMNS = [
   { key: "name", label: "상호명" },
   { key: "delivery_type", label: "구분" },
+  { key: "open_date", label: "오픈일" },
   { key: "phone", label: "전화번호" },
   { key: "tracking_number", label: "송장번호" },
   { key: "items", label: "제품" },
@@ -194,6 +197,7 @@ const MAIN_COLUMNS = [
 const DEFAULT_WIDTHS: Record<string, number> = {
   name: 140,
   delivery_type: 90,
+  open_date: 116,
   phone: 120,
   tracking_number: 140,
   items: 160,
@@ -547,6 +551,7 @@ export default function InstallsClient({
     address: string;
     scheduled_date: string;
     scheduled_time: string;
+    open_date: string;
     items: { name: string; quantity: number }[];
     notes: string;
   } | null>(null);
@@ -665,6 +670,7 @@ export default function InstallsClient({
   const [statusFilter, setStatusFilter] = useState("");
   // 승인 요청이 올라간 건만 추려 보는 필터. 승인이 밀리면 현장이 멈추므로 눈에 띄게 둔다.
   const [pendingOnly, setPendingOnly] = useState(false);
+  const [openSoonOnly, setOpenSoonOnly] = useState(false);
   const [techFilter, setTechFilter] = useState("");
   const [showRejected, setShowRejected] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
@@ -717,6 +723,7 @@ export default function InstallsClient({
       address: inst.address ?? "",
       scheduled_date: inst.scheduled_date ?? "",
       scheduled_time: inst.scheduled_time ?? "",
+      open_date: inst.open_date ?? "",
       items: inst.items ?? [],
       notes: inst.notes ?? "",
     };
@@ -725,8 +732,8 @@ export default function InstallsClient({
   async function fetchInstalls() {
     setLoading(true);
     const installsSelect = van
-      ? "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications!inner(van_company)"
-      : "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications(van_company)";
+      ? "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications!inner(van_company, open_date)"
+      : "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications(van_company, open_date)";
     let query = supabase.from("installations").select(installsSelect);
     if (deliveryOnly) query = query.eq("delivery_type", "delivery");
     else query = query.neq("delivery_type", "delivery");
@@ -1596,6 +1603,7 @@ export default function InstallsClient({
       | "delivery_type"
       | "scheduled_date"
       | "scheduled_time"
+      | "open_date"
       | "tracking_number"
       | "notes",
     value: string,
@@ -1643,6 +1651,8 @@ export default function InstallsClient({
       tasks.push(saveInstallField(id, "scheduled_date", detailDraft.scheduled_date));
     if (detailDraft.scheduled_time !== (inst.scheduled_time ?? ""))
       tasks.push(saveInstallField(id, "scheduled_time", detailDraft.scheduled_time));
+    if (detailDraft.open_date !== (inst.open_date ?? ""))
+      tasks.push(saveInstallField(id, "open_date", detailDraft.open_date));
     if (detailDraft.notes !== (inst.notes ?? ""))
       tasks.push(saveInstallField(id, "notes", detailDraft.notes));
     if (JSON.stringify(detailDraft.items) !== JSON.stringify(inst.items ?? [])) {
@@ -1872,6 +1882,9 @@ export default function InstallsClient({
     [installs, completionApprovals],
   );
 
+  // 오픈 임박(D-5 이내) 건수 — 필터 버튼에 함께 띄운다.
+  const openSoonCount = useMemo(() => installs.filter((i) => isOpenSoon(i)).length, [installs]);
+
   const filteredInstalls = useMemo(() => {
     const q = search.trim().toLowerCase();
     return installs.filter((i) => {
@@ -1887,6 +1900,7 @@ export default function InstallsClient({
       if (!showCompleted && i.status === "completed" && statusFilter !== "completed") return false;
       if (statusFilter && i.status !== statusFilter) return false;
       if (pendingOnly && !completionApprovals[i.id]) return false;
+      if (openSoonOnly && !isOpenSoon(i)) return false;
       if (techFilter && i.assigned_to !== techFilter) return false;
       if (dateFrom && i.created_at < dateFrom) return false;
       if (dateTo && i.created_at > dateTo + "T23:59:59") return false;
@@ -1907,6 +1921,7 @@ export default function InstallsClient({
     search,
     statusFilter,
     pendingOnly,
+    openSoonOnly,
     completionApprovals,
     techFilter,
     showRejected,
@@ -2528,6 +2543,19 @@ export default function InstallsClient({
         >
           승인 대기{pendingCount > 0 ? ` ${pendingCount}` : ""}
         </button>
+        {/* 오픈일이 5일 안으로 남은 건만 추린다. D-5 통화 · D-3 최종점검 대상. */}
+        <button
+          onClick={() => setOpenSoonOnly((v) => !v)}
+          className={`text-xs font-medium px-3 py-1 rounded-full border transition-all ${
+            openSoonOnly
+              ? "border-amber-300 bg-amber-100 text-amber-800"
+              : openSoonCount > 0
+                ? "border-amber-200 bg-amber-50 text-amber-700"
+                : "border-slate-200 bg-white text-slate-400"
+          }`}
+        >
+          오픈 임박{openSoonCount > 0 ? ` ${openSoonCount}` : ""}
+        </button>
         <button
           onClick={() => setShowRejected((v) => !v)}
           className={`text-xs font-medium px-3 py-1 rounded-full border transition-all ${showRejected ? "bg-red-100 text-red-700 border-red-200" : "bg-white border-slate-200 text-slate-400"}`}
@@ -2772,6 +2800,16 @@ export default function InstallsClient({
                               : inst.franchise?.van_company
                           }
                         />
+                        {(() => {
+                          const badge = openBadge(inst);
+                          return badge ? (
+                            <span
+                              className={`text-[10px] font-semibold rounded-md border px-1.5 py-0.5 shrink-0 ${badge.className}`}
+                            >
+                              {badge.label}
+                            </span>
+                          ) : null;
+                        })()}
                         {inst.woo_customer_id && (
                           <span className="text-[10px] font-semibold bg-teal-100 text-teal-600 border border-teal-200 px-1.5 py-0.5 rounded-md shrink-0">
                             우국상이관
@@ -3105,6 +3143,28 @@ export default function InstallsClient({
                             {DELIVERY_TYPE_LABELS[deliveryTypeOf(inst.delivery_type)]}
                           </span>
                         )}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {(() => {
+                          const openDate = effectiveOpenDate(inst);
+                          if (!openDate) return <span className="text-slate-300">-</span>;
+                          const badge = openBadge(inst);
+                          return (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-slate-600 tabular-nums">
+                                {openDate.slice(5).replace("-", "/")}
+                              </span>
+                              {badge && (
+                                <span
+                                  title={badge.hint}
+                                  className={`text-[10px] font-semibold rounded-md border px-1.5 py-0.5 ${badge.className}`}
+                                >
+                                  {badge.label}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td
                         className="px-4 py-3 text-slate-700 whitespace-nowrap overflow-hidden text-ellipsis"

@@ -35,8 +35,8 @@ export default async function InstallsPage({ searchParams }: Props) {
   if (!user) redirect("/login");
 
   const installsSelect = van
-    ? "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications!inner(van_company)"
-    : "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications(van_company)";
+    ? "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications!inner(van_company, open_date)"
+    : "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications(van_company, open_date)";
 
   const [
     { data: profile },
