@@ -108,6 +108,15 @@ export default function TicketsClient({
     (t) => selected.has(t.id) && quality[t.id] && !quality[t.id].hasOpenRequest,
   );
 
+  // 발송 버튼은 건을 골라야 나타난다. 고르기 전에도 미달이 있다는 사실은 보여야 하므로
+  // 목록 위에 상시 안내 줄을 둔다.
+  const flaggedTickets = filteredTickets.filter((t) => quality[t.id]);
+  const sendableFlagged = flaggedTickets.filter((t) => !quality[t.id].hasOpenRequest);
+
+  function selectFlagged() {
+    setSelected(new Set(sendableFlagged.map((t) => t.id)));
+  }
+
   function toggleAll() {
     setSelected(allChecked ? new Set() : new Set(filteredTickets.map((t) => t.id)));
   }
@@ -177,6 +186,24 @@ export default function TicketsClient({
           />
         </div>
       </div>
+
+      {flaggedTickets.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 border-b border-amber-100 bg-amber-50 px-6 py-2.5">
+          <AlertTriangle size={14} className="flex-shrink-0 text-amber-600" />
+          <span className="text-xs font-semibold text-amber-800">
+            이 페이지에 해결 절차 미달 {flaggedTickets.length}건
+          </span>
+          {isMaster && sendableFlagged.length > 0 && (
+            <button
+              type="button"
+              onClick={selectFlagged}
+              className="ml-auto rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100"
+            >
+              미달 {sendableFlagged.length}건 모두 선택
+            </button>
+          )}
+        </div>
+      )}
 
       {selected.size > 0 && (
         <BulkDeleteActions
