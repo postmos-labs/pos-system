@@ -5,7 +5,43 @@ import { Plus } from "lucide-react";
 import { STATUS_LABEL, type TicketStatus, type Profile } from "@/types";
 import TicketsClient from "./TicketsClient";
 import AuthorStats, { type AuthorStatRange, type AuthorStatRow } from "./AuthorStats";
+import MyRevisionRequests, { type MyRevisionRow } from "./MyRevisionRequests";
 import { inspectTicket, type QualityIssue } from "@/lib/resolutionQuality";
+
+// 42P01: relation does not exist / PGRST205: PostgREST 스키마 캐시에 표가 없음.
+// 139번 마이그레이션(ticket_revision_requests)이 아직 적용되지 않은 환경에서 쓴다.
+function isMissingRevisionTable(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "42P01" ||
+    error.code === "PGRST205" ||
+    /ticket_revision_requests|schema cache|relation .* does not exist/i.test(error.message ?? "")
+  );
+}
+
+type RawRevisionRow = {
+  id: string;
+  ticket_id: string;
+  message: string;
+  requested_by_name: string | null;
+  requested_at: string;
+  ticket:
+    | {
+        id: string;
+        title: string | null;
+        sales_id: string | null;
+        cs_id: string | null;
+        tech_id: string | null;
+      }[]
+    | {
+        id: string;
+        title: string | null;
+        sales_id: string | null;
+        cs_id: string | null;
+        tech_id: string | null;
+      }
+    | null;
+};
 
 interface Props {
   searchParams: Promise<{
@@ -75,6 +111,36 @@ export default async function TicketsPage({ searchParams }: Props) {
   const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
   if (!profile) redirect("/login");
   const p = profile as Profile;
+
+  // 나에게 온 수정 요청 — 내가 담당자(sales/cs/tech)인 건 중 대기 중인 것.
+  // 대기 건은 마스터가 닫을 때마다 줄어 총량이 작으므로 열린 것을 다 받아 여기서 거른다.
+  const myRevisions: MyRevisionRow[] = [];
+  {
+    const { data: openRequests, error: revisionError } = await supabase
+      .from("ticket_revision_requests")
+      .select(
+        "id, ticket_id, message, requested_by_name, requested_at, ticket:tickets(id, title, sales_id, cs_id, tech_id)",
+      )
+      .eq("status", "open")
+      .order("requested_at", { ascending: false })
+      .limit(300);
+    if (!isMissingRevisionTable(revisionError) && openRequests) {
+      for (const row of openRequests as RawRevisionRow[]) {
+        const ticket = Array.isArray(row.ticket) ? row.ticket[0] : row.ticket;
+        if (!ticket) continue;
+        const isMine = [ticket.sales_id, ticket.cs_id, ticket.tech_id].includes(user.id);
+        if (!isMine) continue;
+        myRevisions.push({
+          id: row.id,
+          ticket_id: row.ticket_id,
+          ticket_title: ticket.title ?? null,
+          message: row.message,
+          requested_by_name: row.requested_by_name,
+          requested_at: row.requested_at,
+        });
+      }
+    }
+  }
 
   // 검색은 서버에서 전체 범위로 수행한다 — 클라이언트에서 현재 페이지 50건만 거르면
   // 다른 페이지의 티켓이 검색되지 않는다. 가맹점명·기사명은 조인 테이블이라 or()에
@@ -293,6 +359,8 @@ export default async function TicketsPage({ searchParams }: Props) {
           )}
         </div>
       </div>
+
+      <MyRevisionRequests rows={myRevisions} />
 
       {p.role === "master" && (
         <AuthorStats rows={statRows} range={statRange} truncated={statTruncated} />
