@@ -172,7 +172,7 @@ export default async function TicketsPage({ searchParams }: Props) {
     const issues = inspectTicket({
       title: (row.title as string | null) ?? "",
       steps: (row.resolution_steps as string | null) ?? "",
-      businessName: (row.business_name as string | null) ?? merchant?.business_name ?? null,
+      businessName: merchant?.business_name ?? null,
       ownerName: merchant?.owner_name ?? null,
     });
     if (issues.length === 0) continue;

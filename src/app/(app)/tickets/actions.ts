@@ -227,7 +227,6 @@ export async function requestTicketRevisionsBulk(ticketIds: string[]): Promise<B
     title: string;
     created_at: string;
     resolution_steps: string | null;
-    business_name: string | null;
     sales_id: string | null;
     cs_id: string | null;
     tech_id: string | null;
@@ -238,7 +237,7 @@ export async function requestTicketRevisionsBulk(ticketIds: string[]): Promise<B
     const { data, error } = await admin
       .from("tickets")
       .select(
-        "id, title, created_at, resolution_steps, business_name, sales_id, cs_id, tech_id, merchant:merchants(business_name, owner_name)",
+        "id, title, created_at, resolution_steps, sales_id, cs_id, tech_id, merchant:merchants(business_name, owner_name)",
       )
       .in("id", chunk);
     if (error) return { sent: 0, skipped: emptySkipped, error: error.message };
@@ -285,7 +284,7 @@ export async function requestTicketRevisionsBulk(ticketIds: string[]): Promise<B
     const issues = inspectTicket({
       title: ticket.title,
       steps: ticket.resolution_steps,
-      businessName: ticket.business_name ?? ticket.merchant?.business_name ?? null,
+      businessName: ticket.merchant?.business_name ?? null,
       ownerName: ticket.merchant?.owner_name ?? null,
     });
     if (issues.length === 0) {
