@@ -30,7 +30,22 @@ const PRESETS = [
   },
 ];
 
-export default function RevisionRequestButton({ ticketId }: { ticketId: string }) {
+interface Props {
+  ticketId: string;
+  /** 모달을 열 때 미리 채워 넣을 본문. 품질 검사 결과를 그대로 넣는 데 쓴다. */
+  initialMessage?: string;
+  /** 목록 행에 들어갈 작은 버튼 모양 */
+  compact?: boolean;
+  /** 발송 성공 후 부모에게 알린다 */
+  onSent?: () => void;
+}
+
+export default function RevisionRequestButton({
+  ticketId,
+  initialMessage,
+  compact,
+  onSent,
+}: Props) {
   const router = useRouter();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -38,7 +53,7 @@ export default function RevisionRequestButton({ ticketId }: { ticketId: string }
   const [sending, setSending] = useState(false);
 
   function openModal() {
-    setMessage("");
+    setMessage(initialMessage ?? "");
     setOpen(true);
   }
 
@@ -59,6 +74,7 @@ export default function RevisionRequestButton({ ticketId }: { ticketId: string }
     }
     toast.success(`수정 요청을 보냈습니다 (${result.sentCount ?? 0}명)`);
     setOpen(false);
+    onSent?.();
     router.refresh();
   }
 
@@ -67,9 +83,13 @@ export default function RevisionRequestButton({ ticketId }: { ticketId: string }
       <button
         type="button"
         onClick={openModal}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-50"
+        className={
+          compact
+            ? "inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-300 px-2 py-1 text-[11px] font-semibold text-amber-700 transition-colors hover:bg-amber-50"
+            : "inline-flex items-center gap-1.5 rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-50"
+        }
       >
-        <AlertTriangle size={14} /> 수정 요청
+        <AlertTriangle size={compact ? 12 : 14} /> 수정 요청
       </button>
 
       {open && (

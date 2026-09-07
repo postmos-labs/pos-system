@@ -224,6 +224,7 @@ export default function ChatbotDataClient({ rows, profile }: Props) {
             전체 {filteredRows.length.toLocaleString()}건
           </div>
           <ChatbotExportImport
+            isMaster={profile.role === "master"}
             onImported={(imported) => setLocalRows((previous) => [...imported, ...previous])}
           />
           <button

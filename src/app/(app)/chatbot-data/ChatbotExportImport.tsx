@@ -10,8 +10,11 @@ import {
   markTicketsExported,
   type CuratedRow,
   type ExportedTicket,
+  type TicketQuality,
 } from "./actions";
 import type { ChatbotDataRow } from "./ChatbotDataClient";
+import { composeRevisionMessage } from "@/lib/resolutionQuality";
+import RevisionRequestButton from "../tickets/[id]/RevisionRequestButton";
 
 // 정제를 맡길 때 함께 붙여넣는 지시문. 돌려받을 형식을 여기서 못 박아야
 // 가져오기가 파일을 그대로 읽을 수 있다.
@@ -103,15 +106,20 @@ function parseCurated(text: string): { rows: CuratedRow[]; skipped: number; erro
 
 interface ExportModalProps {
   onClose: () => void;
+  isMaster: boolean;
 }
 
-function ExportModal({ onClose }: ExportModalProps) {
+function ExportModal({ onClose, isMaster }: ExportModalProps) {
   const toast = useToast();
   const [includeExported, setIncludeExported] = useState(false);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [preview, setPreview] = useState<ExportedTicket[] | null>(null);
   const [columnMissing, setColumnMissing] = useState(false);
+  const [quality, setQuality] = useState<TicketQuality[]>([]);
+  const [revisionTableMissing, setRevisionTableMissing] = useState(false);
+  const [excludeFlagged, setExcludeFlagged] = useState(true);
+  const [sentIds, setSentIds] = useState<string[]>([]);
 
   const load = useCallback(
     async (next: boolean) => {
@@ -122,10 +130,14 @@ function ExportModal({ onClose }: ExportModalProps) {
       if (result.error) {
         toast.error(`불러오기 실패: ${result.error}`);
         setPreview([]);
+        setQuality([]);
         return;
       }
       setPreview(result.rows);
       setColumnMissing(result.exportColumnMissing);
+      setQuality(result.quality);
+      setRevisionTableMissing(result.revisionTableMissing);
+      setSentIds([]);
     },
     [toast],
   );
@@ -140,10 +152,14 @@ function ExportModal({ onClose }: ExportModalProps) {
       if (result.error) {
         toast.error(`불러오기 실패: ${result.error}`);
         setPreview([]);
+        setQuality([]);
         return;
       }
       setPreview(result.rows);
       setColumnMissing(result.exportColumnMissing);
+      setQuality(result.quality);
+      setRevisionTableMissing(result.revisionTableMissing);
+      setSentIds([]);
     });
     return () => {
       alive = false;
@@ -151,16 +167,23 @@ function ExportModal({ onClose }: ExportModalProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const flagged = quality.filter((item) => item.issues.length > 0);
+  const flaggedIds = new Set(flagged.map((item) => item.id));
+  const exportRows = excludeFlagged
+    ? (preview ?? []).filter((row) => !flaggedIds.has(row.id))
+    : (preview ?? []);
+  const rowById = new Map((preview ?? []).map((row) => [row.id, row]));
+
   async function handleDownload() {
-    if (!preview?.length) return;
+    if (!exportRows.length) return;
     setLoading(true);
     downloadJson(`인입내역_해결절차_${today()}.json`, {
       exported_at: new Date().toISOString(),
-      count: preview.length,
-      items: preview,
+      count: exportRows.length,
+      items: exportRows,
     });
 
-    const marked = await markTicketsExported(preview.map((row) => row.id));
+    const marked = await markTicketsExported(exportRows.map((row) => row.id));
     setLoading(false);
 
     if (marked.error) {
@@ -173,13 +196,13 @@ function ExportModal({ onClose }: ExportModalProps) {
       );
       return;
     }
-    toast.success(`${preview.length}건을 내보냈습니다.`);
+    toast.success(`${exportRows.length}건을 내보냈습니다.`);
     onClose();
   }
 
   async function handleCopyPrompt() {
-    if (!preview?.length) return;
-    const payload = JSON.stringify({ items: preview }, null, 2);
+    if (!exportRows.length) return;
+    const payload = JSON.stringify({ items: exportRows }, null, 2);
     await navigator.clipboard.writeText(CURATION_PROMPT + payload);
     setCopied(true);
     toast.success("프롬프트와 데이터를 복사했습니다.");
@@ -192,7 +215,8 @@ function ExportModal({ onClose }: ExportModalProps) {
         <p className="text-sm text-slate-600">
           기술지원 인입내역에 적힌 해결 절차를 파일로 받습니다. 정제를 마친 뒤{" "}
           <span className="font-semibold text-slate-800">정제 결과 가져오기</span>로 되돌려
-          넣으세요. 가맹점 상호와 연락처는 파일에 담기지 않습니다.
+          넣으세요. 가맹점 상호와 연락처는 파일에 담기지 않습니다. 내보내기 전에 해결 절차 품질을
+          자동으로 점검합니다.
         </p>
 
         <label className="flex items-center gap-2 text-sm text-slate-700">
@@ -212,25 +236,109 @@ function ExportModal({ onClose }: ExportModalProps) {
           </div>
         )}
 
+        {!loading && quality.length > 0 && (
+          <>
+            {flagged.length === 0 ? (
+              <div className="rounded-lg bg-emerald-50 px-3 py-2.5 text-[13px] text-emerald-800">
+                품질 점검 통과 — 미달 건 없음
+              </div>
+            ) : (
+              <div className="rounded-lg border border-amber-200 bg-amber-50">
+                <div className="flex items-center justify-between border-b border-amber-200 px-3 py-2">
+                  <span className="text-[13px] font-semibold text-amber-800">
+                    품질 미달 {flagged.length}건
+                  </span>
+                  <label className="flex items-center gap-1.5 text-xs text-amber-800">
+                    <input
+                      type="checkbox"
+                      checked={excludeFlagged}
+                      onChange={(event) => setExcludeFlagged(event.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-amber-300"
+                    />
+                    미달 건은 빼고 내보내기
+                  </label>
+                </div>
+                {revisionTableMissing && (
+                  <div className="border-b border-amber-200 px-3 py-1.5 text-[11px] text-slate-500">
+                    139번 마이그레이션이 아직 적용되지 않아 이미 보낸 수정 요청을 구분할 수
+                    없습니다.
+                  </div>
+                )}
+                <div className="max-h-56 overflow-auto">
+                  {flagged.slice(0, 20).map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[13px] font-medium text-slate-800">
+                          {rowById.get(item.id)?.inquiry ?? "(제목 없음)"}
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {item.issues.map((issue) => (
+                            <span
+                              key={issue.code}
+                              className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800"
+                            >
+                              {issue.label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      {sentIds.includes(item.id) ? (
+                        <span className="shrink-0 text-[11px] font-semibold text-emerald-700">
+                          요청 보냄
+                        </span>
+                      ) : item.hasOpenRequest ? (
+                        <span className="shrink-0 text-[11px] text-slate-400">요청 대기 중</span>
+                      ) : !isMaster ? null : !item.hasAssignee ? (
+                        <span className="shrink-0 text-[11px] text-slate-400">담당자 없음</span>
+                      ) : (
+                        <RevisionRequestButton
+                          ticketId={item.id}
+                          compact
+                          initialMessage={composeRevisionMessage(item.issues)}
+                          onSent={() => setSentIds((prev) => [...prev, item.id])}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {flagged.length > 20 && (
+                  <div className="px-3 py-2 text-center text-xs text-slate-400">
+                    외 {(flagged.length - 20).toLocaleString()}건
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
         <div className="rounded-lg border border-slate-200">
           <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
-            {loading ? "불러오는 중..." : `대상 ${preview?.length.toLocaleString() ?? 0}건`}
+            {loading
+              ? "불러오는 중..."
+              : `대상 ${exportRows.length.toLocaleString()}건${
+                  excludeFlagged && flagged.length > 0
+                    ? ` · 품질 미달 ${flagged.length.toLocaleString()}건 제외`
+                    : ""
+                }`}
           </div>
           <div className="max-h-56 overflow-auto">
-            {preview?.slice(0, 30).map((row) => (
+            {exportRows.slice(0, 30).map((row) => (
               <div key={row.id} className="border-b border-slate-100 px-3 py-2 last:border-b-0">
                 <div className="truncate text-[13px] font-medium text-slate-800">{row.inquiry}</div>
                 <div className="mt-0.5 truncate text-xs text-slate-500">{row.steps}</div>
               </div>
             ))}
-            {preview?.length === 0 && (
+            {exportRows.length === 0 && (
               <div className="px-3 py-8 text-center text-sm text-slate-400">
                 내보낼 해결 절차가 없습니다.
               </div>
             )}
-            {(preview?.length ?? 0) > 30 && (
+            {exportRows.length > 30 && (
               <div className="px-3 py-2 text-center text-xs text-slate-400">
-                외 {(preview!.length - 30).toLocaleString()}건
+                외 {(exportRows.length - 30).toLocaleString()}건
               </div>
             )}
           </div>
@@ -247,7 +355,7 @@ function ExportModal({ onClose }: ExportModalProps) {
           <button
             type="button"
             onClick={handleCopyPrompt}
-            disabled={loading || !preview?.length}
+            disabled={loading || !exportRows.length}
             className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
@@ -256,7 +364,7 @@ function ExportModal({ onClose }: ExportModalProps) {
           <button
             type="button"
             onClick={handleDownload}
-            disabled={loading || !preview?.length}
+            disabled={loading || !exportRows.length}
             className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           >
             <Download size={14} />
@@ -370,10 +478,11 @@ function ImportModal({ onClose, onImported }: ImportModalProps) {
 }
 
 interface Props {
+  isMaster: boolean;
   onImported: (rows: ChatbotDataRow[]) => void;
 }
 
-export default function ChatbotExportImport({ onImported }: Props) {
+export default function ChatbotExportImport({ isMaster, onImported }: Props) {
   const [mode, setMode] = useState<"export" | "import" | null>(null);
 
   return (
@@ -395,7 +504,7 @@ export default function ChatbotExportImport({ onImported }: Props) {
         정제 결과 가져오기
       </button>
 
-      {mode === "export" && <ExportModal onClose={() => setMode(null)} />}
+      {mode === "export" && <ExportModal isMaster={isMaster} onClose={() => setMode(null)} />}
       {mode === "import" && <ImportModal onClose={() => setMode(null)} onImported={onImported} />}
     </>
   );

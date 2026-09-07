@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { inspectResolutionSteps, type QualityIssue } from "@/lib/resolutionQuality";
 
 // 인입내역(tickets) 해결 절차 → 외부 LLM 정제 → 챗봇 학습 데이터(chatbot_training_data)
 //
@@ -24,6 +25,15 @@ export interface CuratedRow {
   problem_situation: string;
   solution: string;
   source_ticket_ids: string[];
+}
+
+export interface TicketQuality {
+  id: string;
+  issues: QualityIssue[];
+  /** 담당자(sales/cs/tech)가 한 명이라도 있는지 — 없으면 수정 요청을 보낼 대상이 없다 */
+  hasAssignee: boolean;
+  /** 이미 처리 대기 중인 수정 요청이 있는지 — 중복 발송을 막는다 */
+  hasOpenRequest: boolean;
 }
 
 async function currentProfile() {
@@ -63,6 +73,16 @@ function missingColumnName(error: { message?: string } | null): string | null {
   return match[1].split(".").pop() ?? null;
 }
 
+// 139번 마이그레이션(ticket_revision_requests) 미적용 감지. tickets/actions.ts의 같은 규칙을 그대로 둔다.
+function isMissingRevisionTable(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "42P01" ||
+    error.code === "PGRST205" ||
+    /ticket_revision_requests|schema cache|relation .* does not exist/i.test(error.message ?? "")
+  );
+}
+
 /**
  * 정제를 맡길 인입내역을 뽑는다.
  * 기본은 아직 안 내보낸 건만, includeExported면 해결 절차가 있는 건 전부.
@@ -70,18 +90,29 @@ function missingColumnName(error: { message?: string } | null): string | null {
  */
 export async function fetchExportTargets(includeExported: boolean): Promise<{
   rows: ExportedTicket[];
+  quality: TicketQuality[];
   /** 138번 마이그레이션 미적용 — "안 내보낸 것만" 필터가 동작하지 않은 경우 */
   exportColumnMissing: boolean;
+  /** 139번 마이그레이션(ticket_revision_requests) 미적용 — 중복 요청 여부를 알 수 없는 경우 */
+  revisionTableMissing: boolean;
   error: string | null;
 }> {
   const profile = await currentProfile();
-  if (!profile) return { rows: [], exportColumnMissing: false, error: "로그인이 필요합니다." };
+  if (!profile)
+    return {
+      rows: [],
+      quality: [],
+      exportColumnMissing: false,
+      revisionTableMissing: false,
+      error: "로그인이 필요합니다.",
+    };
 
   const admin = createAdminClient();
 
   // 마이그레이션이 밀린 환경을 감안해, 없는 컬럼이 걸리면 그 조건만 빼고 다시 시도한다.
   // team(123) / issue_category(124) / chatbot_exported_at(138) / deleted_at 모두 대상이다.
-  let selectColumns = "id, title, resolution_steps, issue_category, is_repeat, created_at";
+  let selectColumns =
+    "id, title, resolution_steps, issue_category, is_repeat, created_at, business_name, sales_id, cs_id, tech_id";
   let useTeam = true;
   let useDeleted = true;
   let useExported = !includeExported;
@@ -90,7 +121,7 @@ export async function fetchExportTargets(includeExported: boolean): Promise<{
   let data: Record<string, unknown>[] | null = null;
   let error: { code?: string; message?: string } | null = null;
 
-  for (let attempt = 0; attempt < 6; attempt++) {
+  for (let attempt = 0; attempt < 10; attempt++) {
     let query = admin
       .from("tickets")
       .select(selectColumns)
@@ -125,11 +156,29 @@ export async function fetchExportTargets(includeExported: boolean): Promise<{
       selectColumns = selectColumns.replace(", issue_category", "");
       continue;
     }
+    if (missing === "business_name" && selectColumns.includes("business_name")) {
+      selectColumns = selectColumns.replace(", business_name", "");
+      continue;
+    }
+    if (missing === "sales_id" && selectColumns.includes("sales_id")) {
+      selectColumns = selectColumns.replace(", sales_id", "");
+      continue;
+    }
+    if (missing === "cs_id" && selectColumns.includes("cs_id")) {
+      selectColumns = selectColumns.replace(", cs_id", "");
+      continue;
+    }
+    if (missing === "tech_id" && selectColumns.includes("tech_id")) {
+      selectColumns = selectColumns.replace(", tech_id", "");
+      continue;
+    }
     if (missing === "resolution_steps") {
       // 128번이 안 돌았으면 내보낼 원본 자체가 없다. 에러 코드 대신 이유를 알린다.
       return {
         rows: [],
+        quality: [],
         exportColumnMissing,
+        revisionTableMissing: false,
         error: "해결 절차 컬럼이 없습니다. 128번 마이그레이션을 먼저 적용해 주세요.",
       };
     }
@@ -137,7 +186,13 @@ export async function fetchExportTargets(includeExported: boolean): Promise<{
   }
 
   if (error)
-    return { rows: [], exportColumnMissing, error: error.message ?? "조회에 실패했습니다." };
+    return {
+      rows: [],
+      quality: [],
+      exportColumnMissing,
+      revisionTableMissing: false,
+      error: error.message ?? "조회에 실패했습니다.",
+    };
 
   const rows = (data ?? []).map((row) => ({
     id: row.id as string,
@@ -148,7 +203,48 @@ export async function fetchExportTargets(includeExported: boolean): Promise<{
     occurred_on: String(row.created_at).slice(0, 10),
   }));
 
-  return { rows, exportColumnMissing, error: null };
+  const quality: TicketQuality[] = (data ?? []).map((row) => ({
+    id: row.id as string,
+    issues: inspectResolutionSteps({
+      steps: (row.resolution_steps as string | null) ?? "",
+      businessName: (row.business_name as string | null) ?? null,
+    }),
+    hasAssignee: !!(row.sales_id || row.cs_id || row.tech_id),
+    hasOpenRequest: false,
+  }));
+
+  const flaggedIds = quality.filter((q) => q.issues.length > 0).map((q) => q.id);
+  let revisionTableMissing = false;
+
+  if (flaggedIds.length) {
+    const openIds = new Set<string>();
+    for (let i = 0; i < flaggedIds.length; i += CHUNK_SIZE) {
+      const chunk = flaggedIds.slice(i, i + CHUNK_SIZE);
+      const { data: openRows, error: openError } = await admin
+        .from("ticket_revision_requests")
+        .select("ticket_id")
+        .eq("status", "open")
+        .in("ticket_id", chunk);
+      if (openError) {
+        if (isMissingRevisionTable(openError)) {
+          revisionTableMissing = true;
+          break;
+        }
+        // 그 외 에러는 조용히 무시하고 hasOpenRequest를 false로 둔다.
+        continue;
+      }
+      for (const row of openRows ?? []) {
+        openIds.add(row.ticket_id as string);
+      }
+    }
+    if (!revisionTableMissing) {
+      for (const q of quality) {
+        if (openIds.has(q.id)) q.hasOpenRequest = true;
+      }
+    }
+  }
+
+  return { rows, quality, exportColumnMissing, revisionTableMissing, error: null };
 }
 
 /**
