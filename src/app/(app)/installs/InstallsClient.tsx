@@ -37,7 +37,7 @@ import {
   blocksForceComplete,
 } from "@/lib/auth/installApproval";
 import { AppSelect } from "@/components/ui/AppSelect";
-import { openBadge, isOpenSoon, effectiveOpenDate } from "@/lib/openSchedule";
+import { openBadge, isOpenSoon, effectiveOpenDate, isConfirmedOpenDate } from "@/lib/openSchedule";
 import { DatePickerField, CalendarPopoverButton } from "@/components/ui/DatePickerField";
 import { VanBadge } from "@/components/ui/VanBadge";
 import { PRODUCT_CATALOG, QtyStepper, InstallItemsEditor } from "./InstallItemsEditor";
@@ -3154,6 +3154,10 @@ export default function InstallsClient({
                               <span className="text-xs text-slate-600 tabular-nums">
                                 {openDate.slice(5).replace("-", "/")}
                               </span>
+                              {/* 설치관리에서 확정한 값이 아니라 가맹접수 예정일을 따르고 있다는 표시. */}
+                              {!isConfirmedOpenDate(inst) && (
+                                <span className="text-[10px] text-slate-400">예정</span>
+                              )}
                               {badge && (
                                 <span
                                   title={badge.hint}

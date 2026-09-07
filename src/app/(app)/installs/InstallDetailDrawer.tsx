@@ -34,7 +34,7 @@ import {
   statusOrderFor,
 } from "./installStatus";
 import type { Installation, CompletionApproval } from "./InstallsClient";
-import { openBadge, effectiveOpenDate } from "@/lib/openSchedule";
+import { openBadge, effectiveOpenDate, franchiseOpenDate } from "@/lib/openSchedule";
 
 // franchise_applications를 "*"로 select한 뒤 sales/cs 조인의 name만 붙인 결과 중,
 // 이 드로어가 실제로 쓰는 필드만 추린 타입. select 컬럼 근거: InstallsClient.tsx의
@@ -458,14 +458,25 @@ export default function InstallDetailDrawer({
                     <ReadValue>{installation.scheduled_date || "-"}</ReadValue>
                   )}
                 </Field>
-                <Field label="오픈일">
+                {/* 이 칸은 설치관리에서 확정한 오픈일만 담는다. 비워두면 가맹접수의 오픈 예정일을
+                    따르는데, 그 사실이 화면에 안 보이면 "목록엔 날짜가 있는데 여기는 비었다"가 된다.
+                    예정일을 칸에 미리 채우지는 않는다 — 저장할 때 설치건으로 복사돼 정본이 갈라진다. */}
+                <Field label="확정 오픈일">
                   {canEdit ? (
-                    <DatePickerField
-                      value={draft?.open_date ?? installation.open_date ?? ""}
-                      onChange={(value) => onDraftChange({ open_date: value })}
-                      ariaLabel="오픈일"
-                      className="w-full"
-                    />
+                    <div className="flex flex-col gap-1">
+                      <DatePickerField
+                        value={draft?.open_date ?? installation.open_date ?? ""}
+                        onChange={(value) => onDraftChange({ open_date: value })}
+                        ariaLabel="확정 오픈일"
+                        className="w-full"
+                      />
+                      {!!franchiseOpenDate(installation) && (
+                        <span className="text-muted-foreground text-[11px]">
+                          접수 예정일 {franchiseOpenDate(installation)} · 비워두면 이 날짜를
+                          따릅니다
+                        </span>
+                      )}
+                    </div>
                   ) : (
                     <ReadValue>{effectiveOpenDate(installation) || "-"}</ReadValue>
                   )}

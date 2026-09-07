@@ -56,6 +56,14 @@ export function openDaysLeft(openDate: string | null, today: string = kstToday()
   return Math.round((target - base) / 86400000);
 }
 
+/**
+ * 이 오픈일이 설치관리에서 확정한 값인지. false면 가맹접수의 오픈 예정일을 따르고 있다는 뜻이다.
+ * 화면에서 "예정"과 "확정"을 구분해 보여줘야 담당자가 다시 확인할 대상을 안다.
+ */
+export function isConfirmedOpenDate(source: OpenScheduleSource): boolean {
+  return !!source.open_date;
+}
+
 /** 이 설치건의 오픈 임박 단계. */
 export function openUrgency(source: OpenScheduleSource, today: string = kstToday()): OpenUrgency {
   // 끝난 건에 빨간불이 남아 있으면 신호 전체가 의미를 잃는다.
