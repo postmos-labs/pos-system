@@ -12,8 +12,6 @@ import {
   canApproveFinalBy,
   skipsFirstApproval,
   canForceCompleteBy,
-  blocksForceComplete,
-  FORCE_COMPLETE_BLOCKING_STATUSES,
 } from "@/lib/auth/installApproval";
 
 const INSTALL_STATUSES = new Set([
@@ -962,20 +960,10 @@ export async function completeInstallationByTeamLead(installationId: string, not
   if (!profile || !canForceCompleteBy(profile))
     return { error: "팀장급 이상만 승인 없이 완료 처리할 수 있습니다.", notificationError: null };
 
+  // 승인 요청이 올라와 있어도 막지 않는다. 현장이 끝났는데 결재만 남아 지연되는 걸 푸는 게
+  // 이 경로의 목적이라, 요청이 있을 때만 잠기면 정작 필요한 상황에서 못 쓴다.
+  // 대기 중이던 요청은 아래에서 승인 처리로 함께 닫는다.
   const admin = createAdminClient();
-  const { data: latestApproval } = await admin
-    .from("installation_completion_approvals")
-    .select("status")
-    .eq("installation_id", installationId)
-    .in("status", FORCE_COMPLETE_BLOCKING_STATUSES)
-    .order("requested_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (blocksForceComplete(profile, latestApproval?.status))
-    return {
-      error: "이미 승인 요청이 올라온 건입니다. 승인 절차로 처리해주세요.",
-      notificationError: null,
-    };
 
   const { data: installation } = await admin
     .from("installations")

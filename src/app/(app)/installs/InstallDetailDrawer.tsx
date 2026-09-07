@@ -18,7 +18,7 @@ import {
   canApproveFirstBy,
   canApproveFinalBy,
   canForceCompleteBy,
-  blocksForceComplete,
+  blocksApprovalRequest,
 } from "@/lib/auth/installApproval";
 import { InstallItemsEditor } from "./InstallItemsEditor";
 import InstallCompositionSection from "../merchants/InstallCompositionSection";
@@ -34,7 +34,7 @@ import {
   statusOrderFor,
 } from "./installStatus";
 import type { Installation, CompletionApproval } from "./InstallsClient";
-import { openBadge, effectiveOpenDate, franchiseOpenDate } from "@/lib/openSchedule";
+import { installBadge, effectiveOpenDate, franchiseOpenDate } from "@/lib/openSchedule";
 
 // franchise_applications를 "*"로 select한 뒤 sales/cs 조인의 name만 붙인 결과 중,
 // 이 드로어가 실제로 쓰는 필드만 추린 타입. select 컬럼 근거: InstallsClient.tsx의
@@ -333,12 +333,12 @@ export default function InstallDetailDrawer({
               {statusLabel(installation.status, installation.delivery_type)}
             </span>
             {(() => {
-              const badge = openBadge(installation);
+              const badge = installBadge(installation);
               return badge ? (
                 <span
                   className={`inline-flex w-fit items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${badge.className}`}
                 >
-                  오픈 {badge.label}
+                  설치 {badge.label}
                   {badge.hint ? ` · ${badge.hint}` : ""}
                 </span>
               ) : null;
@@ -708,7 +708,7 @@ export default function InstallDetailDrawer({
             <button
               type="button"
               onClick={onReschedule}
-              disabled={blocksForceComplete(profile, approval?.status)}
+              disabled={blocksApprovalRequest(profile, approval?.status)}
               className="rounded-lg border border-indigo-200 px-2.5 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
             >
               일정변경

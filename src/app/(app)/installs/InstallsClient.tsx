@@ -34,10 +34,15 @@ import {
   canApproveFinalBy,
   skipsFirstApproval,
   canForceCompleteBy,
-  blocksForceComplete,
+  blocksApprovalRequest,
 } from "@/lib/auth/installApproval";
 import { AppSelect } from "@/components/ui/AppSelect";
-import { openBadge, isOpenSoon, effectiveOpenDate, isConfirmedOpenDate } from "@/lib/openSchedule";
+import {
+  installBadge,
+  isInstallSoon,
+  effectiveOpenDate,
+  isConfirmedOpenDate,
+} from "@/lib/openSchedule";
 import { DatePickerField, CalendarPopoverButton } from "@/components/ui/DatePickerField";
 import { VanBadge } from "@/components/ui/VanBadge";
 import { PRODUCT_CATALOG, QtyStepper, InstallItemsEditor } from "./InstallItemsEditor";
@@ -185,6 +190,7 @@ const FETCH_LIMIT = 300;
 const MAIN_COLUMNS = [
   { key: "name", label: "상호명" },
   { key: "delivery_type", label: "구분" },
+  { key: "scheduled_date", label: "설치예정일" },
   { key: "open_date", label: "오픈일" },
   { key: "phone", label: "전화번호" },
   { key: "tracking_number", label: "송장번호" },
@@ -197,6 +203,7 @@ const MAIN_COLUMNS = [
 const DEFAULT_WIDTHS: Record<string, number> = {
   name: 140,
   delivery_type: 90,
+  scheduled_date: 126,
   open_date: 116,
   phone: 120,
   tracking_number: 140,
@@ -670,7 +677,7 @@ export default function InstallsClient({
   const [statusFilter, setStatusFilter] = useState("");
   // 승인 요청이 올라간 건만 추려 보는 필터. 승인이 밀리면 현장이 멈추므로 눈에 띄게 둔다.
   const [pendingOnly, setPendingOnly] = useState(false);
-  const [openSoonOnly, setOpenSoonOnly] = useState(false);
+  const [installSoonOnly, setInstallSoonOnly] = useState(false);
   const [techFilter, setTechFilter] = useState("");
   const [showRejected, setShowRejected] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
@@ -1882,8 +1889,11 @@ export default function InstallsClient({
     [installs, completionApprovals],
   );
 
-  // 오픈 임박(D-5 이내) 건수 — 필터 버튼에 함께 띄운다.
-  const openSoonCount = useMemo(() => installs.filter((i) => isOpenSoon(i)).length, [installs]);
+  // 설치 임박(D-5 이내) 건수 — 필터 버튼에 함께 띄운다.
+  const installSoonCount = useMemo(
+    () => installs.filter((i) => isInstallSoon(i)).length,
+    [installs],
+  );
 
   const filteredInstalls = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1900,7 +1910,7 @@ export default function InstallsClient({
       if (!showCompleted && i.status === "completed" && statusFilter !== "completed") return false;
       if (statusFilter && i.status !== statusFilter) return false;
       if (pendingOnly && !completionApprovals[i.id]) return false;
-      if (openSoonOnly && !isOpenSoon(i)) return false;
+      if (installSoonOnly && !isInstallSoon(i)) return false;
       if (techFilter && i.assigned_to !== techFilter) return false;
       if (dateFrom && i.created_at < dateFrom) return false;
       if (dateTo && i.created_at > dateTo + "T23:59:59") return false;
@@ -1921,7 +1931,7 @@ export default function InstallsClient({
     search,
     statusFilter,
     pendingOnly,
-    openSoonOnly,
+    installSoonOnly,
     completionApprovals,
     techFilter,
     showRejected,
@@ -2543,18 +2553,18 @@ export default function InstallsClient({
         >
           승인 대기{pendingCount > 0 ? ` ${pendingCount}` : ""}
         </button>
-        {/* 오픈일이 5일 안으로 남은 건만 추린다. D-5 통화 · D-3 최종점검 대상. */}
+        {/* 설치예정일이 5일 안으로 남은 건만 추린다. */}
         <button
-          onClick={() => setOpenSoonOnly((v) => !v)}
+          onClick={() => setInstallSoonOnly((v) => !v)}
           className={`text-xs font-medium px-3 py-1 rounded-full border transition-all ${
-            openSoonOnly
+            installSoonOnly
               ? "border-amber-300 bg-amber-100 text-amber-800"
-              : openSoonCount > 0
+              : installSoonCount > 0
                 ? "border-amber-200 bg-amber-50 text-amber-700"
                 : "border-slate-200 bg-white text-slate-400"
           }`}
         >
-          오픈 임박{openSoonCount > 0 ? ` ${openSoonCount}` : ""}
+          설치 임박{installSoonCount > 0 ? ` ${installSoonCount}` : ""}
         </button>
         <button
           onClick={() => setShowRejected((v) => !v)}
@@ -2801,7 +2811,7 @@ export default function InstallsClient({
                           }
                         />
                         {(() => {
-                          const badge = openBadge(inst);
+                          const badge = installBadge(inst);
                           return badge ? (
                             <span
                               className={`text-[10px] font-semibold rounded-md border px-1.5 py-0.5 shrink-0 ${badge.className}`}
@@ -2909,12 +2919,11 @@ export default function InstallsClient({
                               ...techUsers.map((t) => ({ value: t.id, label: t.name })),
                             ]}
                           />
+                          {/* 승인 대기 중이어도 잠그지 않는다 — 팀장급은 여기서 완료 모달로 들어가
+                              강제완료를 해야 한다. 승인요청이 필요한 단계를 고르면
+                              handleStatusChange가 중복 요청 전에 막아준다(데스크톱 표와 동일). */}
                           <AppSelect
                             value={inst.status}
-                            disabled={blocksForceComplete(
-                              profile,
-                              completionApprovals[inst.id]?.status,
-                            )}
                             onValueChange={(value) => handleStatusChange(inst.id, value)}
                             aria-label="상태 변경"
                             className={`w-full font-medium ${STATUS_COLORS[inst.status]
@@ -2934,7 +2943,7 @@ export default function InstallsClient({
                           {inst.status !== "completed" && inst.status !== "rejected" && (
                             <button
                               onClick={() => handleStatusChange(inst.id, "reschedule")}
-                              disabled={blocksForceComplete(
+                              disabled={blocksApprovalRequest(
                                 profile,
                                 completionApprovals[inst.id]?.status,
                               )}
@@ -3144,11 +3153,34 @@ export default function InstallsClient({
                           </span>
                         )}
                       </td>
+                      {/* 설치예정일 — 기사가 현장에 나가는 날. D-day 칩은 이 축에만 붙인다. */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {(() => {
+                          if (!inst.scheduled_date)
+                            return <span className="text-slate-300">-</span>;
+                          const badge = installBadge(inst);
+                          return (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-slate-600 tabular-nums">
+                                {inst.scheduled_date.slice(5).replace("-", "/")}
+                              </span>
+                              {badge && (
+                                <span
+                                  title={badge.hint}
+                                  className={`text-[10px] font-semibold rounded-md border px-1.5 py-0.5 ${badge.className}`}
+                                >
+                                  {badge.label}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </td>
+                      {/* 오픈일 — 가맹점이 문을 여는 날. 날짜만 두고 칩은 설치예정일 쪽에 넘겼다. */}
                       <td className="px-4 py-3 whitespace-nowrap">
                         {(() => {
                           const openDate = effectiveOpenDate(inst);
                           if (!openDate) return <span className="text-slate-300">-</span>;
-                          const badge = openBadge(inst);
                           return (
                             <div className="flex items-center gap-1.5">
                               <span className="text-xs text-slate-600 tabular-nums">
@@ -3157,14 +3189,6 @@ export default function InstallsClient({
                               {/* 설치관리에서 확정한 값이 아니라 가맹접수 예정일을 따르고 있다는 표시. */}
                               {!isConfirmedOpenDate(inst) && (
                                 <span className="text-[10px] text-slate-400">예정</span>
-                              )}
-                              {badge && (
-                                <span
-                                  title={badge.hint}
-                                  className={`text-[10px] font-semibold rounded-md border px-1.5 py-0.5 ${badge.className}`}
-                                >
-                                  {badge.label}
-                                </span>
                               )}
                             </div>
                           );
@@ -3400,8 +3424,8 @@ export default function InstallsClient({
             </div>
             <div className="flex flex-col gap-2">
               {checklistItems.some((c) => !c.checked) && (
-                <p className="text-center text-xs text-amber-600">
-                  체크리스트를 모두 확인해야 완료할 수 있습니다.
+                <p className="text-center text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+                  위 체크리스트를 모두 확인해야 완료 버튼이 활성화됩니다.
                 </p>
               )}
               {canRequestApproval && (
@@ -3414,16 +3438,15 @@ export default function InstallsClient({
                 </button>
               )}
               {/* 팀장급 이상은 승인 절차 없이 바로 끝낼 수 있다(서버도 같은 조건으로 막는다).
+                  승인 요청이 올라와 있어도 막지 않는다 — 대기 중이던 요청은 서버가 함께 닫는다.
                   조건이 안 맞을 때 버튼을 지워버리면 왜 못 쓰는지 알 수가 없어, 버튼은 그대로 두고
                   사유를 적어 비활성화한다. 직급 자체가 모자라면 애초에 대상이 아니므로 그때만 숨긴다. */}
               {canForceCompleteBy(profile) &&
                 (() => {
                   const target = installs.find((i) => i.id === completeModal.id);
                   const blockedReason = !target?.assigned_to
-                    ? "담당기사를 먼저 배정해주세요"
-                    : blocksForceComplete(profile, completionApprovals[completeModal.id]?.status)
-                      ? "승인 요청이 올라온 건은 승인 절차로 처리해주세요"
-                      : null;
+                    ? "담당기사가 배정되지 않아 완료할 수 없습니다. 목록에서 담당기사를 지정한 뒤 다시 시도해주세요."
+                    : null;
                   return (
                     <div className="flex flex-col gap-1">
                       <button
@@ -3439,13 +3462,15 @@ export default function InstallsClient({
                         {completing ? "처리 중..." : "승인 없이 바로 완료"}
                       </button>
                       {blockedReason && (
-                        <p className="text-center text-xs text-slate-400">{blockedReason}</p>
+                        <p className="text-center text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+                          {blockedReason}
+                        </p>
                       )}
                     </div>
                   );
                 })()}
               {!canForceCompleteBy(profile) && (
-                <p className="text-center text-xs text-slate-400">
+                <p className="text-center text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5">
                   승인 없이 바로 완료: 팀장급 이상만 가능 (현재 직급{" "}
                   {profile.position ? `'${profile.position}'` : "미지정"})
                 </p>

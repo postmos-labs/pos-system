@@ -45,9 +45,10 @@ export function skipsFirstApproval(position?: string | null): boolean {
 // 예전 approval_role의 team_lead가 최종 승인자였는데 직급 축의 최종 승인은 실장이라,
 // 같은 "팀장"이라는 말이 다른 등급을 가리키게 된 탓이다.
 //
-// 강제완료는 팀장급 이상으로 되돌린다. 다만 그대로 두면 팀장이 자기가 1차 승인해야 할
-// 건을 강제완료로 끝내버려 "팀장 1차 → 실장 최종" 분리가 무의미해지므로,
-// 이미 승인 요청이 올라온 건은 팀장급의 강제완료를 막는다(blocksForceComplete).
+// 강제완료는 팀장급 이상이면 된다. 승인 요청이 이미 올라온 건도 막지 않는다 — 현장이 끝난
+// 뒤 결재만 남아 며칠씩 지연되는 걸 푸는 게 이 기능의 목적인데, 승인 요청이 있을 때만 잠기면
+// 정작 필요한 상황에서 못 쓴다. 대신 강제완료가 대기 중이던 요청을 함께 닫아
+// (completeInstallationByTeamLead) 결재 기록이 붕 뜨지 않게 한다.
 
 export type ApprovalActor = { role?: string | null; position?: string | null };
 
@@ -74,7 +75,7 @@ export function canApproveFirstBy(actor: ApprovalActor): boolean {
   return isApprovalOverrider(actor.role) || canApproveFirst(actor.position);
 }
 
-/** 강제완료 가능 여부 — 팀장급 이상. 단 건별 제한은 blocksForceComplete로 따로 본다. */
+/** 강제완료 가능 여부 — 팀장급 이상. 승인 대기 여부와 무관하다. */
 export function canForceCompleteBy(actor: ApprovalActor): boolean {
   return (
     isApprovalOverrider(actor.role) ||
@@ -82,18 +83,23 @@ export function canForceCompleteBy(actor: ApprovalActor): boolean {
   );
 }
 
-/** 강제완료로 건너뛰면 안 되는 승인 상태 — 이미 결재가 돌고 있는 단계. */
-export const FORCE_COMPLETE_BLOCKING_STATUSES = ["requested", "responsible_approved"];
+/** 아직 결재가 돌고 있는 승인 상태. */
+export const PENDING_APPROVAL_STATUSES = ["requested", "responsible_approved"];
 
 /**
- * 이 건을 강제완료로 처리하면 안 되는지.
- * 실장급 이상(과 관리자)은 최종 승인 권한이 있어 제한하지 않는다.
- * 팀장급은 이미 승인 요청이 올라온 건을 강제완료로 건너뛸 수 없다.
+ * 지금 새 승인요청을 올릴 수 없는 상태인지.
  *
- * 화면의 버튼 노출 조건과 서버 가드가 이 함수 하나를 함께 쓴다 — 갈라지면
+ * 대기 중 요청이 하나라도 있으면 서버가 중복 요청을 거절한다
+ * (requestInstallationStatusApproval — 중복 행이 생기면 승인 조회가 깨진다).
+ * 실장급 이상(과 관리자)은 승인요청 대신 바로 처리하는 경로가 따로 있어 막지 않는다.
+ *
+ * 화면의 버튼 비활성 조건과 서버 동작이 이 함수 하나를 기준으로 맞춰져야 한다 — 갈라지면
  * "버튼은 보이는데 누르면 에러"가 된다.
  */
-export function blocksForceComplete(actor: ApprovalActor, approvalStatus?: string | null): boolean {
+export function blocksApprovalRequest(
+  actor: ApprovalActor,
+  approvalStatus?: string | null,
+): boolean {
   if (canApproveFinalBy(actor)) return false;
-  return FORCE_COMPLETE_BLOCKING_STATUSES.includes(approvalStatus ?? "");
+  return PENDING_APPROVAL_STATUSES.includes(approvalStatus ?? "");
 }
