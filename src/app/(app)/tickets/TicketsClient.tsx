@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
-import { ChevronRight, Search } from "lucide-react";
-import { deleteTickets } from "./actions";
+import { AlertTriangle, ChevronRight, Search } from "lucide-react";
+import { deleteTickets, requestTicketRevisionsBulk } from "./actions";
+import { type QualityIssue } from "@/lib/resolutionQuality";
+import { useToast } from "@/components/ui/Toast";
 import {
   STATUS_LABEL,
   STATUS_COLOR,
@@ -51,16 +53,23 @@ interface Ticket {
 export default function TicketsClient({
   tickets,
   initialSearch = "",
+  quality = {},
+  isMaster = false,
 }: {
   tickets: Ticket[];
   initialSearch?: string;
+  quality?: Record<string, { issues: QualityIssue[]; hasOpenRequest: boolean }>;
+  isMaster?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const toast = useToast();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [revisionConfirmOpen, setRevisionConfirmOpen] = useState(false);
+  const [sendingRevision, setSendingRevision] = useState(false);
   const [search, setSearch] = useState(initialSearch);
 
   // 검색은 서버가 전체 범위에서 수행한다(현재 페이지 50건만 걸러지는 문제 방지).
@@ -94,6 +103,11 @@ export default function TicketsClient({
 
   const allChecked = filteredTickets.length > 0 && filteredTickets.every((t) => selected.has(t.id));
 
+  // 미달이면서 아직 대기 중인 수정 요청이 없는 건만 일괄 발송 대상이 된다.
+  const revisionTargets = filteredTickets.filter(
+    (t) => selected.has(t.id) && quality[t.id] && !quality[t.id].hasOpenRequest,
+  );
+
   function toggleAll() {
     setSelected(allChecked ? new Set() : new Set(filteredTickets.map((t) => t.id)));
   }
@@ -124,6 +138,30 @@ export default function TicketsClient({
     startTransition(() => router.refresh());
   }
 
+  async function confirmRevisionRequests() {
+    setSendingRevision(true);
+    const result = await requestTicketRevisionsBulk(revisionTargets.map((t) => t.id));
+    setSendingRevision(false);
+    setRevisionConfirmOpen(false);
+    if (result.error) {
+      toast.error(`수정 요청 실패: ${result.error}`);
+      return;
+    }
+    // 건너뛴 건수만 알려주면 왜 빠졌는지 알 수 없다. 사유를 함께 붙인다.
+    const reasons: string[] = [];
+    if (result.skipped.noAssignee > 0) reasons.push(`담당자 없음 ${result.skipped.noAssignee}건`);
+    if (result.skipped.alreadyOpen > 0)
+      reasons.push(`이미 요청 중 ${result.skipped.alreadyOpen}건`);
+    if (result.skipped.noIssue > 0) reasons.push(`미달 아님 ${result.skipped.noIssue}건`);
+    toast.success(
+      reasons.length > 0
+        ? `${result.sent}건을 보냈습니다. 건너뜀 — ${reasons.join(" · ")}`
+        : `${result.sent}건을 보냈습니다.`,
+    );
+    setSelected(new Set());
+    startTransition(() => router.refresh());
+  }
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       {}
@@ -146,7 +184,19 @@ export default function TicketsClient({
           deleting={deleting}
           onDelete={handleDelete}
           onCancel={() => setSelected(new Set())}
-        />
+        >
+          {isMaster && revisionTargets.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setRevisionConfirmOpen(true)}
+              disabled={sendingRevision}
+              className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-amber-700 disabled:opacity-50"
+            >
+              <AlertTriangle size={14} />
+              수정 요청 {revisionTargets.length}건
+            </button>
+          )}
+        </BulkDeleteActions>
       )}
 
       {filteredTickets.length === 0 && (
@@ -210,6 +260,16 @@ export default function TicketsClient({
                   {ticket.is_repeat === true && (
                     <Badge colorClass="bg-red-100 text-red-700">또 그럼</Badge>
                   )}
+                  {quality[ticket.id] && (
+                    <span title={quality[ticket.id].issues.map((i) => i.label).join(", ")}>
+                      <Badge colorClass="bg-amber-100 text-amber-800">
+                        {`해결 절차 미달 ${quality[ticket.id].issues.length}`}
+                      </Badge>
+                    </span>
+                  )}
+                  {quality[ticket.id]?.hasOpenRequest && (
+                    <Badge colorClass="bg-slate-100 text-slate-500">수정 요청 대기</Badge>
+                  )}
                 </div>
                 <p className="text-sm font-semibold text-slate-900 break-words">{ticket.title}</p>
                 <div className="flex items-center gap-3 text-xs text-slate-500">
@@ -251,6 +311,23 @@ export default function TicketsClient({
         items={tickets.filter((t) => selected.has(t.id)).map((t) => ({ id: t.id, label: t.title }))}
         onCancel={() => setDeleteConfirmOpen(false)}
         onConfirm={confirmDelete}
+      />
+
+      <BulkConfirmDialog
+        open={revisionConfirmOpen}
+        title="수정 요청 보내기"
+        subtitle="사유는 각 건의 품질 점검 결과로 자동 작성됩니다. 담당자에게 알림이 갑니다."
+        busy={sendingRevision}
+        confirmText="보내기"
+        confirmColor="blue"
+        confirmQuestion="선택한 건의 담당자에게 수정 요청을 보냅니다."
+        items={revisionTargets.map((t) => ({
+          id: t.id,
+          label: t.title,
+          detail: quality[t.id].issues.map((i) => i.label).join(" · "),
+        }))}
+        onCancel={() => setRevisionConfirmOpen(false)}
+        onConfirm={confirmRevisionRequests}
       />
     </div>
   );

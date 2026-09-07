@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import { STATUS_LABEL, type TicketStatus, type Profile } from "@/types";
 import TicketsClient from "./TicketsClient";
 import AuthorStats, { type AuthorStatRange, type AuthorStatRow } from "./AuthorStats";
+import { inspectResolutionSteps, type QualityIssue } from "@/lib/resolutionQuality";
 
 interface Props {
   searchParams: Promise<{
@@ -160,6 +161,37 @@ export default async function TicketsPage({ searchParams }: Props) {
     (listError as { message?: string } | null)?.message ??
     "";
 
+  // 해결 절차가 이미 적힌 건만 품질 점검한다 — 아직 안 적은 건까지 미달로 표시하면 안 된다.
+  const rows = (tickets ?? []) as Record<string, unknown>[];
+  const quality: Record<string, { issues: QualityIssue[]; hasOpenRequest: boolean }> = {};
+  for (const row of rows) {
+    const steps = (row.resolution_steps as string | null) ?? "";
+    if (!steps.trim()) continue;
+    const issues = inspectResolutionSteps({
+      steps,
+      businessName:
+        (row.business_name as string | null) ??
+        (row.merchant as { business_name?: string } | null)?.business_name ??
+        null,
+    });
+    if (issues.length === 0) continue;
+    quality[row.id as string] = { issues, hasOpenRequest: false };
+  }
+
+  // ticket_revision_requests(139번 마이그레이션)가 아직 없는 환경에서는 에러를 무시하고
+  // 전부 false로 둔다 — 페이지가 죽으면 안 된다.
+  const flaggedIds = Object.keys(quality);
+  if (flaggedIds.length > 0) {
+    const { data: openRows } = await supabase
+      .from("ticket_revision_requests")
+      .select("ticket_id")
+      .eq("status", "open")
+      .in("ticket_id", flaggedIds);
+    for (const r of (openRows ?? []) as { ticket_id: string }[]) {
+      if (quality[r.ticket_id]) quality[r.ticket_id].hasOpenRequest = true;
+    }
+  }
+
   const TABS =
     p.role === "tech"
       ? [
@@ -313,7 +345,12 @@ export default async function TicketsPage({ searchParams }: Props) {
       )}
 
       {}
-      <TicketsClient tickets={(tickets ?? []) as any} initialSearch={searchTerm} />
+      <TicketsClient
+        tickets={(tickets ?? []) as any}
+        initialSearch={searchTerm}
+        quality={quality}
+        isMaster={p.role === "master"}
+      />
 
       {}
       {totalPages > 1 && (

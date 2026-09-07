@@ -9,8 +9,15 @@ import {
   requireMaster,
 } from "@/lib/auth/require-admin";
 import { revalidatePath } from "next/cache";
+import { inspectResolutionSteps, composeRevisionMessage } from "@/lib/resolutionQuality";
 
 const CHUNK_SIZE = 100;
+
+export interface BulkRevisionResult {
+  sent: number;
+  skipped: { noIssue: number; noAssignee: number; alreadyOpen: number };
+  error: string | null;
+}
 
 // 42P01: relation does not exist / PGRST205: PostgREST 스키마 캐시에 표가 없음.
 // 139번 마이그레이션(ticket_revision_requests)이 아직 적용되지 않은 환경에서 쓴다.
@@ -185,4 +192,141 @@ export async function resolveTicketRevision(requestId: string, note: string) {
 
   revalidatePath("/tickets/revisions");
   return { error: null };
+}
+
+export async function requestTicketRevisionsBulk(ticketIds: string[]): Promise<BulkRevisionResult> {
+  const emptySkipped = { noIssue: 0, noAssignee: 0, alreadyOpen: 0 };
+
+  const authError = await requireMaster();
+  if (authError) return { sent: 0, skipped: emptySkipped, error: authError };
+
+  if (!ticketIds.length) return { sent: 0, skipped: emptySkipped, error: null };
+  if (ticketIds.length > 200) {
+    return { sent: 0, skipped: emptySkipped, error: "한 번에 200건까지만 보낼 수 있습니다." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { sent: 0, skipped: emptySkipped, error: "로그인이 필요합니다." };
+
+  const { data: requesterProfile } = await supabase
+    .from("profiles")
+    .select("name")
+    .eq("id", user.id)
+    .single();
+
+  const admin = createAdminClient();
+
+  const tickets: {
+    id: string;
+    title: string;
+    resolution_steps: string | null;
+    business_name: string | null;
+    sales_id: string | null;
+    cs_id: string | null;
+    tech_id: string | null;
+  }[] = [];
+  for (let i = 0; i < ticketIds.length; i += CHUNK_SIZE) {
+    const chunk = ticketIds.slice(i, i + CHUNK_SIZE);
+    const { data, error } = await admin
+      .from("tickets")
+      .select("id, title, resolution_steps, business_name, sales_id, cs_id, tech_id")
+      .in("id", chunk);
+    if (error) return { sent: 0, skipped: emptySkipped, error: error.message };
+    if (data) tickets.push(...data);
+  }
+
+  // 이미 대기 중인 요청이 있는 건은 중복 발송하지 않는다. 표가 없는 환경(마이그레이션 미적용)에서는
+  // 중복 판정을 포기하고 전체를 진행한다.
+  const openTicketIds = new Set<string>();
+  for (let i = 0; i < ticketIds.length; i += CHUNK_SIZE) {
+    const chunk = ticketIds.slice(i, i + CHUNK_SIZE);
+    const { data, error } = await admin
+      .from("ticket_revision_requests")
+      .select("ticket_id")
+      .eq("status", "open")
+      .in("ticket_id", chunk);
+    if (!error && data) {
+      for (const row of data) openTicketIds.add(row.ticket_id as string);
+    }
+  }
+
+  const skipped = { noIssue: 0, noAssignee: 0, alreadyOpen: 0 };
+  const revisionRecords: {
+    ticket_id: string;
+    message: string;
+    requested_by: string;
+    requested_by_name: string | null;
+  }[] = [];
+  const notificationRecords: {
+    user_id: string;
+    ticket_id: string;
+    type: string;
+    title: string;
+    body: string;
+  }[] = [];
+
+  for (const ticket of tickets) {
+    const issues = inspectResolutionSteps({
+      steps: ticket.resolution_steps ?? "",
+      businessName: ticket.business_name ?? null,
+    });
+    if (!ticket.resolution_steps || !ticket.resolution_steps.trim() || issues.length === 0) {
+      skipped.noIssue += 1;
+      continue;
+    }
+    if (openTicketIds.has(ticket.id)) {
+      skipped.alreadyOpen += 1;
+      continue;
+    }
+    const recipientIds = Array.from(
+      new Set(
+        [ticket.sales_id, ticket.cs_id, ticket.tech_id].filter(
+          (id): id is string => !!id && id !== user.id,
+        ),
+      ),
+    );
+    if (recipientIds.length === 0) {
+      skipped.noAssignee += 1;
+      continue;
+    }
+
+    const message = composeRevisionMessage(issues);
+    revisionRecords.push({
+      ticket_id: ticket.id,
+      message,
+      requested_by: user.id,
+      requested_by_name: requesterProfile?.name ?? null,
+    });
+    for (const recipientId of recipientIds) {
+      notificationRecords.push({
+        user_id: recipientId,
+        ticket_id: ticket.id,
+        type: "ticket_revision",
+        title: `수정 요청: ${ticket.title}`,
+        body: message,
+      });
+    }
+  }
+
+  // 기록은 부가 기능이라 표가 없어도(마이그레이션 미적용) 알림 발송은 그대로 진행한다.
+  for (let i = 0; i < revisionRecords.length; i += CHUNK_SIZE) {
+    const chunk = revisionRecords.slice(i, i + CHUNK_SIZE);
+    const { error } = await admin.from("ticket_revision_requests").insert(chunk);
+    if (error && !isMissingRevisionTable(error)) {
+      return { sent: revisionRecords.length, skipped, error: error.message };
+    }
+  }
+
+  for (let i = 0; i < notificationRecords.length; i += CHUNK_SIZE) {
+    const chunk = notificationRecords.slice(i, i + CHUNK_SIZE);
+    const { error } = await admin.from("notifications").insert(chunk);
+    if (error) return { sent: revisionRecords.length, skipped, error: error.message };
+  }
+
+  revalidatePath("/tickets");
+  revalidatePath("/tickets/revisions");
+  return { sent: revisionRecords.length, skipped, error: null };
 }
