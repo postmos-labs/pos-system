@@ -5,7 +5,7 @@ import { Plus } from "lucide-react";
 import { STATUS_LABEL, type TicketStatus, type Profile } from "@/types";
 import TicketsClient from "./TicketsClient";
 import AuthorStats, { type AuthorStatRange, type AuthorStatRow } from "./AuthorStats";
-import { inspectResolutionSteps, type QualityIssue } from "@/lib/resolutionQuality";
+import { inspectTicket, type QualityIssue } from "@/lib/resolutionQuality";
 
 interface Props {
   searchParams: Promise<{
@@ -103,7 +103,7 @@ export default async function TicketsPage({ searchParams }: Props) {
     let q = supabase
       .from("tickets")
       .select(
-        "*, merchant:merchants(business_name, phone), sales:profiles!tickets_sales_id_fkey(name), tech:profiles!tickets_tech_id_fkey(name)",
+        "*, merchant:merchants(business_name, phone, owner_name), sales:profiles!tickets_sales_id_fkey(name), tech:profiles!tickets_tech_id_fkey(name)",
         { count: "exact" },
       )
       .order("created_at", { ascending: false });
@@ -161,18 +161,19 @@ export default async function TicketsPage({ searchParams }: Props) {
     (listError as { message?: string } | null)?.message ??
     "";
 
-  // 해결 절차가 이미 적힌 건만 품질 점검한다 — 아직 안 적은 건까지 미달로 표시하면 안 된다.
+  // 절차가 비어 있는 건은 inspectTicket이 판정하지 않는다 — 안 적은 것과 잘못 적은 것은 다르다.
   const rows = (tickets ?? []) as Record<string, unknown>[];
   const quality: Record<string, { issues: QualityIssue[]; hasOpenRequest: boolean }> = {};
   for (const row of rows) {
-    const steps = (row.resolution_steps as string | null) ?? "";
-    if (!steps.trim()) continue;
-    const issues = inspectResolutionSteps({
-      steps,
-      businessName:
-        (row.business_name as string | null) ??
-        (row.merchant as { business_name?: string } | null)?.business_name ??
-        null,
+    const merchant = row.merchant as {
+      business_name?: string | null;
+      owner_name?: string | null;
+    } | null;
+    const issues = inspectTicket({
+      title: (row.title as string | null) ?? "",
+      steps: (row.resolution_steps as string | null) ?? "",
+      businessName: (row.business_name as string | null) ?? merchant?.business_name ?? null,
+      ownerName: merchant?.owner_name ?? null,
     });
     if (issues.length === 0) continue;
     quality[row.id as string] = { issues, hasOpenRequest: false };

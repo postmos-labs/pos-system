@@ -1,89 +1,335 @@
-// 기술지원 인입내역의 해결 절차를 챗봇 학습 데이터로 내보내기 전에 품질을 점검하는 순수 함수 모듈
+// 인입내역의 문의 내용과 해결 절차가 챗봇 학습 데이터로 쓸 만한지 판정하는 순수 함수 모듈.
+//
+// 챗봇은 두 가지를 한다. 사장님이 친 문장으로 비슷한 문제를 찾고(문의 내용), 찾은 절차를
+// 사장님에게 그대로 안내한다(해결 절차). 규칙은 전부 이 두 용도에서 나왔다.
+//   - 문의 내용은 "무엇이 어떻게"가 있어야 검색이 된다
+//   - 해결 절차는 다른 가맹점에도 그대로 통해야 한다
+//
+// 관리자 모드·마스터 비밀번호는 사장님도 쓸 수 있으므로 잡지 않는다. 원격 접속은 직원이 대신 한
+// 일이라 잡는다. 사장님용 표현으로 다듬는 일은 정제 단계(프롬프트 7번 규칙)가 맡는다.
+//
+// 이 규칙은 등록·수정 화면에서 저장을 막는 데 쓰지 않는다. 마스터가 수정 요청을 돌릴 때와
+// 챗봇 데이터로 내보낼 때만 적용한다. 응대 중 급하게 적는 사람을 붙잡지 않기 위해서다.
 
-export type QualityIssueCode = "too_short" | "no_order" | "personal_info" | "our_action";
+export type QualityIssueCode =
+  | "title_no_subject"
+  | "title_personal_info"
+  | "too_short"
+  | "too_few_steps"
+  | "no_ui_term"
+  | "remote_access"
+  | "dangerous"
+  | "our_action"
+  | "personal_info";
 
 export interface QualityIssue {
-  /** 화면 칩에 뜨는 짧은 라벨 */
   code: QualityIssueCode;
+  /** 화면 칩에 뜨는 짧은 라벨 */
   label: string;
   /** 수정 요청 본문에 들어갈 문장 */
   message: string;
 }
 
-const ORDER_MARK_REGEX = /(^|\s)(\d+\s*[).]|[①-⑳]|[-•*]\s)/;
-const PHONE_REGEX = /0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4}/;
-const BUSINESS_NUMBER_REGEX = /\d{3}[-\s]?\d{2}[-\s]?\d{5}/;
-const OUR_ACTION_REGEX = /유선|통화|전화\s*(드림|드렸|안내|연결)|안내\s*(드림|드렸|함|완료)|콜백/;
+// ── 문의 내용 ─────────────────────────────────────────────────────────────
+// "포스 오류"는 모든 문제에 다 걸려 검색 열쇠가 못 된다. 무엇(대상)이 어떻게(증상·의도)
+// 되는지 둘 다 있어야 통과다. 공백을 지운 뒤 비교하므로 "안 됨"과 "안됨"을 같이 잡는다.
+const SUBJECT_WORDS = [
+  "포스",
+  "단말기",
+  "결제기",
+  "리더기",
+  "프린터",
+  "영수증",
+  "라벨",
+  "카드",
+  "결제",
+  "승인",
+  "취소",
+  "환불",
+  "현금영수증",
+  "메뉴",
+  "주문",
+  "배달",
+  "배민",
+  "요기요",
+  "쿠팡",
+  "인터넷",
+  "공유기",
+  "와이파이",
+  "랜선",
+  "케이블",
+  "통신",
+  "앱",
+  "키오스크",
+  "태블릿",
+  "화면",
+  "프로그램",
+  "업데이트",
+  "로그인",
+  "계정",
+  "비밀번호",
+  "매출",
+  "정산",
+  "마감",
+  "시재",
+  "세금계산서",
+  "사업자",
+  "가맹점",
+  "회원",
+  "포인트",
+  "쿠폰",
+  "할인",
+  "테이블",
+  "주방",
+  "바코드",
+  "스캐너",
+  "돈통",
+  "서랍",
+  "서명",
+  "패드",
+  "모니터",
+  "전원",
+  "부팅",
+  "밴",
+  "van",
+];
 
-const TOO_SHORT_ISSUE: QualityIssue = {
-  code: "too_short",
-  label: "내용이 너무 짧음",
-  message:
-    "해결 절차가 너무 짧아 다른 사람이 그대로 따라 할 수 없습니다. 어떤 화면에서 무엇을 눌렀는지 순서대로 적어주세요.",
+const INTENT_WORDS = [
+  "안됨",
+  "안돼",
+  "안되",
+  "안됩",
+  "안나옴",
+  "안나와",
+  "안들어",
+  "안켜",
+  "안찍",
+  "안보",
+  "안열",
+  "안잡",
+  "안읽",
+  "안옴",
+  "안와",
+  "못함",
+  "못하",
+  "멈춤",
+  "멈춰",
+  "먹통",
+  "오류",
+  "에러",
+  "느림",
+  "느려",
+  "꺼짐",
+  "꺼져",
+  "끊김",
+  "끊겨",
+  "튕김",
+  "튕겨",
+  "깨짐",
+  "깜빡",
+  "이상",
+  "실패",
+  "거절",
+  "불가",
+  "반복",
+  "계속",
+  "중복",
+  "누락",
+  "지연",
+  "방법",
+  "문의",
+  "설정",
+  "변경",
+  "추가",
+  "삭제",
+  "연결",
+  "등록",
+  "교체",
+  "재발급",
+  "요청",
+  "확인",
+  "어떻게",
+  "하고싶",
+  "알려",
+  "궁금",
+];
+
+// ── 해결 절차 ─────────────────────────────────────────────────────────────
+// 단계 구분자. 작성 예시는 ">"로 잇지만 줄바꿈이나 번호 줄로 적은 예전 건도 단계로 인정한다.
+const STEP_SEPARATOR = /\n|>|＞|→|->|»/;
+const STEP_MARKER = /^\s*(\d+\s*[).]|[①-⑳]|[-•*])\s*/;
+
+// [메뉴관리]처럼 대괄호로 적힌 화면 용어
+const UI_TERM = /\[[^\]]+\]/;
+
+// 원격 접속은 직원이 대신 한 일이라 사장님이 따라 할 수 없다. 관리자 모드·마스터 비밀번호는
+// 사장님도 쓸 수 있으므로 잡지 않는다. "원격 지원 요청"은 사장님이 하는 행동이라 걸리지 않게
+// 접속·으로·처리·제어가 붙을 때만 본다.
+const REMOTE_ACCESS = /원격\s*(접속|으로|처리|제어)/;
+
+// 데이터가 지워질 수 있는 조작. "메뉴 삭제"처럼 정상적인 사용법은 잡지 않도록
+// 삭제는 데이터·전체·모두 같은 말이 붙을 때만 본다.
+const DANGEROUS = /초기화|포맷|재설치|공장\s*초기|(데이터|전체|모두|전부)\s*삭제/;
+
+// 우리가 한 행동. "안내"는 예시 6의 "고객센터로 안내"처럼 정당한 마지막 단계라 빼고,
+// 유선·통화·콜백과 "~드림/드렸/드릴/해드" 꼴만 잡는다.
+const OUR_ACTION = /유선|통화|콜백|드림|드렸|드릴|해\s*드/;
+
+// ── 개인정보 ─────────────────────────────────────────────────────────────
+const PHONE = /0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4}/;
+const BUSINESS_NUMBER = /\d{3}[-\s]?\d{2}[-\s]?\d{5}/;
+const CARD_NUMBER = /\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}|\d{15,16}/;
+const ACCOUNT_NUMBER = /계좌\s*(번호)?\s*[:：]?\s*[\d-]{8,}/;
+
+const ISSUES: Record<QualityIssueCode, QualityIssue> = {
+  title_no_subject: {
+    code: "title_no_subject",
+    label: "문의 내용 불명확",
+    message:
+      "문의 내용에 무엇이(포스·단말기·카드 등) 어떻게(안 됨·멈춤·방법 등) 되는지가 없습니다. '카드 결제가 안 됨'처럼 적어주세요.",
+  },
+  title_personal_info: {
+    code: "title_personal_info",
+    label: "문의 내용 개인정보",
+    message: "문의 내용에 가맹점 이름이나 전화번호가 있습니다. 증상만 남겨주세요.",
+  },
+  too_short: {
+    code: "too_short",
+    label: "너무 짧음",
+    message:
+      "해결 절차가 너무 짧습니다. 어떤 화면에서 무엇을 누르는지 사장님이 따라 할 수 있게 적어주세요.",
+  },
+  too_few_steps: {
+    code: "too_few_steps",
+    label: "단계 없음",
+    message:
+      "해결 절차가 한 단계뿐입니다. '[설정] > [통신설정] > [재연결]'처럼 단계를 >로 나눠 적어주세요.",
+  },
+  no_ui_term: {
+    code: "no_ui_term",
+    label: "버튼명 없음",
+    message: "화면에 보이는 버튼이나 메뉴 이름이 없습니다. [메뉴관리]처럼 대괄호로 적어주세요.",
+  },
+  remote_access: {
+    code: "remote_access",
+    label: "원격 조치",
+    message:
+      "원격 접속으로 처리한 내용이 절차에 있습니다. 사장님은 따라 할 수 없으니, 사장님이 직접 할 수 있는 확인까지만 적고 '원격 지원 요청'으로 끝내주세요.",
+  },
+  dangerous: {
+    code: "dangerous",
+    label: "위험 조작",
+    message:
+      "초기화·포맷·재설치처럼 데이터가 지워질 수 있는 조작이 절차에 있습니다. 사장님께 직접 시키면 안 되니 '원격 지원 요청'으로 바꿔주세요.",
+  },
+  our_action: {
+    code: "our_action",
+    label: "응대 행동",
+    message:
+      "'유선으로 안내해드림'처럼 우리가 한 행동이 절차에 적혀 있습니다. 이건 처리 내용에 적고, 절차에는 사장님이 할 일만 남겨주세요.",
+  },
+  personal_info: {
+    code: "personal_info",
+    label: "개인정보",
+    message:
+      "해결 절차에 가맹점 이름, 전화번호, 카드번호 같은 특정 정보가 있습니다. 챗봇이 다른 가맹점에도 그대로 답하니 빼주세요.",
+  },
 };
 
-const NO_ORDER_ISSUE: QualityIssue = {
-  code: "no_order",
-  label: "순서 구분 없음",
-  message: "해결 절차가 한 덩어리로 적혀 있습니다. 1) 2) 3) 처럼 단계를 나눠 적어주세요.",
-};
+const MIN_STEPS_LENGTH = 25;
+const MIN_STEP_COUNT = 2;
+const MIN_TITLE_LENGTH = 5;
 
-const PERSONAL_INFO_ISSUE: QualityIssue = {
-  code: "personal_info",
-  label: "개인정보 포함 의심",
-  message:
-    "해결 절차에 가맹점 이름이나 전화번호처럼 특정 정보로 보이는 내용이 있습니다. 챗봇이 다른 문의에도 그대로 답하게 되니 빼고 문제와 해결 순서만 남겨주세요.",
-};
+/** 해결 절차를 단계로 나눈다. 구분자와 번호 표시를 떼고 빈 조각은 버린다. */
+export function splitSteps(steps: string): string[] {
+  return steps
+    .split(STEP_SEPARATOR)
+    .map((part) => part.replace(STEP_MARKER, "").trim())
+    .filter((part) => part.length > 0);
+}
 
-const OUR_ACTION_ISSUE: QualityIssue = {
-  code: "our_action",
-  label: "응대 행동이 절차로 적힘",
-  message:
-    "'유선으로 안내했다'처럼 우리가 한 행동이 해결 절차에 적혀 있습니다. 이런 내용은 처리 내용 칸에 적고, 해결 절차에는 무엇을 확인하고 어떻게 푸는지만 남겨주세요.",
-};
+function hasName(text: string, name: string | null | undefined): boolean {
+  const trimmed = (name ?? "").trim();
+  if (trimmed.length < 2) return false;
+  return text.toLowerCase().includes(trimmed.toLowerCase());
+}
 
-export function inspectResolutionSteps(input: {
-  steps: string;
+function hasPersonalNumber(text: string): boolean {
+  return (
+    PHONE.test(text) ||
+    BUSINESS_NUMBER.test(text) ||
+    CARD_NUMBER.test(text) ||
+    ACCOUNT_NUMBER.test(text)
+  );
+}
+
+export interface InspectInput {
+  /** 문의 내용 (tickets.title) */
+  title?: string | null;
+  /** 해결 절차 (tickets.resolution_steps) */
+  steps?: string | null;
+  /** 이 건의 가맹점 상호. 본문에 그대로 들어갔는지 본다 */
   businessName?: string | null;
-}): QualityIssue[] {
-  const { steps, businessName } = input;
-  const trimmed = steps.trim();
+  /** 이 건의 가맹점 대표자명 */
+  ownerName?: string | null;
+}
 
-  // 공백뿐이면 다른 규칙을 돌릴 필요가 없으니 짧음 하나만 반환
-  if (trimmed.length === 0) {
-    return [TOO_SHORT_ISSUE];
-  }
+/** 문의 내용만 판정한다. 비어 있으면 판정하지 않는다. */
+export function inspectInquiry(input: InspectInput): QualityIssue[] {
+  const title = (input.title ?? "").trim();
+  if (!title) return [];
 
   const issues: QualityIssue[] = [];
-
-  if (trimmed.length < 20) {
-    issues.push(TOO_SHORT_ISSUE);
+  const compact = title.replace(/\s+/g, "").toLowerCase();
+  const hasSubject = SUBJECT_WORDS.some((word) => compact.includes(word));
+  const hasIntent = INTENT_WORDS.some((word) => compact.includes(word));
+  if (compact.length < MIN_TITLE_LENGTH || !hasSubject || !hasIntent) {
+    issues.push(ISSUES.title_no_subject);
   }
-
-  if (!steps.includes("\n") && trimmed.length >= 60 && !ORDER_MARK_REGEX.test(steps)) {
-    issues.push(NO_ORDER_ISSUE);
+  if (
+    hasPersonalNumber(title) ||
+    hasName(title, input.businessName) ||
+    hasName(title, input.ownerName)
+  ) {
+    issues.push(ISSUES.title_personal_info);
   }
-
-  const hasBusinessName =
-    !!businessName &&
-    businessName.trim().length >= 2 &&
-    steps.toLowerCase().includes(businessName.trim().toLowerCase());
-  if (PHONE_REGEX.test(steps) || BUSINESS_NUMBER_REGEX.test(steps) || hasBusinessName) {
-    issues.push(PERSONAL_INFO_ISSUE);
-  }
-
-  if (OUR_ACTION_REGEX.test(steps)) {
-    issues.push(OUR_ACTION_ISSUE);
-  }
-
   return issues;
 }
 
-export function composeRevisionMessage(issues: QualityIssue[]): string {
-  if (issues.length === 0) {
-    return "";
-  }
+/** 해결 절차만 판정한다. 비어 있으면 판정하지 않는다 — 안 적은 것과 잘못 적은 것은 다르다. */
+export function inspectResolutionSteps(input: InspectInput): QualityIssue[] {
+  const steps = input.steps ?? "";
+  const trimmed = steps.trim();
+  if (!trimmed) return [];
 
+  const issues: QualityIssue[] = [];
+  if (trimmed.length < MIN_STEPS_LENGTH) issues.push(ISSUES.too_short);
+  if (splitSteps(steps).length < MIN_STEP_COUNT) issues.push(ISSUES.too_few_steps);
+  if (!UI_TERM.test(steps)) issues.push(ISSUES.no_ui_term);
+  if (REMOTE_ACCESS.test(steps)) issues.push(ISSUES.remote_access);
+  if (DANGEROUS.test(steps)) issues.push(ISSUES.dangerous);
+  if (OUR_ACTION.test(steps)) issues.push(ISSUES.our_action);
+  if (
+    hasPersonalNumber(steps) ||
+    hasName(steps, input.businessName) ||
+    hasName(steps, input.ownerName)
+  ) {
+    issues.push(ISSUES.personal_info);
+  }
+  return issues;
+}
+
+/**
+ * 문의 내용과 해결 절차를 함께 판정한다. 챗봇 데이터로는 둘이 한 쌍이라 따로 볼 이유가 없다.
+ * 해결 절차가 비어 있으면 문의 내용도 보지 않는다 — 절차 없는 건은 애초에 내보내기 대상이 아니다.
+ */
+export function inspectTicket(input: InspectInput): QualityIssue[] {
+  if (!(input.steps ?? "").trim()) return [];
+  return [...inspectInquiry(input), ...inspectResolutionSteps(input)];
+}
+
+export function composeRevisionMessage(issues: QualityIssue[]): string {
+  if (issues.length === 0) return "";
   const lines = issues.map((issue) => `- ${issue.message}`);
-  return `해결 절차 품질 점검에서 아래 항목이 걸렸습니다. 해결 절차는 챗봇 학습에 쓰이니 확인 후 고쳐주세요.\n\n${lines.join("\n")}`;
+  return `챗봇 학습 데이터 점검에서 아래 항목이 걸렸습니다. 문의 내용과 해결 절차는 챗봇이 사장님께 그대로 안내하는 데 쓰이니 확인 후 고쳐주세요.\n\n${lines.join("\n")}`;
 }

@@ -9,13 +9,16 @@ import {
   requireMaster,
 } from "@/lib/auth/require-admin";
 import { revalidatePath } from "next/cache";
-import { inspectResolutionSteps, composeRevisionMessage } from "@/lib/resolutionQuality";
+import { inspectTicket, composeRevisionMessage } from "@/lib/resolutionQuality";
 
 const CHUNK_SIZE = 100;
 
+// 이보다 오래된 건에는 일괄 수정 요청을 보내지 않는다. 기억으로 다시 적은 절차는 지어낸 절차다.
+const REVISION_WINDOW_DAYS = 30;
+
 export interface BulkRevisionResult {
   sent: number;
-  skipped: { noIssue: number; noAssignee: number; alreadyOpen: number };
+  skipped: { noIssue: number; noAssignee: number; alreadyOpen: number; tooOld: number };
   error: string | null;
 }
 
@@ -195,7 +198,7 @@ export async function resolveTicketRevision(requestId: string, note: string) {
 }
 
 export async function requestTicketRevisionsBulk(ticketIds: string[]): Promise<BulkRevisionResult> {
-  const emptySkipped = { noIssue: 0, noAssignee: 0, alreadyOpen: 0 };
+  const emptySkipped = { noIssue: 0, noAssignee: 0, alreadyOpen: 0, tooOld: 0 };
 
   const authError = await requireMaster();
   if (authError) return { sent: 0, skipped: emptySkipped, error: authError };
@@ -222,20 +225,24 @@ export async function requestTicketRevisionsBulk(ticketIds: string[]): Promise<B
   const tickets: {
     id: string;
     title: string;
+    created_at: string;
     resolution_steps: string | null;
     business_name: string | null;
     sales_id: string | null;
     cs_id: string | null;
     tech_id: string | null;
+    merchant: { business_name: string | null; owner_name: string | null } | null;
   }[] = [];
   for (let i = 0; i < ticketIds.length; i += CHUNK_SIZE) {
     const chunk = ticketIds.slice(i, i + CHUNK_SIZE);
     const { data, error } = await admin
       .from("tickets")
-      .select("id, title, resolution_steps, business_name, sales_id, cs_id, tech_id")
+      .select(
+        "id, title, created_at, resolution_steps, business_name, sales_id, cs_id, tech_id, merchant:merchants(business_name, owner_name)",
+      )
       .in("id", chunk);
     if (error) return { sent: 0, skipped: emptySkipped, error: error.message };
-    if (data) tickets.push(...data);
+    if (data) tickets.push(...(data as unknown as typeof tickets));
   }
 
   // 이미 대기 중인 요청이 있는 건은 중복 발송하지 않는다. 표가 없는 환경(마이그레이션 미적용)에서는
@@ -253,7 +260,7 @@ export async function requestTicketRevisionsBulk(ticketIds: string[]): Promise<B
     }
   }
 
-  const skipped = { noIssue: 0, noAssignee: 0, alreadyOpen: 0 };
+  const skipped = { noIssue: 0, noAssignee: 0, alreadyOpen: 0, tooOld: 0 };
   const revisionRecords: {
     ticket_id: string;
     message: string;
@@ -268,12 +275,20 @@ export async function requestTicketRevisionsBulk(ticketIds: string[]): Promise<B
     body: string;
   }[] = [];
 
+  const cutoff = Date.now() - REVISION_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+
   for (const ticket of tickets) {
-    const issues = inspectResolutionSteps({
-      steps: ticket.resolution_steps ?? "",
-      businessName: ticket.business_name ?? null,
+    if (new Date(ticket.created_at).getTime() < cutoff) {
+      skipped.tooOld += 1;
+      continue;
+    }
+    const issues = inspectTicket({
+      title: ticket.title,
+      steps: ticket.resolution_steps,
+      businessName: ticket.business_name ?? ticket.merchant?.business_name ?? null,
+      ownerName: ticket.merchant?.owner_name ?? null,
     });
-    if (!ticket.resolution_steps || !ticket.resolution_steps.trim() || issues.length === 0) {
+    if (issues.length === 0) {
       skipped.noIssue += 1;
       continue;
     }

@@ -72,6 +72,32 @@ export default function TicketsClient({
   const [sendingRevision, setSendingRevision] = useState(false);
   const [search, setSearch] = useState(initialSearch);
 
+  const CHECK_MODE_KEY = "tickets:qualityCheck";
+  // 마스터가 켜야만 품질 배지가 보인다. 규칙은 수정 요청을 돌릴 때만 쓰기로 했으므로
+  // 평소 목록은 품질과 무관하게 깨끗해야 한다. 켜둔 상태는 브라우저에 남긴다.
+  const [checkMode, setCheckMode] = useState(false);
+  useEffect(() => {
+    if (!isMaster) return;
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage는 SSR에서 읽을 수 없어 마운트 후 동기화가 불가피함
+      setCheckMode(localStorage.getItem(CHECK_MODE_KEY) === "1");
+    } catch {
+      /* 저장 불가 환경 */
+    }
+  }, [isMaster]);
+  function toggleCheckMode() {
+    setCheckMode((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(CHECK_MODE_KEY, next ? "1" : "0");
+      } catch {
+        /* 저장 불가 환경 */
+      }
+      return next;
+    });
+  }
+  const showQuality = isMaster && checkMode;
+
   // 검색은 서버가 전체 범위에서 수행한다(현재 페이지 50건만 걸러지는 문제 방지).
   // 입력 후 400ms 지나면 q 파라미터로 반영하고 1페이지부터 다시 본다.
   useEffect(() => {
@@ -158,6 +184,7 @@ export default function TicketsClient({
     }
     // 건너뛴 건수만 알려주면 왜 빠졌는지 알 수 없다. 사유를 함께 붙인다.
     const reasons: string[] = [];
+    if (result.skipped.tooOld > 0) reasons.push(`30일 지남 ${result.skipped.tooOld}건`);
     if (result.skipped.noAssignee > 0) reasons.push(`담당자 없음 ${result.skipped.noAssignee}건`);
     if (result.skipped.alreadyOpen > 0)
       reasons.push(`이미 요청 중 ${result.skipped.alreadyOpen}건`);
@@ -175,23 +202,39 @@ export default function TicketsClient({
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       {}
       <div className="px-6 py-3 border-b border-slate-100">
-        <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="가맹점명, 제목, 담당 기사로 검색"
-            className="w-full text-sm border border-slate-200 rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="가맹점명, 제목, 담당 기사로 검색"
+              className="w-full text-sm border border-slate-200 rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          {isMaster && (
+            <button
+              type="button"
+              onClick={toggleCheckMode}
+              className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                checkMode
+                  ? "border-amber-300 bg-amber-50 text-amber-700"
+                  : "border-slate-200 text-slate-500 hover:bg-slate-50"
+              }`}
+            >
+              <AlertTriangle size={13} />
+              품질 점검 {checkMode ? "켜짐" : "꺼짐"}
+            </button>
+          )}
         </div>
       </div>
 
-      {flaggedTickets.length > 0 && (
+      {showQuality && flaggedTickets.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 border-b border-amber-100 bg-amber-50 px-6 py-2.5">
           <AlertTriangle size={14} className="flex-shrink-0 text-amber-600" />
           <span className="text-xs font-semibold text-amber-800">
-            이 페이지에 해결 절차 미달 {flaggedTickets.length}건
+            이 페이지에 품질 미달 {flaggedTickets.length}건
           </span>
           {isMaster && sendableFlagged.length > 0 && (
             <button
@@ -212,7 +255,7 @@ export default function TicketsClient({
           onDelete={handleDelete}
           onCancel={() => setSelected(new Set())}
         >
-          {isMaster && revisionTargets.length > 0 && (
+          {showQuality && revisionTargets.length > 0 && (
             <button
               type="button"
               onClick={() => setRevisionConfirmOpen(true)}
@@ -287,14 +330,14 @@ export default function TicketsClient({
                   {ticket.is_repeat === true && (
                     <Badge colorClass="bg-red-100 text-red-700">또 그럼</Badge>
                   )}
-                  {quality[ticket.id] && (
+                  {showQuality && quality[ticket.id] && (
                     <span title={quality[ticket.id].issues.map((i) => i.label).join(", ")}>
                       <Badge colorClass="bg-amber-100 text-amber-800">
-                        {`해결 절차 미달 ${quality[ticket.id].issues.length}`}
+                        {`품질 미달 ${quality[ticket.id].issues.length}`}
                       </Badge>
                     </span>
                   )}
-                  {quality[ticket.id]?.hasOpenRequest && (
+                  {showQuality && quality[ticket.id]?.hasOpenRequest && (
                     <Badge colorClass="bg-slate-100 text-slate-500">수정 요청 대기</Badge>
                   )}
                 </div>

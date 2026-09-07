@@ -2,7 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { inspectResolutionSteps, type QualityIssue } from "@/lib/resolutionQuality";
+import { inspectTicket, type QualityIssue } from "@/lib/resolutionQuality";
 
 // 인입내역(tickets) 해결 절차 → 외부 LLM 정제 → 챗봇 학습 데이터(chatbot_training_data)
 //
@@ -112,7 +112,7 @@ export async function fetchExportTargets(includeExported: boolean): Promise<{
   // 마이그레이션이 밀린 환경을 감안해, 없는 컬럼이 걸리면 그 조건만 빼고 다시 시도한다.
   // team(123) / issue_category(124) / chatbot_exported_at(138) / deleted_at 모두 대상이다.
   let selectColumns =
-    "id, title, resolution_steps, issue_category, is_repeat, created_at, business_name, sales_id, cs_id, tech_id";
+    "id, title, resolution_steps, issue_category, is_repeat, created_at, business_name, sales_id, cs_id, tech_id, merchant:merchants(business_name, owner_name)";
   let useTeam = true;
   let useDeleted = true;
   let useExported = !includeExported;
@@ -203,15 +203,23 @@ export async function fetchExportTargets(includeExported: boolean): Promise<{
     occurred_on: String(row.created_at).slice(0, 10),
   }));
 
-  const quality: TicketQuality[] = (data ?? []).map((row) => ({
-    id: row.id as string,
-    issues: inspectResolutionSteps({
-      steps: (row.resolution_steps as string | null) ?? "",
-      businessName: (row.business_name as string | null) ?? null,
-    }),
-    hasAssignee: !!(row.sales_id || row.cs_id || row.tech_id),
-    hasOpenRequest: false,
-  }));
+  const quality: TicketQuality[] = (data ?? []).map((row) => {
+    const merchant = row.merchant as {
+      business_name?: string | null;
+      owner_name?: string | null;
+    } | null;
+    return {
+      id: row.id as string,
+      issues: inspectTicket({
+        title: (row.title as string | null) ?? "",
+        steps: (row.resolution_steps as string | null) ?? "",
+        businessName: (row.business_name as string | null) ?? merchant?.business_name ?? null,
+        ownerName: merchant?.owner_name ?? null,
+      }),
+      hasAssignee: !!(row.sales_id || row.cs_id || row.tech_id),
+      hasOpenRequest: false,
+    };
+  });
 
   const flaggedIds = quality.filter((q) => q.issues.length > 0).map((q) => q.id);
   let revisionTableMissing = false;
