@@ -8,8 +8,8 @@ import { sendApprovedInstallNotification } from "@/lib/installNotifications";
 import { appendApprovalNote, parseApprovalNotes, validateApprovalNote } from "@/lib/approvalNotes";
 import { recordDeletions } from "@/lib/deletionLog";
 import {
-  canApproveFirst,
-  canApproveFinal,
+  canApproveFirstBy,
+  canApproveFinalBy,
   skipsFirstApproval,
   canForceCompleteBy,
   blocksForceComplete,
@@ -632,10 +632,10 @@ export async function approveInstallationCompletion(installationId: string, note
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, name, approval_role, position")
+    .select("id, name, role, approval_role, position")
     .eq("id", user.id)
     .single();
-  if (!profile || !canApproveFirst(profile.position)) {
+  if (!profile || !canApproveFirstBy(profile)) {
     return { error: "승인 권한이 없습니다.", notificationError: null };
   }
 
@@ -744,10 +744,10 @@ export async function approveInstallationStatusByTeamLead(installationId: string
   if (!user) return { error: "로그인이 필요합니다.", notificationError: null };
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name, approval_role, position")
+    .select("name, role, approval_role, position")
     .eq("id", user.id)
     .single();
-  if (!profile || !canApproveFinal(profile.position))
+  if (!profile || !canApproveFinalBy(profile))
     return { error: "실장 최종 승인 권한이 없습니다.", notificationError: null };
 
   const admin = createAdminClient();
@@ -1088,10 +1088,10 @@ export async function rescheduleInstallationByTeamLead(input: {
   if (!user) return { error: "로그인이 필요합니다.", notificationError: null };
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name, approval_role, position")
+    .select("name, role, approval_role, position")
     .eq("id", user.id)
     .single();
-  if (!profile || !canApproveFinal(profile.position))
+  if (!profile || !canApproveFinalBy(profile))
     return {
       error: "실장급 이상만 승인 없이 바로 일정을 변경할 수 있습니다.",
       notificationError: null,
@@ -1157,6 +1157,48 @@ export async function rescheduleInstallationByTeamLead(input: {
     };
   }
 
+  // 승인 절차를 건너뛰고 일정을 확정했으므로, 이 건에 걸려 있던 대기 승인요청은 무효가 된다.
+  // 닫아주지 않으면 그 설치건은 "승인 대기"로 남아 재요청도(중복 방지) 강제완료도 막힌다.
+  const { data: staleApprovals } = await admin
+    .from("installation_completion_approvals")
+    .select("id, requested_by, target_status, approval_notes")
+    .eq("installation_id", input.installationId)
+    .in("status", ["requested", "responsible_approved"]);
+  let staleNotificationError: string | null = null;
+  for (const stale of staleApprovals ?? []) {
+    await admin
+      .from("installation_completion_approvals")
+      .update({
+        status: "rejected",
+        approval_notes: appendApprovalNote(
+          stale.approval_notes,
+          { id: user.id, name: profile.name, role: "실장" },
+          `실장이 승인 없이 일정을 ${input.scheduledDate}${input.scheduledTime ? ` ${input.scheduledTime}` : ""}(으)로 변경해 이 승인요청은 무효 처리됐습니다.${input.note.trim() ? ` 사유: ${input.note.trim()}` : ""}`,
+          "rejection",
+        ),
+      })
+      .eq("id", stale.id)
+      .in("status", ["requested", "responsible_approved"]);
+    await admin.from("installation_activity_logs").insert({
+      installation_id: input.installationId,
+      user_id: user.id,
+      action: "step_approval_rejected",
+      to_status: stale.target_status,
+      approval_id: stale.id,
+      details: { reason: "실장 직접 일정변경으로 승인요청 무효", by: "team_lead_direct" },
+    });
+    if (stale.requested_by && stale.requested_by !== user.id) {
+      const { error: staleNotifyError } = await admin.from("notifications").insert({
+        user_id: stale.requested_by,
+        installation_id: input.installationId,
+        type: "approval_install_step_rejected",
+        title: "[무효] 기술지원 단계 승인요청",
+        body: `${profile.name}님이 승인 없이 일정을 직접 변경해 승인요청이 무효 처리됐습니다.`,
+      });
+      if (staleNotifyError) staleNotificationError = staleNotifyError.message;
+    }
+  }
+
   const notification = input.skipNotify
     ? { error: null }
     : await sendApprovedInstallNotification({
@@ -1168,7 +1210,7 @@ export async function rescheduleInstallationByTeamLead(input: {
   revalidatePath("/installs");
   revalidatePath("/installs/mine");
   revalidatePath("/calendar");
-  return { error: null, notificationError: notification.error };
+  return { error: null, notificationError: notification.error ?? staleNotificationError };
 }
 
 export async function rejectInstallationStatusApproval(installationId: string, reason: string) {
@@ -1183,7 +1225,7 @@ export async function rejectInstallationStatusApproval(installationId: string, r
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, name, approval_role, position")
+    .select("id, name, role, approval_role, position")
     .eq("id", user.id)
     .single();
 
@@ -1199,8 +1241,8 @@ export async function rejectInstallationStatusApproval(installationId: string, r
   if (!approval) return { error: "처리할 승인 요청이 없습니다.", notificationError: null };
   const expectedStatus = approval.status;
   const canReject =
-    (expectedStatus === "requested" && canApproveFirst(profile?.position)) ||
-    (expectedStatus === "responsible_approved" && canApproveFinal(profile?.position));
+    (expectedStatus === "requested" && canApproveFirstBy(profile ?? {})) ||
+    (expectedStatus === "responsible_approved" && canApproveFinalBy(profile ?? {}));
   if (!canReject) return { error: "반려 권한이 없습니다.", notificationError: null };
   if (approval.requested_by === user.id)
     return { error: "요청자는 직접 반려할 수 없습니다.", notificationError: null };

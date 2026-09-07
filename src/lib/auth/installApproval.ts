@@ -25,9 +25,17 @@ export function canApproveFinal(position?: string | null): boolean {
   return positionRank(position) >= positionRank(FINAL_APPROVAL_POSITION);
 }
 
-/** 요청자가 실장급 이상이면 1차를 건너뛰고 최종 승인 대기로 올린다. */
+/**
+ * 요청자가 팀장급 이상이면 1차를 건너뛰고 최종 승인 대기로 올린다.
+ *
+ * 예전에는 실장급 이상만 건너뛰었는데, 팀장이 직접 올린 건은 1차 승인 담당(팀장)과
+ * 요청자가 같은 사람이 된다. 요청자 본인 승인은 막혀 있으므로 다른 팀장이 없으면
+ * "requested"에서 영영 멈추고(실장은 1차를 대신하지 않는다) 재요청도 막힌다.
+ * 팀장 요청 건은 처음부터 최종 승인 대기로 올려 이 잠금을 없앤다 — 검토는
+ * 요청자(팀장) 한 번, 실장 최종 한 번으로 두 단계가 그대로 유지된다.
+ */
 export function skipsFirstApproval(position?: string | null): boolean {
-  return canApproveFinal(position);
+  return positionRank(position) >= positionRank(FIRST_APPROVAL_POSITION);
 }
 
 // ── 강제완료(승인 절차 없이 바로 완료) ───────────────────────────────────────
@@ -55,6 +63,15 @@ export function isApprovalOverrider(role?: string | null): boolean {
 /** 최종 승인 권한자인지 — 직급 판정에 관리자 안전망을 더한 것. */
 export function canApproveFinalBy(actor: ApprovalActor): boolean {
   return isApprovalOverrider(actor.role) || canApproveFinal(actor.position);
+}
+
+/**
+ * 1차 승인 권한자인지 — 직급 판정에 관리자 안전망을 더한 것.
+ * 팀장이 한 명도 없으면 "requested" 건을 아무도 못 푸는데, 관리자는 그때 풀 수 있어야 한다.
+ * 화면(버튼 노출)과 서버 액션 가드가 이 함수를 함께 써야 한다.
+ */
+export function canApproveFirstBy(actor: ApprovalActor): boolean {
+  return isApprovalOverrider(actor.role) || canApproveFirst(actor.position);
 }
 
 /** 강제완료 가능 여부 — 팀장급 이상. 단 건별 제한은 blocksForceComplete로 따로 본다. */

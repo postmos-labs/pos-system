@@ -14,7 +14,12 @@ import { NotificationHistory } from "@/components/ui/NotificationHistory";
 import InstallationActivityHistory from "@/components/ui/InstallationActivityHistory";
 import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
 import type { ApprovalNote } from "@/lib/approvalNotes";
-import { canApproveFirst, canApproveFinal } from "@/lib/auth/installApproval";
+import {
+  canApproveFirstBy,
+  canApproveFinalBy,
+  canForceCompleteBy,
+  blocksForceComplete,
+} from "@/lib/auth/installApproval";
 import { InstallItemsEditor } from "./InstallItemsEditor";
 import InstallCompositionSection from "../merchants/InstallCompositionSection";
 import {
@@ -244,8 +249,8 @@ export default function InstallDetailDrawer({
   const canDecideApproval =
     !!approval &&
     approval.requested_by !== profile.id &&
-    ((approval.status === "requested" && canApproveFirst(profile.position)) ||
-      (canApproveFinal(profile.position) && approval.status === "responsible_approved"));
+    ((approval.status === "requested" && canApproveFirstBy(profile)) ||
+      (canApproveFinalBy(profile) && approval.status === "responsible_approved"));
   const showReschedule =
     canEdit && installation.status !== "completed" && installation.status !== "rejected";
   // 표(데스크톱)에는 이 버튼과 동등한 단독 조작이 없다 — "이동중" 상태로 select를 바꾸면
@@ -267,10 +272,18 @@ export default function InstallDetailDrawer({
   // 승인요청(requestInstallationStatusApproval/requestInstallationCompletion)으로 이어지는 상태는
   // 서버가 tech/admin/master만 허용하므로, CS에게는 드롭다운에서부터 노출하지 않는다.
   const canRequestApproval = ["tech", "admin", "master"].includes(profile.role);
+  // 다만 강제완료는 role이 아니라 직급으로 갈린다(서버 completeInstallationByTeamLead와 같은 기준).
+  // 승인요청은 못 해도 강제완료는 되는 계정이 있어, 그 계정에게도 "완료"를 열어준다.
+  const canForceComplete = canForceCompleteBy(profile);
   const approvalOnlyStatuses = new Set([...APPROVAL_TARGETS, "completed"]);
   // 현재 상태는 항상 옵션에 남긴다 — 현재 값이 목록에 없으면 select가 빈 칸으로 표시된다.
   const statusOptions = statusOrderFor(installation.delivery_type)
-    .filter((s) => canRequestApproval || !approvalOnlyStatuses.has(s) || s === installation.status)
+    .filter((s) => {
+      if (s === installation.status) return true;
+      if (!approvalOnlyStatuses.has(s)) return true;
+      if (s === "completed") return canRequestApproval || canForceComplete;
+      return canRequestApproval;
+    })
     .map((s) => ({
       value: s,
       label: statusLabel(s, installation.delivery_type),
@@ -659,7 +672,7 @@ export default function InstallDetailDrawer({
             <button
               type="button"
               onClick={onReschedule}
-              disabled={!!approval}
+              disabled={blocksForceComplete(profile, approval?.status)}
               className="rounded-lg border border-indigo-200 px-2.5 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
             >
               일정변경

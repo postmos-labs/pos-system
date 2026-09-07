@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { canApproveFirst, canApproveFinal } from "@/lib/auth/installApproval";
+import { canApproveFirstBy, canApproveFinalBy } from "@/lib/auth/installApproval";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, ClipboardCheck } from "lucide-react";
@@ -78,8 +78,8 @@ export default async function ApprovalsPage() {
 
   // 설치 단계 승인은 직급으로 갈린다(팀장 1차 → 실장 최종). 가맹접수 이관 승인은
   // 기존대로 승인 직책을 쓰므로 두 기준을 함께 본다.
-  const canFirst = canApproveFirst(p.position);
-  const canFinal = canApproveFinal(p.position);
+  const canFirst = canApproveFirstBy(p);
+  const canFinal = canApproveFinalBy(p);
   const isApprover =
     ["cs_responsible", "tech_responsible", "team_lead"].includes(p.approval_role ?? "") ||
     canFirst ||
@@ -87,12 +87,12 @@ export default async function ApprovalsPage() {
 
   // 단계별로 담당 직급만 처리한다 — 팀장은 1차, 실장은 최종.
   // 실장이 1차까지 하면 두 단계가 사실상 한 사람에게 몰려 검토가 형식이 된다.
-  const isFinalApprover = canFinal;
-  const completionStatuses = isFinalApprover
-    ? ["responsible_approved"]
-    : canFirst
-      ? ["requested"]
-      : [];
+  // 다만 관리자(admin/master)는 두 판정이 모두 참이라 1차·최종을 함께 본다 —
+  // 담당 직급이 비어 결재가 통째로 멈췄을 때 풀 사람이 하나는 있어야 한다.
+  const completionStatuses = [
+    ...(canFirst ? ["requested"] : []),
+    ...(canFinal ? ["responsible_approved"] : []),
+  ];
 
   const completionApprovalQuery =
     completionStatuses.length > 0

@@ -30,8 +30,8 @@ import InstallationActivityHistory from "@/components/ui/InstallationActivityHis
 import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
 import { appendApprovalNote, type ApprovalNote } from "@/lib/approvalNotes";
 import {
-  canApproveFirst,
-  canApproveFinal,
+  canApproveFirstBy,
+  canApproveFinalBy,
   skipsFirstApproval,
   canForceCompleteBy,
   blocksForceComplete,
@@ -743,6 +743,20 @@ export default function InstallsClient({
       .limit(FETCH_LIMIT);
     setInstalls((data as any) ?? []);
     setHitFetchLimit((data?.length ?? 0) >= FETCH_LIMIT);
+    // 승인요청 상태도 함께 다시 읽는다. 목록만 갱신하면 다른 사람이 승인·반려한 뒤에도
+    // 이 탭은 "승인 대기"로 알고 있어 강제완료 버튼과 상태 변경이 계속 잠긴다.
+    const { data: approvalRows } = await supabase
+      .from("installation_completion_approvals")
+      .select(
+        "installation_id,status,target_status,request_payload,requested_by,requested_by_name,responsible_approved_by_name,approved_by,approved_by_name,approval_notes,requested_at",
+      )
+      .in("status", ["requested", "responsible_approved"])
+      .order("requested_at", { ascending: true });
+    setCompletionApprovals(
+      Object.fromEntries(
+        (approvalRows ?? []).map((row) => [row.installation_id, row]),
+      ) as unknown as typeof completionApprovals,
+    );
     setLoading(false);
     if (!deliveryOnly && !mineOnly) {
       const { data: deliveryRows } = await supabase
@@ -904,6 +918,12 @@ export default function InstallsClient({
       return;
     }
     if (APPROVAL_TARGETS.has(status)) {
+      // 대기 중 요청이 있으면 서버가 중복 요청을 거절한다(requestInstallationStatusApproval).
+      // 실장급 이상은 select가 열려 있으므로, 눌러서 에러를 보기 전에 여기서 막는다.
+      if (completionApprovals[id]) {
+        toast.warning("이미 승인 대기 중인 요청이 있습니다. 승인 처리 후 다시 시도해주세요.");
+        return;
+      }
       await requestStepApproval(id, status);
       return;
     }
@@ -948,11 +968,19 @@ export default function InstallsClient({
   // 승인요청(requestInstallationStatusApproval/requestInstallationCompletion)으로 이어지는 상태는
   // 서버가 tech/admin/master만 허용하므로, CS에게는 드롭다운에서부터 노출하지 않는다.
   const canRequestApproval = ["tech", "admin", "master"].includes(profile.role);
+  // 강제완료는 role이 아니라 직급으로 갈린다(서버 completeInstallationByTeamLead와 같은 기준).
+  // 승인요청은 못 해도 강제완료는 되는 계정이 있어, 그 계정에게도 "완료"를 열어준다.
+  const canForceComplete = canForceCompleteBy(profile);
   const approvalOnlyStatuses = new Set([...APPROVAL_TARGETS, "completed"]);
   // currentStatus는 항상 옵션에 남긴다 — 현재 값이 목록에 없으면 select가 빈 칸으로 표시된다.
   function statusOptionsFor(deliveryType?: string, currentStatus?: string) {
     return statusOrderFor(deliveryType)
-      .filter((s) => canRequestApproval || !approvalOnlyStatuses.has(s) || s === currentStatus)
+      .filter((s) => {
+        if (s === currentStatus) return true;
+        if (!approvalOnlyStatuses.has(s)) return true;
+        if (s === "completed") return canRequestApproval || canForceComplete;
+        return canRequestApproval;
+      })
       .map((s) => ({ value: s, label: statusLabel(s, deliveryType) }));
   }
 
@@ -1049,7 +1077,7 @@ export default function InstallsClient({
     setSendingSchedule(true);
     const effectiveSkipNotify = isReschedule ? true : skipNotify;
 
-    if (canApproveFinal(profile.position)) {
+    if (canApproveFinalBy(profile)) {
       const note = await promptNote("변경 사유를 입력해주세요.");
       if (note === null) {
         setSendingSchedule(false);
@@ -1074,6 +1102,12 @@ export default function InstallsClient({
             : item,
         ),
       );
+      setCompletionApprovals((prev) => {
+        if (!prev[id]) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
       setScheduleModal(null);
       setSendingSchedule(false);
       if (result.notificationError)
@@ -1373,9 +1407,8 @@ export default function InstallsClient({
   async function approveCompletion(id: string) {
     const approval = completionApprovals[id];
     if (!approval || !["requested", "responsible_approved"].includes(approval.status)) return;
-    const isResponsible = approval.status === "requested" && canApproveFirst(profile.position);
-    const isTeamLead =
-      canApproveFinal(profile.position) && approval.status === "responsible_approved";
+    const isResponsible = approval.status === "requested" && canApproveFirstBy(profile);
+    const isTeamLead = canApproveFinalBy(profile) && approval.status === "responsible_approved";
     if (!isResponsible && !isTeamLead) {
       toast.warning("현재 승인 단계의 권한이 없습니다.");
       return;
@@ -1481,8 +1514,8 @@ export default function InstallsClient({
     const approval = completionApprovals[id];
     if (!approval || !["requested", "responsible_approved"].includes(approval.status)) return;
     const canReject =
-      (approval.status === "requested" && canApproveFirst(profile.position)) ||
-      (canApproveFinal(profile.position) && approval.status === "responsible_approved");
+      (approval.status === "requested" && canApproveFirstBy(profile)) ||
+      (canApproveFinalBy(profile) && approval.status === "responsible_approved");
     if (!canReject) {
       toast.warning("현재 승인 단계의 권한이 없습니다.");
       return;
@@ -2840,7 +2873,10 @@ export default function InstallsClient({
                           />
                           <AppSelect
                             value={inst.status}
-                            disabled={!!completionApprovals[inst.id]}
+                            disabled={blocksForceComplete(
+                              profile,
+                              completionApprovals[inst.id]?.status,
+                            )}
                             onValueChange={(value) => handleStatusChange(inst.id, value)}
                             aria-label="상태 변경"
                             className={`w-full font-medium ${STATUS_COLORS[inst.status]
@@ -2860,7 +2896,10 @@ export default function InstallsClient({
                           {inst.status !== "completed" && inst.status !== "rejected" && (
                             <button
                               onClick={() => handleStatusChange(inst.id, "reschedule")}
-                              disabled={!!completionApprovals[inst.id]}
+                              disabled={blocksForceComplete(
+                                profile,
+                                completionApprovals[inst.id]?.status,
+                              )}
                               className="w-full text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 disabled:opacity-50 px-3 py-2 rounded-lg"
                             >
                               일정변경
@@ -3296,13 +3335,20 @@ export default function InstallsClient({
               />
             </div>
             <div className="flex flex-col gap-2">
-              <button
-                onClick={() => submitCompletion(false)}
-                disabled={completing || checklistItems.some((c) => !c.checked)}
-                className="w-full py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50"
-              >
-                {completing ? "처리 중..." : "완료 처리"}
-              </button>
+              {checklistItems.some((c) => !c.checked) && (
+                <p className="text-center text-xs text-amber-600">
+                  체크리스트를 모두 확인해야 완료할 수 있습니다.
+                </p>
+              )}
+              {canRequestApproval && (
+                <button
+                  onClick={() => submitCompletion(false)}
+                  disabled={completing || checklistItems.some((c) => !c.checked)}
+                  className="w-full py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+                >
+                  {completing ? "처리 중..." : "완료 처리"}
+                </button>
+              )}
               {/* 팀장급 이상은 승인 절차 없이 바로 끝낼 수 있다(서버도 같은 조건으로 막는다).
                   조건이 안 맞을 때 버튼을 지워버리면 왜 못 쓰는지 알 수가 없어, 버튼은 그대로 두고
                   사유를 적어 비활성화한다. 직급 자체가 모자라면 애초에 대상이 아니므로 그때만 숨긴다. */}
@@ -3340,13 +3386,15 @@ export default function InstallsClient({
                   {profile.position ? `'${profile.position}'` : "미지정"})
                 </p>
               )}
-              <button
-                onClick={() => submitCompletion(true)}
-                disabled={completing || checklistItems.some((c) => !c.checked)}
-                className="w-full py-2 rounded-lg border border-slate-200 text-slate-400 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
-              >
-                {completing ? "처리 중..." : "템플릿 안보내고 완료 처리"}
-              </button>
+              {canRequestApproval && (
+                <button
+                  onClick={() => submitCompletion(true)}
+                  disabled={completing || checklistItems.some((c) => !c.checked)}
+                  className="w-full py-2 rounded-lg border border-slate-200 text-slate-400 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {completing ? "처리 중..." : "템플릿 안보내고 완료 처리"}
+                </button>
+              )}
               <button
                 onClick={() => {
                   setCompleteModal(null);
