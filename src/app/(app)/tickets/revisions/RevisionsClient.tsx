@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { X } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
-import { resolveTicketRevision, cancelTicketRevision } from "../actions";
+import { resolveTicketRevision, cancelTicketRevision, cancelTicketRevisionsBulk } from "../actions";
 
 export interface RevisionRow {
   id: string;
@@ -67,10 +67,27 @@ export default function RevisionsClient({
   const [target, setTarget] = useState<RevisionRow | null>(null);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
-  const [mode, setMode] = useState<"resolve" | "cancel">("resolve");
+  const [mode, setMode] = useState<"resolve" | "cancel" | "cancelBulk">("resolve");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
 
   function changeTab(key: string) {
+    setSelected(new Set());
     router.replace(`/tickets/revisions?status=${key}`);
+  }
+
+  function toggleAll() {
+    setSelected(allChecked ? new Set() : new Set(rows.map((r) => r.id)));
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   function openResolveModal(row: RevisionRow) {
@@ -83,6 +100,12 @@ export default function RevisionsClient({
     setNote("");
     setMode("cancel");
     setTarget(row);
+  }
+
+  function openCancelBulkModal() {
+    setNote("");
+    setMode("cancelBulk");
+    setTarget(rows.find((r) => selected.has(r.id)) ?? null);
   }
 
   async function confirmResolve() {
@@ -114,6 +137,26 @@ export default function RevisionsClient({
     router.refresh();
   }
 
+  async function confirmCancelBulk() {
+    if (selected.size === 0) return;
+    setSaving(true);
+    const result = await cancelTicketRevisionsBulk([...selected], note);
+    setSaving(false);
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    const skippedNote =
+      result.skipped.notOpen > 0
+        ? ` 이미 처리된 ${result.skipped.notOpen}건은 건너뛰었습니다.`
+        : "";
+    if (result.warning) toast.error(result.warning);
+    else toast.success(`${result.canceled}건을 취소했습니다.${skippedNote}`);
+    setTarget(null);
+    setSelected(new Set());
+    router.refresh();
+  }
+
   return (
     <>
       <div className="mb-5 flex w-fit gap-1 rounded-xl bg-slate-100 p-1">
@@ -133,6 +176,18 @@ export default function RevisionsClient({
         ))}
       </div>
 
+      {rows.length > 0 && status === "open" && (
+        <div className="mb-2 flex items-center gap-3 px-1">
+          <input
+            type="checkbox"
+            checked={allChecked}
+            onChange={toggleAll}
+            className="h-4 w-4 cursor-pointer accent-blue-600"
+          />
+          <span className="text-xs font-medium text-slate-400">전체 선택</span>
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-400">
           {status === "open"
@@ -146,12 +201,22 @@ export default function RevisionsClient({
           {rows.map((row) => (
             <div key={row.id} className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="flex items-start justify-between gap-2">
-                <Link
-                  href={`/tickets/${row.ticket_id}`}
-                  className="text-sm font-semibold text-blue-600 hover:underline"
-                >
-                  {row.ticket_title ?? "제목 없음"}
-                </Link>
+                <div className="flex min-w-0 items-start gap-2">
+                  {row.status === "open" && (
+                    <input
+                      type="checkbox"
+                      checked={selected.has(row.id)}
+                      onChange={() => toggleOne(row.id)}
+                      className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-blue-600"
+                    />
+                  )}
+                  <Link
+                    href={`/tickets/${row.ticket_id}`}
+                    className="text-sm font-semibold text-blue-600 hover:underline"
+                  >
+                    {row.ticket_title ?? "제목 없음"}
+                  </Link>
+                </div>
                 <span
                   className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
                     row.status === "open"
@@ -236,21 +301,58 @@ export default function RevisionsClient({
         </div>
       )}
 
+      {selected.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3 shadow-lg">
+          <span className="text-sm font-semibold text-blue-700">{selected.size}건 선택됨</span>
+          <button
+            type="button"
+            onClick={openCancelBulkModal}
+            className="rounded-lg bg-slate-700 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
+          >
+            선택 취소
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelected(new Set())}
+            className="text-sm text-slate-500 hover:text-slate-700"
+          >
+            선택 해제
+          </button>
+        </div>
+      )}
+
       {target &&
         (() => {
-          const modalTitle = mode === "resolve" ? "수정 요청 확인 완료" : "수정 요청 취소";
+          const modalTitle =
+            mode === "resolve"
+              ? "수정 요청 확인 완료"
+              : mode === "cancelBulk"
+                ? `수정 요청 ${selected.size}건 취소`
+                : "수정 요청 취소";
           const modalDescription =
             mode === "resolve"
               ? "담당자가 고친 내용을 확인했으면 완료 처리합니다. 메모는 선택 입력입니다."
-              : "담당자에게 취소 알림이 갑니다. 사유는 선택 입력입니다.";
+              : mode === "cancelBulk"
+                ? "선택한 요청을 모두 취소하고 담당자마다 알림을 보냅니다. 사유는 선택 입력이며 전체에 같은 사유가 들어갑니다."
+                : "담당자에게 취소 알림이 갑니다. 사유는 선택 입력입니다.";
           const placeholder = mode === "resolve" ? "확인 메모 (선택)" : "취소 사유 (선택)";
           const maxLength = mode === "resolve" ? 500 : 300;
-          const confirmLabel = mode === "resolve" ? "확인 완료" : "취소하기";
+          const confirmLabel =
+            mode === "resolve"
+              ? "확인 완료"
+              : mode === "cancelBulk"
+                ? `${selected.size}건 취소하기`
+                : "취소하기";
           const confirmClassName =
             mode === "resolve"
               ? "rounded-lg bg-green-600 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
               : "rounded-lg bg-slate-700 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:opacity-50";
-          const onConfirm = mode === "resolve" ? confirmResolve : confirmCancel;
+          const onConfirm =
+            mode === "resolve"
+              ? confirmResolve
+              : mode === "cancelBulk"
+                ? confirmCancelBulk
+                : confirmCancel;
 
           return (
             <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/30 p-4">

@@ -22,6 +22,13 @@ export interface BulkRevisionResult {
   error: string | null;
 }
 
+export interface BulkCancelResult {
+  canceled: number;
+  skipped: { notOpen: number };
+  error: string | null;
+  warning?: string;
+}
+
 // 42P01: relation does not exist / PGRST205: PostgREST 스키마 캐시에 표가 없음.
 // 139번 마이그레이션(ticket_revision_requests)이 아직 적용되지 않은 환경에서 쓴다.
 function isMissingRevisionTable(error: { code?: string; message?: string } | null) {
@@ -464,4 +471,165 @@ export async function requestTicketRevisionsBulk(ticketIds: string[]): Promise<B
   revalidatePath("/tickets");
   revalidatePath("/tickets/revisions");
   return { sent: revisionRecords.length, skipped, error: null };
+}
+
+export async function cancelTicketRevisionsBulk(
+  requestIds: string[],
+  note: string,
+): Promise<BulkCancelResult> {
+  const emptySkipped = { notOpen: 0 };
+
+  const authError = await requireMaster();
+  if (authError) return { canceled: 0, skipped: emptySkipped, error: authError };
+
+  if (!requestIds.length) return { canceled: 0, skipped: emptySkipped, error: null };
+  if (requestIds.length > 200) {
+    return { canceled: 0, skipped: emptySkipped, error: "한 번에 200건까지만 취소할 수 있습니다." };
+  }
+
+  const trimmedNote = note.trim();
+  if (trimmedNote.length > 300) {
+    return { canceled: 0, skipped: emptySkipped, error: "사유는 300자 이내로 입력해주세요." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { canceled: 0, skipped: emptySkipped, error: "로그인이 필요합니다." };
+
+  const { data: cancelerProfile } = await supabase
+    .from("profiles")
+    .select("name")
+    .eq("id", user.id)
+    .single();
+
+  const admin = createAdminClient();
+
+  const requests: {
+    id: string;
+    ticket_id: string;
+    status: string;
+    ticket:
+      | {
+          title: string | null;
+          sales_id: string | null;
+          cs_id: string | null;
+          tech_id: string | null;
+        }
+      | {
+          title: string | null;
+          sales_id: string | null;
+          cs_id: string | null;
+          tech_id: string | null;
+        }[]
+      | null;
+  }[] = [];
+  for (let i = 0; i < requestIds.length; i += CHUNK_SIZE) {
+    const chunk = requestIds.slice(i, i + CHUNK_SIZE);
+    const { data, error } = await admin
+      .from("ticket_revision_requests")
+      .select("id, ticket_id, status, ticket:tickets(title, sales_id, cs_id, tech_id)")
+      .in("id", chunk);
+    if (error) {
+      if (isMissingRevisionTable(error)) {
+        return {
+          canceled: 0,
+          skipped: emptySkipped,
+          error: "수정 요청 마이그레이션(supabase/139)이 아직 적용되지 않았습니다.",
+        };
+      }
+      return { canceled: 0, skipped: emptySkipped, error: error.message };
+    }
+    if (data) requests.push(...(data as unknown as typeof requests));
+  }
+
+  const openRequests = requests.filter((r) => r.status === "open");
+  const skipped = { notOpen: requestIds.length - openRequests.length };
+  if (openRequests.length === 0) return { canceled: 0, skipped, error: null };
+
+  let canceled = 0;
+  const canceledRequests: typeof openRequests = [];
+  for (let i = 0; i < openRequests.length; i += CHUNK_SIZE) {
+    const chunkRequests = openRequests.slice(i, i + CHUNK_SIZE);
+    const chunk = chunkRequests.map((r) => r.id);
+    const { data, error } = await admin
+      .from("ticket_revision_requests")
+      .update({
+        status: "canceled",
+        canceled_by: user.id,
+        canceled_by_name: cancelerProfile?.name ?? null,
+        canceled_at: new Date().toISOString(),
+        canceled_note: trimmedNote || null,
+      })
+      .in("id", chunk)
+      .eq("status", "open")
+      .select("id");
+    if (error) {
+      if (isMissingCancelSchema(error)) {
+        return {
+          canceled,
+          skipped,
+          error: "수정 요청 취소 마이그레이션(supabase/142)이 아직 적용되지 않았습니다.",
+        };
+      }
+      if (isMissingRevisionTable(error)) {
+        return {
+          canceled,
+          skipped,
+          error: "수정 요청 마이그레이션(supabase/139)이 아직 적용되지 않았습니다.",
+        };
+      }
+      return { canceled, skipped, error: error.message };
+    }
+    const updatedIds = new Set((data ?? []).map((row) => row.id as string));
+    canceled += updatedIds.size;
+    for (const r of chunkRequests) {
+      if (updatedIds.has(r.id)) canceledRequests.push(r);
+    }
+  }
+
+  const notificationRecords: {
+    user_id: string;
+    ticket_id: string;
+    type: string;
+    title: string;
+    body: string;
+  }[] = [];
+  for (const request of canceledRequests) {
+    const rawTicket = request.ticket;
+    const ticket = Array.isArray(rawTicket) ? rawTicket[0] : rawTicket;
+    const ticketTitle = ticket?.title ?? "";
+    const recipientIds = Array.from(
+      new Set(
+        [ticket?.sales_id, ticket?.cs_id, ticket?.tech_id].filter(
+          (id): id is string => !!id && id !== user.id,
+        ),
+      ),
+    );
+    for (const userId of recipientIds) {
+      notificationRecords.push({
+        user_id: userId,
+        ticket_id: request.ticket_id,
+        type: "ticket_revision_canceled",
+        title: `수정 요청 취소: ${ticketTitle}`,
+        body: trimmedNote || "마스터가 수정 요청을 거둬들였습니다. 이 건은 고치지 않아도 됩니다.",
+      });
+    }
+  }
+
+  // 알림이 실패해도 취소 자체는 이미 반영됐으므로 경고로만 알린다.
+  let warning: string | undefined;
+  for (let i = 0; i < notificationRecords.length; i += CHUNK_SIZE) {
+    const chunk = notificationRecords.slice(i, i + CHUNK_SIZE);
+    const { error: notifyError } = await admin.from("notifications").insert(chunk);
+    if (notifyError) {
+      warning = `취소는 됐지만 알림 발송에 실패했습니다: ${notifyError.message}`;
+      break;
+    }
+  }
+
+  revalidatePath("/tickets/revisions");
+  revalidatePath("/tickets");
+  return { canceled, skipped, error: null, ...(warning ? { warning } : {}) };
 }
