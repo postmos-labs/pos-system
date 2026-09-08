@@ -25,9 +25,18 @@ export default function ExportCsvButton() {
     const labelsById = new Map(
       result.quality.map((q) => [q.id, q.issues.map((issue) => issue.label).join(" · ")]),
     );
+    // 같은 문의·같은 절차가 여러 건 쌓이는 경우가 많다(같은 증상을 여러 매장이 문의). 첫 건만 남긴다.
+    const seen = new Set<string>();
     const rows = result.rows
+      .filter((row) => {
+        const key = `${row.inquiry.trim()}\n${row.steps.trim()}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
       .map((row) => ({ row, verdict: labelsById.get(row.id) || "통과" }))
       .sort((a, b) => (a.verdict === "통과" ? 0 : 1) - (b.verdict === "통과" ? 0 : 1));
+    const duplicateCount = result.rows.length - rows.length;
     if (rows.length === 0) {
       toast.error("받을 수 있는 해결 절차가 없습니다.");
       return;
@@ -39,7 +48,7 @@ export default function ExportCsvButton() {
       rows.map(({ row, verdict }) => [row.inquiry, row.steps, verdict]),
     );
     toast.success(
-      `${rows.length}건을 받았습니다. 통과 ${passedCount}건, 미달 ${rows.length - passedCount}건.`,
+      `${rows.length}건을 받았습니다. 통과 ${passedCount}건, 미달 ${rows.length - passedCount}건${duplicateCount ? `, 중복 ${duplicateCount}건 제외` : ""}.`,
     );
   }
 
