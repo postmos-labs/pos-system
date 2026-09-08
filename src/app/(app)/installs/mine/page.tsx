@@ -32,6 +32,7 @@ export default async function MyInstallsPage() {
         .select(
           "installation_id,status,target_status,request_payload,requested_by,requested_by_name,responsible_approved_by_name,approved_by,approved_by_name,approval_notes,requested_at",
         )
+        .in("status", ["requested", "responsible_approved"])
         .order("requested_at", { ascending: true }),
     ]);
 

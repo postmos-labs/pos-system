@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import ChangesClient from "./ChangesClient";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 interface Props {
   searchParams: Promise<{ id?: string }>;
@@ -16,12 +17,18 @@ export default async function ChangesPage({ searchParams }: Props) {
 
   const [{ data: rows, error }, { data: csProfiles }, { data: currentProfile }] = await Promise.all(
     [
-      supabase
-        .from("change_requests")
-        .select(
-          "*, cs:profiles!change_requests_cs_id_fkey(id,name,role), creator:profiles!change_requests_created_by_fkey(id,name,role)",
-        )
-        .order("created_at", { ascending: false }),
+      fetchAllRows(
+        (from, to) =>
+          supabase
+            .from("change_requests")
+            .select(
+              "*, cs:profiles!change_requests_cs_id_fkey(id,name,role), creator:profiles!change_requests_created_by_fkey(id,name,role)",
+            )
+            .order("created_at", { ascending: false })
+            .order("id", { ascending: true })
+            .range(from, to),
+        { label: "changes list" },
+      ),
       supabase
         .from("profiles")
         .select("id,name,role")

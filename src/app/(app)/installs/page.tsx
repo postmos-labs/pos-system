@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import InstallsClient from "./InstallsClient";
 import type { Profile, VanGroup } from "@/types";
 import type { ApprovalNote } from "@/lib/approvalNotes";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 interface Props {
   searchParams: Promise<{ id?: string; van?: string }>;
@@ -44,7 +45,8 @@ export default async function InstallsPage({ searchParams }: Props) {
     { data: techUsers },
     { data: completionApprovals },
     { data: transferApprovals },
-    { data: deliveryStatusRows },
+    { count: deliveryTotal },
+    { count: deliveryCompleted },
     { count: allVanCount },
     { count: tossVanCount },
     { count: kiccVanCount },
@@ -61,14 +63,28 @@ export default async function InstallsPage({ searchParams }: Props) {
       van,
     ),
     supabase.from("profiles").select("id, name").eq("role", "tech"),
-    supabase
-      .from("installation_completion_approvals")
-      .select(
-        "installation_id,status,target_status,request_payload,requested_by,requested_by_name,responsible_approved_by_name,approved_by,approved_by_name,approval_notes,requested_at",
-      )
-      .order("requested_at", { ascending: true }),
+    fetchAllRows(
+      (from, to) =>
+        supabase
+          .from("installation_completion_approvals")
+          .select(
+            "installation_id,status,target_status,request_payload,requested_by,requested_by_name,responsible_approved_by_name,approved_by,approved_by_name,approval_notes,requested_at",
+          )
+          .order("requested_at", { ascending: true })
+          .order("installation_id", { ascending: true })
+          .range(from, to),
+      { label: "installs approvals" },
+    ),
     supabase.from("franchise_transfer_approvals").select("franchise_application_id,approval_notes"),
-    supabase.from("installations").select("status").eq("delivery_type", "delivery"),
+    supabase
+      .from("installations")
+      .select("id", { count: "exact", head: true })
+      .eq("delivery_type", "delivery"),
+    supabase
+      .from("installations")
+      .select("id", { count: "exact", head: true })
+      .eq("delivery_type", "delivery")
+      .eq("status", "completed"),
     supabase
       .from("installations")
       .select("id", { count: "exact", head: true })
@@ -102,8 +118,8 @@ export default async function InstallsPage({ searchParams }: Props) {
   };
 
   const initialDeliveryStats = {
-    total: deliveryStatusRows?.length ?? 0,
-    completed: (deliveryStatusRows ?? []).filter((row) => row.status === "completed").length,
+    total: deliveryTotal ?? 0,
+    completed: deliveryCompleted ?? 0,
   };
 
   if (!profile) redirect("/dashboard");

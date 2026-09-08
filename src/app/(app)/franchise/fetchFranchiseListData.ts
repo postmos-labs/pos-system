@@ -2,7 +2,7 @@ import type { InstallationDeliveryType } from "@/lib/installationDeliveryType";
 import type { ApprovalNote } from "@/lib/approvalNotes";
 import type { FranchiseApplication } from "@/types";
 import { createClient } from "@/lib/supabase/server";
-import { fetchAllRows } from "@/lib/fetchAllRows";
+import { fetchAllRows, fetchByIdChunks } from "@/lib/fetchAllRows";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -116,50 +116,49 @@ export async function fetchFranchiseListData(
     { id: string; status: string | null; category: string | null }
   > = {};
   if (rows && rows.length > 0) {
+    const ids = rows.map((r) => r.id);
     const phones = [...new Set(rows.map((r) => r.phone).filter((p): p is string => !!p))];
     const [
-      { data: installs },
-      { data: internetsById },
-      { data: internetsByPhone },
-      { data: callLogs },
+      { data: installs, error: installsError },
+      { data: internetsById, error: internetsByIdError },
+      { data: internetsByPhone, error: internetsByPhoneError },
+      { data: callLogsRaw, error: callLogsError },
     ] = await Promise.all([
-      supabase
-        .from("installations")
-        .select("id, status, franchise_application_id")
-        .in(
-          "franchise_application_id",
-          rows.map((r) => r.id),
-        ),
-      supabase
-        .from("internet_management")
-        .select("id, status, category, franchise_application_id")
-        .in(
-          "franchise_application_id",
-          rows.map((r) => r.id),
-        ),
-      phones.length > 0
-        ? supabase
-            .from("internet_management")
-            .select("id, status, category, phone")
-            .is("franchise_application_id", null)
-            .in("phone", phones)
-        : Promise.resolve({
-            data: [] as {
-              id: string;
-              status: string | null;
-              category: string | null;
-              phone: string | null;
-            }[],
-          }),
-      supabase
-        .from("franchise_application_call_logs")
-        .select("franchise_application_id, call_type, created_at")
-        .in(
-          "franchise_application_id",
-          rows.map((row) => row.id),
-        )
-        .order("created_at", { ascending: false }),
+      fetchByIdChunks(ids, (chunk) =>
+        supabase
+          .from("installations")
+          .select("id, status, franchise_application_id")
+          .in("franchise_application_id", chunk),
+      ),
+      fetchByIdChunks(ids, (chunk) =>
+        supabase
+          .from("internet_management")
+          .select("id, status, category, franchise_application_id")
+          .in("franchise_application_id", chunk),
+      ),
+      fetchByIdChunks(phones, (chunk) =>
+        supabase
+          .from("internet_management")
+          .select("id, status, category, phone")
+          .is("franchise_application_id", null)
+          .in("phone", chunk),
+      ),
+      fetchByIdChunks(ids, (chunk) =>
+        supabase
+          .from("franchise_application_call_logs")
+          .select("franchise_application_id, call_type, created_at")
+          .in("franchise_application_id", chunk)
+          .order("created_at", { ascending: false }),
+      ),
     ]);
+    const connectionError =
+      installsError ?? internetsByIdError ?? internetsByPhoneError ?? callLogsError;
+    if (connectionError) {
+      console.error("fetchFranchiseListData 연결 조회 실패:", connectionError.message);
+    }
+    const callLogs = [...(callLogsRaw ?? [])].sort((a, b) =>
+      a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0,
+    );
     for (const inst of installs ?? []) {
       if (inst.franchise_application_id)
         linkedInstalls[inst.franchise_application_id] = {
