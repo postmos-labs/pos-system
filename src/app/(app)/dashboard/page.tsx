@@ -167,9 +167,11 @@ export default async function DashboardPage({ searchParams }: Props) {
       buildVanGroupCountQuery("kicc"),
     ]);
 
+  // 1일로 먼저 맞춘 뒤 달을 뺀다. 31일에서 먼저 달을 빼면 없는 날짜가 돼 다음 달로 넘친다.
   const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
   sixMonthsAgo.setDate(1);
+  sixMonthsAgo.setHours(0, 0, 0, 0);
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
   const monthlyFranchiseQuery = applyVanFilter(
     supabase
       .from("franchise_applications")
@@ -210,8 +212,8 @@ export default async function DashboardPage({ searchParams }: Props) {
   const monthlyStats: { label: string; total: number; done: number }[] = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date();
-    d.setMonth(d.getMonth() - i);
     d.setDate(1);
+    d.setMonth(d.getMonth() - i);
     const ym = d.toISOString().slice(0, 7);
     const monthRows = (monthlyFranchise ?? []).filter((r: any) => r.created_at.startsWith(ym));
     monthlyStats.push({
