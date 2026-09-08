@@ -240,7 +240,8 @@ export default function NewTicketForm({ salesId, role }: Props) {
     const ticketPayload = {
       merchant_id: merchantId,
       title: form.inquiry,
-      type: "install",
+      // 종류는 팀을 따른다. 기술지원 인입은 A/S, CS 인입은 상담. 가맹점 360 업무 이력이 이 값을 읽는다.
+      type: form.team === "tech" ? "as" : "consult",
       priority: "normal",
       reception_channel: form.reception_channel,
       progress_note: form.answer || null,

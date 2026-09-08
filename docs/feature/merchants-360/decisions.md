@@ -24,7 +24,8 @@
 
 - 접수: `merchants.franchise_application_id`로 연결된 `franchise_applications` 1건.
 - 설치: 같은 접수에 연결되고 `delivery_type IN ('install', 'transfer')`인 `installations`.
-- AS: 같은 접수에 연결된 `installations`의 `delivery_type = 'as'`와 `tickets.type = 'as'`.
+- AS: 같은 접수에 연결된 `installations`의 `delivery_type = 'as'`.
+- 인입내역: `tickets.merchant_id` 직접 연결, 팀 무관 전부. 요약에 팀·문제 유형·해결 방식·반복 여부를 같이 보여준다. (2026-09-08 추가 — 등록 폼이 type을 'install'로 고정 저장해 AS 탭에 하나도 안 잡히던 문제. 등록 폼은 팀 기준으로 as/consult를 저장하고 기존 건은 `supabase/144`로 보정)
 - 변경: `change_requests.merchant_id` 직접 연결.
 - 설치·배송 이후 히스토리: `installation_post_history.merchant_id` 직접 연결.
 - 모든 원본 행은 `created_at` 기준 내림차순으로 하나의 배열에 합치고, 원본 상세 화면으로 이동하는 링크를 제공한다. 설치·배송 이후 히스토리 테이블이 아직 없으면 조회는 빈 배열로 처리한다.

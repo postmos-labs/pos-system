@@ -10,19 +10,25 @@ import {
   FRANCHISE_TRANSFER_LOG_LABEL,
   STATUS_COLOR as TICKET_STATUS_COLOR,
   STATUS_LABEL as TICKET_STATUS_LABEL,
+  TEAM_LABEL,
   type ChangeRequestStatus,
   type ChangeType,
   type FranchiseChannel,
   type FranchiseStatus,
   type TicketStatus,
+  type TicketTeam,
 } from "@/types";
 import {
   computeEquipmentCategorySummaries,
+  MEMO_ISSUE_CATEGORY_LABEL,
+  MEMO_RESOLUTION_LABEL,
   type Merchant360Application,
   type Merchant360Merchant,
   type MerchantDerivedSummary,
   type MerchantEquipmentCategorySummary,
   type MerchantEquipmentItem,
+  type MemoIssueCategory,
+  type MemoResolution,
   type MerchantMemoEntry,
   type MerchantMemoStage,
   type WorkHistoryItem,
@@ -94,12 +100,45 @@ type MerchantMemoEntryRow = {
   is_repeat?: MerchantMemoEntry["is_repeat"];
 };
 
-type AsTicketRow = {
+type MerchantTicketRow = {
   id: string;
   title: string | null;
   status: string;
+  type: string;
   created_at: string;
+  team?: string | null;
+  issue_category?: string | null;
+  resolution?: string | null;
+  is_repeat?: boolean | null;
 };
+
+// 가맹점의 인입내역 전부. AS 구분 컬럼(124번 마이그레이션)이 없는 환경이면 기본 컬럼만 다시 읽는다.
+async function fetchMerchantTickets(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  merchantId: string,
+): Promise<{
+  data: MerchantTicketRow[] | null;
+  error: { code?: string; message?: string } | null;
+}> {
+  const base = "id,title,status,type,created_at";
+  const full = `${base},team,issue_category,resolution,is_repeat`;
+  const run = (columns: string) =>
+    supabase
+      .from("tickets")
+      .select(columns)
+      .eq("merchant_id", merchantId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false });
+  const first = await run(full);
+  if (!first.error) return { data: first.data as unknown as MerchantTicketRow[], error: null };
+  const isMissingColumn =
+    first.error.code === "42703" ||
+    first.error.code === "PGRST204" ||
+    /column .* does not exist/i.test(first.error.message ?? "");
+  if (!isMissingColumn) return { data: null, error: first.error };
+  const second = await run(base);
+  return { data: second.data as unknown as MerchantTicketRow[] | null, error: second.error };
+}
 
 type ChangeRequestRow = {
   id: string;
@@ -308,7 +347,7 @@ export async function loadMerchant360(
     transferApprovalResult,
     memoEntriesResult,
     equipmentResultRaw,
-    asTicketsResult,
+    ticketsResult,
     changeRequestsResult,
     postHistoryResult,
   ] = await Promise.all([
@@ -346,13 +385,7 @@ export async function loadMerchant360(
       : Promise.resolve({ data: null, error: null }),
     fetchMemoEntries(supabase, merchantId),
     fetchEquipmentRows(supabase, merchantId),
-    supabase
-      .from("tickets")
-      .select("id,title,status,created_at")
-      .eq("merchant_id", merchantId)
-      .eq("type", "as")
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false }),
+    fetchMerchantTickets(supabase, merchantId),
     supabase
       .from("change_requests")
       .select("id,change_type,before_value,after_value,status,created_at")
@@ -366,9 +399,9 @@ export async function loadMerchant360(
   ]);
 
   const equipmentResult = equipmentResultRaw;
-  const asTickets = isMissingTableError(asTicketsResult.error)
+  const merchantTickets = isMissingTableError(ticketsResult.error)
     ? []
-    : ((asTicketsResult.data ?? []) as AsTicketRow[]);
+    : ((ticketsResult.data ?? []) as MerchantTicketRow[]);
   const changeRequests = isMissingTableError(changeRequestsResult.error)
     ? []
     : ((changeRequestsResult.data ?? []) as ChangeRequestRow[]);
@@ -546,8 +579,7 @@ export async function loadMerchant360(
     });
   }
 
-  // AS: 같은 접수에 연결된 installations(delivery_type='as') + merchant_id로 직접 연결된
-  // tickets(type='as'). merchants-360/decisions.md의 통합 업무 이력 정의를 따른다.
+  // AS: 같은 접수에 연결된 installations(delivery_type='as'). 인입내역은 아래 별도 탭으로 뺐다.
   for (const installation of installations.filter((item) => item.delivery_type === "as")) {
     const status = installationStatusLabel(installation.status, installation.delivery_type);
     history.push({
@@ -562,13 +594,25 @@ export async function loadMerchant360(
       actorName: installationActorName(installation.id),
     });
   }
-  for (const ticket of asTickets) {
+  // 인입내역: tickets.merchant_id 직접 연결, 팀 무관 전부. 등록 폼으로 만든 건은 type이
+  // 'install'로 저장돼 AS 탭에 안 잡혔다(144번으로 보정). 요약에 팀과 AS 구분을 같이 보여준다.
+  for (const ticket of merchantTickets) {
+    const parts = [
+      ticket.team ? (TEAM_LABEL[ticket.team as TicketTeam] ?? ticket.team) : null,
+      ticket.issue_category
+        ? (MEMO_ISSUE_CATEGORY_LABEL[ticket.issue_category as MemoIssueCategory] ?? null)
+        : null,
+      ticket.resolution
+        ? (MEMO_RESOLUTION_LABEL[ticket.resolution as MemoResolution] ?? null)
+        : null,
+      ticket.is_repeat == null ? null : ticket.is_repeat ? "또 그럼" : "처음",
+    ].filter((part): part is string => !!part);
     history.push({
       id: ticket.id,
       date: ticket.created_at,
-      title: ticket.title || "AS 티켓",
-      summary: merchant.business_name,
-      category: "as",
+      title: ticket.title || "인입내역",
+      summary: parts.join(" · ") || merchant.business_name,
+      category: "ticket",
       status: TICKET_STATUS_LABEL[ticket.status as TicketStatus] ?? ticket.status,
       statusClass:
         TICKET_STATUS_COLOR[ticket.status as TicketStatus] ?? "bg-slate-100 text-slate-600",
@@ -680,16 +724,18 @@ export async function loadMerchant360(
     .filter((item) => item.status !== "removed")
     .reduce((sum, item) => sum + (item.quantity ?? 1), 0);
 
-  // "최근 A/S" KPI와 관련 업무 이력의 AS 탭이 서로 다른 날짜를 보여주는 모순을 막기 위해,
-  // 이력 탭에 실제로 들어가는 것과 동일한 배열(installations의 as건 + asTickets 전체)에서
-  // 최신 시각을 뽑는다. 별도로 "가장 최근 1건만" 조회하지 않는다.
+  // "최근 A/S" KPI는 AS 성격의 기록 전부에서 최신 시각을 뽑는다 — installations의 as건,
+  // AS 메모, 그리고 기술지원 인입내역. 인입내역은 이력에서 별도 탭으로 빠졌지만 기술지원 건은
+  // AS 응대 기록이므로 지표에는 계속 넣는다. 별도로 "가장 최근 1건만" 조회하지 않는다.
   const asInstallationTimes = installations
     .filter((item) => item.delivery_type === "as")
     .map((item) => item.created_at);
   const asMemoTimes = memos
     .filter((memo) => memo.entry_type === "as")
     .map((memo) => memo.created_at);
-  const asTicketTimes = asTickets.map((ticket) => ticket.created_at);
+  const asTicketTimes = merchantTickets
+    .filter((ticket) => ticket.team === "tech" || (!ticket.team && ticket.type === "as"))
+    .map((ticket) => ticket.created_at);
   const lastAsAtMs = latestTimestamp([...asInstallationTimes, ...asMemoTimes, ...asTicketTimes]);
   const lastAsAt = lastAsAtMs !== undefined ? new Date(lastAsAtMs).toISOString() : null;
 

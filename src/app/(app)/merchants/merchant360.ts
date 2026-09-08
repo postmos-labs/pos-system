@@ -1,4 +1,4 @@
-export type WorkHistoryCategory = "reception" | "install" | "as" | "change" | "post";
+export type WorkHistoryCategory = "reception" | "install" | "as" | "ticket" | "change" | "post";
 
 export type MerchantMemoStage = "before_transfer" | "after_transfer" | "after_completion";
 
