@@ -140,18 +140,29 @@ export default function RevisionsClient({
   async function confirmCancelBulk() {
     if (selected.size === 0) return;
     setSaving(true);
-    const result = await cancelTicketRevisionsBulk([...selected], note);
+    const ids = [...selected];
+    let canceled = 0;
+    let notOpen = 0;
+    let warning: string | undefined;
+    let errorMessage: string | null = null;
+    for (let i = 0; i < ids.length; i += 200) {
+      const result = await cancelTicketRevisionsBulk(ids.slice(i, i + 200), note);
+      canceled += result.canceled;
+      notOpen += result.skipped.notOpen;
+      if (result.warning && !warning) warning = result.warning;
+      if (result.error) {
+        errorMessage = result.error;
+        break;
+      }
+    }
     setSaving(false);
-    if (result.error) {
-      toast.error(result.error);
+    if (errorMessage) {
+      toast.error(`${errorMessage}${canceled ? ` (${canceled}건은 취소됨)` : ""}`);
       return;
     }
-    const skippedNote =
-      result.skipped.notOpen > 0
-        ? ` 이미 처리된 ${result.skipped.notOpen}건은 건너뛰었습니다.`
-        : "";
-    if (result.warning) toast.error(result.warning);
-    else toast.success(`${result.canceled}건을 취소했습니다.${skippedNote}`);
+    const skippedNote = notOpen > 0 ? ` 이미 처리된 ${notOpen}건은 건너뛰었습니다.` : "";
+    if (warning) toast.error(warning);
+    else toast.success(`${canceled}건을 취소했습니다.${skippedNote}`);
     setTarget(null);
     setSelected(new Set());
     router.refresh();

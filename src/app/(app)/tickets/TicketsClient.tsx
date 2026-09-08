@@ -92,6 +92,7 @@ export default function TicketsClient({
   const [reviewAllTargets, setReviewAllTargets] = useState<
     { id: string; label: string; detail: string }[]
   >([]);
+  const [reviewAllTooOld, setReviewAllTooOld] = useState(0);
   const [search, setSearch] = useState(initialSearch);
 
   const CHECK_MODE_KEY = "tickets:qualityCheck";
@@ -278,9 +279,19 @@ export default function TicketsClient({
     const resolvedNote = passing.resolved
       ? `고쳐서 통과한 ${passing.resolved}건은 완료 처리했습니다. `
       : "";
+    // 서버는 30일 지난 건에 요청을 보내지 않는다(기억으로 다시 적은 절차는 지어낸 절차다). 확인창 건수를 실제 발송과 맞추려고 여기서 미리 뺀다.
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const recentIds = new Set(
+      result.rows.filter((row) => row.occurred_on >= cutoff).map((row) => row.id),
+    );
+    const tooOldCount = result.quality.filter(
+      (q) => q.issues.length > 0 && q.hasAssignee && !q.hasOpenRequest && !recentIds.has(q.id),
+    ).length;
     const inquiryById = new Map(result.rows.map((row) => [row.id, row.inquiry]));
     const targets = result.quality
-      .filter((q) => q.issues.length > 0 && q.hasAssignee && !q.hasOpenRequest)
+      .filter(
+        (q) => q.issues.length > 0 && q.hasAssignee && !q.hasOpenRequest && recentIds.has(q.id),
+      )
       .map((q) => ({
         id: q.id,
         label: inquiryById.get(q.id) || "(제목 없음)",
@@ -288,12 +299,13 @@ export default function TicketsClient({
       }));
     if (targets.length === 0) {
       toast.success(
-        `${resolvedNote}보낼 미달 건이 없습니다. 이미 요청 중이거나 담당자가 없는 건은 제외됩니다.`,
+        `${resolvedNote}보낼 미달 건이 없습니다.${tooOldCount ? ` 30일 지난 ${tooOldCount}건은 보내지 않습니다.` : ""} 이미 요청 중이거나 담당자가 없는 건은 제외됩니다.`,
       );
       if (passing.resolved) startTransition(() => router.refresh());
       return;
     }
     if (passing.resolved) toast.success(resolvedNote.trim());
+    setReviewAllTooOld(tooOldCount);
     setReviewAllTargets(targets);
     setReviewAllConfirmOpen(true);
   }
@@ -589,7 +601,7 @@ export default function TicketsClient({
       <BulkConfirmDialog
         open={reviewAllConfirmOpen}
         title="전체 검토 · 수정 요청 보내기"
-        subtitle="해결 절차가 있는 전체 건을 점검했습니다. 사유는 각 건의 점검 결과로 자동 작성되고 담당자에게 알림이 갑니다."
+        subtitle={`해결 절차가 있는 전체 건을 점검했습니다.${reviewAllTooOld ? ` 30일 지난 ${reviewAllTooOld}건은 보내지 않습니다.` : ""} 사유는 각 건의 점검 결과로 자동 작성되고 담당자에게 알림이 갑니다.`}
         busy={reviewAllSending}
         confirmText={`${reviewAllTargets.length}건 보내기`}
         confirmColor="blue"
