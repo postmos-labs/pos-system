@@ -12,6 +12,7 @@ import {
   cancelTicketRevisionsForTickets,
   cancelAllOpenTicketRevisions,
 } from "./actions";
+import { fetchExportTargets } from "./exportActions";
 import { type QualityIssue } from "@/lib/resolutionQuality";
 import { useToast } from "@/components/ui/Toast";
 import {
@@ -84,6 +85,12 @@ export default function TicketsClient({
   const [cancelingRevision, setCancelingRevision] = useState(false);
   const [cancelAllConfirmOpen, setCancelAllConfirmOpen] = useState(false);
   const [cancelingAll, setCancelingAll] = useState(false);
+  const [reviewAllLoading, setReviewAllLoading] = useState(false);
+  const [reviewAllConfirmOpen, setReviewAllConfirmOpen] = useState(false);
+  const [reviewAllSending, setReviewAllSending] = useState(false);
+  const [reviewAllTargets, setReviewAllTargets] = useState<
+    { id: string; label: string; detail: string }[]
+  >([]);
   const [search, setSearch] = useState(initialSearch);
 
   const CHECK_MODE_KEY = "tickets:qualityCheck";
@@ -250,6 +257,61 @@ export default function TicketsClient({
     startTransition(() => router.refresh());
   }
 
+  // 전체 검토: 페이지 범위가 아니라 해결 절차가 있는 전체 건을 판정해 미달 건을 한 번에 보낸다.
+  // 판정과 대기 중 요청 여부는 CSV 내보내기와 같은 조회(fetchExportTargets)를 그대로 쓴다.
+  async function openReviewAll() {
+    setReviewAllLoading(true);
+    const result = await fetchExportTargets(true);
+    setReviewAllLoading(false);
+    if (result.error) {
+      toast.error(`전체 검토 실패: ${result.error}`);
+      return;
+    }
+    const inquiryById = new Map(result.rows.map((row) => [row.id, row.inquiry]));
+    const targets = result.quality
+      .filter((q) => q.issues.length > 0 && q.hasAssignee && !q.hasOpenRequest)
+      .map((q) => ({
+        id: q.id,
+        label: inquiryById.get(q.id) || "(제목 없음)",
+        detail: q.issues.map((issue) => issue.label).join(" · "),
+      }));
+    if (targets.length === 0) {
+      toast.success("보낼 미달 건이 없습니다. 이미 요청 중이거나 담당자가 없는 건은 제외됩니다.");
+      return;
+    }
+    setReviewAllTargets(targets);
+    setReviewAllConfirmOpen(true);
+  }
+
+  async function confirmReviewAll() {
+    setReviewAllSending(true);
+    let sent = 0;
+    let tooOld = 0;
+    let errorMessage: string | null = null;
+    for (let i = 0; i < reviewAllTargets.length; i += 200) {
+      const ids = reviewAllTargets.slice(i, i + 200).map((t) => t.id);
+      const result = await requestTicketRevisionsBulk(ids);
+      sent += result.sent;
+      tooOld += result.skipped.tooOld;
+      if (result.error) {
+        errorMessage = result.error;
+        break;
+      }
+    }
+    setReviewAllSending(false);
+    setReviewAllConfirmOpen(false);
+    if (errorMessage) {
+      toast.error(`수정 요청 발송 실패: ${errorMessage}${sent ? ` (${sent}건은 발송됨)` : ""}`);
+    } else {
+      toast.success(
+        `${sent}건에 수정 요청을 보냈습니다.${tooOld ? ` 30일 지난 ${tooOld}건은 제외했습니다.` : ""}`,
+      );
+    }
+    setReviewAllTargets([]);
+    setSelected(new Set());
+    startTransition(() => router.refresh());
+  }
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       {}
@@ -265,6 +327,17 @@ export default function TicketsClient({
               className="w-full text-sm border border-slate-200 rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          {isMaster && (
+            <button
+              type="button"
+              onClick={openReviewAll}
+              disabled={reviewAllLoading}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-amber-700 disabled:opacity-50"
+            >
+              <AlertTriangle size={13} />
+              {reviewAllLoading ? "검토 중..." : "전체 검토"}
+            </button>
+          )}
           {isMaster && openRequestTotal > 0 && (
             <button
               type="button"
@@ -496,6 +569,19 @@ export default function TicketsClient({
         items={[{ id: "all", label: `대기 중인 수정 요청 ${openRequestTotal}건 전체` }]}
         onCancel={() => setCancelAllConfirmOpen(false)}
         onConfirm={confirmCancelAll}
+      />
+
+      <BulkConfirmDialog
+        open={reviewAllConfirmOpen}
+        title="전체 검토 · 수정 요청 보내기"
+        subtitle="해결 절차가 있는 전체 건을 점검했습니다. 사유는 각 건의 점검 결과로 자동 작성되고 담당자에게 알림이 갑니다."
+        busy={reviewAllSending}
+        confirmText={`${reviewAllTargets.length}건 보내기`}
+        confirmColor="blue"
+        confirmQuestion={`미달 ${reviewAllTargets.length}건의 담당자에게 수정 요청을 보냅니다.`}
+        items={reviewAllTargets}
+        onCancel={() => setReviewAllConfirmOpen(false)}
+        onConfirm={confirmReviewAll}
       />
     </div>
   );
