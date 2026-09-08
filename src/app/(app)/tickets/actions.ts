@@ -327,6 +327,101 @@ export async function cancelTicketRevision(
   return { error: null, ...(warning ? { warning } : {}) };
 }
 
+export interface AutoResolveResult {
+  /** 지금 내용이 규칙을 통과하는지 (절차가 비어 있으면 false) */
+  passed: boolean;
+  labels: string[];
+  /** 이 건에 대기 중 수정 요청이 있었는지 */
+  hadOpenRequest: boolean;
+  /** 통과해서 대기 요청을 완료 처리했는지 */
+  resolved: boolean;
+  error: string | null;
+}
+
+// 담당자가 문의 내용이나 해결 절차를 저장한 직후 부른다. 지금 내용에 규칙을 돌려 통과하면
+// 대기 중 수정 요청을 자동으로 완료 처리한다. 마스터가 확인 완료를 누르러 가지 않아도 되게 하기 위해서다.
+// 미달이면 요청은 대기로 남고 사유만 돌려준다.
+export async function autoResolveTicketRevision(ticketId: string): Promise<AutoResolveResult> {
+  const fail = (error: string): AutoResolveResult => ({
+    passed: false,
+    labels: [],
+    hadOpenRequest: false,
+    resolved: false,
+    error,
+  });
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return fail("로그인이 필요합니다.");
+
+  const admin = createAdminClient();
+  const { data: ticket, error: ticketError } = await admin
+    .from("tickets")
+    .select("id, title, resolution_steps, merchant:merchants(business_name, owner_name)")
+    .eq("id", ticketId)
+    .single();
+  if (ticketError || !ticket) return fail(ticketError?.message ?? "인입내역을 찾을 수 없습니다.");
+
+  const rawMerchant = ticket.merchant as
+    | { business_name?: string | null; owner_name?: string | null }
+    | { business_name?: string | null; owner_name?: string | null }[]
+    | null;
+  const merchant = Array.isArray(rawMerchant) ? (rawMerchant[0] ?? null) : rawMerchant;
+  const steps = (ticket.resolution_steps as string | null) ?? "";
+  const issues = steps.trim()
+    ? inspectTicket({
+        title: (ticket.title as string | null) ?? "",
+        steps,
+        businessName: merchant?.business_name ?? null,
+        ownerName: merchant?.owner_name ?? null,
+      })
+    : [];
+  const passed = !!steps.trim() && issues.length === 0;
+  const labels = issues.map((issue) => issue.label);
+
+  const { data: openRows, error: openError } = await admin
+    .from("ticket_revision_requests")
+    .select("id")
+    .eq("ticket_id", ticketId)
+    .eq("status", "open");
+  if (openError) {
+    if (isMissingRevisionTable(openError)) {
+      return { passed, labels, hadOpenRequest: false, resolved: false, error: null };
+    }
+    return fail(openError.message);
+  }
+  const openIds = (openRows ?? []).map((row) => row.id as string);
+  if (openIds.length === 0 || !passed) {
+    return { passed, labels, hadOpenRequest: openIds.length > 0, resolved: false, error: null };
+  }
+
+  const { data: resolverProfile } = await supabase
+    .from("profiles")
+    .select("name")
+    .eq("id", user.id)
+    .single();
+
+  const { error: updateError } = await admin
+    .from("ticket_revision_requests")
+    .update({
+      status: "resolved",
+      resolved_by: user.id,
+      resolved_by_name: resolverProfile?.name ?? null,
+      resolved_at: new Date().toISOString(),
+      resolved_note: "고쳐서 품질 점검 통과 (자동 완료)",
+    })
+    .in("id", openIds)
+    .eq("status", "open");
+  if (updateError) return fail(updateError.message);
+
+  revalidatePath("/tickets");
+  revalidatePath("/tickets/revisions");
+  revalidatePath(`/tickets/${ticketId}`);
+  return { passed, labels, hadOpenRequest: true, resolved: true, error: null };
+}
+
 export async function requestTicketRevisionsBulk(ticketIds: string[]): Promise<BulkRevisionResult> {
   const emptySkipped = { noIssue: 0, noAssignee: 0, alreadyOpen: 0, tooOld: 0 };
 

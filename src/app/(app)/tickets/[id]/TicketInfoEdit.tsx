@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Ticket } from "@/types";
 import { AppSelect } from "@/components/ui/AppSelect";
@@ -10,6 +11,7 @@ import {
   MEMO_RESOLUTIONS,
   MEMO_RESOLUTION_LABEL,
 } from "@/app/(app)/merchants/merchant360";
+import { autoResolveTicketRevision, type AutoResolveResult } from "../actions";
 
 // 옛 작업 관리 시절 값("전화" 등)도 남아 있어 목록에 함께 둔다.
 const RECEPTION_CHANNELS = ["채널톡", "유선", "전화", "카카오톡", "문자", "방문", "온라인", "기타"];
@@ -39,7 +41,10 @@ function StatusDot({
 }
 
 export default function TicketInfoEdit({ ticket, canEdit }: Props) {
+  const router = useRouter();
+  const [qualityNote, setQualityNote] = useState<AutoResolveResult | null>(null);
   const [form, setForm] = useState({
+    title: ticket.title ?? "",
     reception_channel: ticket.reception_channel ?? "",
     issue_category: ticket.issue_category ?? "",
     resolution: ticket.resolution ?? "",
@@ -54,6 +59,12 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
 
   const save = useCallback(
     async (key: string, value: string | boolean) => {
+      // 문의 내용은 NOT NULL이라 비워서 저장할 수 없다. 빈 값이면 저장하지 않고 오류 표시만 한다.
+      if (key === "title" && typeof value === "string" && !value.trim()) {
+        setSaveError(key);
+        setTimeout(() => setSaveError(null), 3000);
+        return;
+      }
       setSaving(key);
       setSaved(null);
       setSaveError(null);
@@ -70,8 +81,15 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
       }
       setSaved(key);
       setTimeout(() => setSaved(null), 1500);
+      // 문의 내용과 해결 절차는 챗봇 품질 규칙의 대상이다. 저장 직후 서버가 다시 판정해
+      // 통과하면 대기 중 수정 요청을 자동으로 닫는다. 결과는 해결 절차 칸 아래에 보여준다.
+      if (key === "title" || key === "resolution_steps") {
+        const result = await autoResolveTicketRevision(ticket.id);
+        if (!result.error) setQualityNote(result);
+        if (key === "title" || result.resolved) router.refresh();
+      }
     },
-    [ticket.id],
+    [ticket.id, router],
   );
 
   function handleChange(key: string, value: string) {
@@ -87,6 +105,23 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
       <h2 className="text-sm font-semibold text-gray-700 mb-4">인입 정보</h2>
 
       <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+        <div className="col-span-2">
+          <p className="text-xs text-gray-400 mb-1">
+            문의 내용{" "}
+            <StatusDot field="title" saving={saving} saved={saved} saveError={saveError} />
+            <span className="ml-1 text-[10px] font-medium text-blue-600">챗봇 검색에 사용</span>
+          </p>
+          <input
+            type="text"
+            value={form.title}
+            disabled={!canEdit}
+            onChange={(e) => handleChange("title", e.target.value)}
+            onBlur={() => handleBlur("title")}
+            className="w-full border-0 border-b border-slate-200 bg-transparent px-0 py-1 text-sm text-slate-900 focus:outline-none focus:border-blue-400 transition-colors"
+            placeholder="무엇이 어떻게 되는지 (예: 카드 결제가 안 됨). 가맹점 이름·전화번호는 쓰지 마세요"
+          />
+        </div>
+
         {}
         <div>
           <p className="text-xs text-gray-400 mb-1">
@@ -221,6 +256,21 @@ export default function TicketInfoEdit({ ticket, canEdit }: Props) {
             className="w-full border-0 border-b border-slate-200 bg-transparent px-0 py-1 text-sm text-slate-900 focus:outline-none focus:border-blue-400 transition-colors resize-none"
             placeholder="같은 문제가 또 왔을 때 따라 할 순서 (가맹점 정보는 쓰지 마세요)"
           />
+          {qualityNote && form.resolution_steps.trim() && (
+            <p
+              className={`mt-1 text-[11px] font-medium ${
+                qualityNote.passed ? "text-green-700" : "text-amber-700"
+              }`}
+            >
+              {qualityNote.passed
+                ? qualityNote.resolved
+                  ? "품질 점검 통과 · 수정 요청이 완료 처리됐습니다"
+                  : "품질 점검 통과"
+                : `아직 미달: ${qualityNote.labels.join(" · ")}${
+                    qualityNote.hadOpenRequest ? " · 수정 요청은 대기로 남습니다" : ""
+                  }`}
+            </p>
+          )}
         </div>
       )}
 
