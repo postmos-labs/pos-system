@@ -263,6 +263,16 @@ export default async function TicketsPage({ searchParams }: Props) {
     }
   }
 
+  // 전체 취소 버튼에 쓸 대기 중 수정 요청 총건수. 페이지 범위가 아니라 전체를 센다. 마스터만 본다.
+  let openRequestTotal = 0;
+  if (p.role === "master") {
+    const { count: openCount } = await supabase
+      .from("ticket_revision_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "open");
+    openRequestTotal = openCount ?? 0;
+  }
+
   const TABS =
     p.role === "tech"
       ? [
@@ -429,6 +439,7 @@ export default async function TicketsPage({ searchParams }: Props) {
         quality={quality}
         isMaster={p.role === "master"}
         openRequestTicketIds={openRequestTicketIds}
+        openRequestTotal={openRequestTotal}
       />
 
       {}

@@ -10,6 +10,7 @@ import {
   deleteTickets,
   requestTicketRevisionsBulk,
   cancelTicketRevisionsForTickets,
+  cancelAllOpenTicketRevisions,
 } from "./actions";
 import { type QualityIssue } from "@/lib/resolutionQuality";
 import { useToast } from "@/components/ui/Toast";
@@ -60,12 +61,14 @@ export default function TicketsClient({
   quality = {},
   isMaster = false,
   openRequestTicketIds = [],
+  openRequestTotal = 0,
 }: {
   tickets: Ticket[];
   initialSearch?: string;
   quality?: Record<string, { issues: QualityIssue[]; hasOpenRequest: boolean }>;
   isMaster?: boolean;
   openRequestTicketIds?: string[];
+  openRequestTotal?: number;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -79,6 +82,8 @@ export default function TicketsClient({
   const [sendingRevision, setSendingRevision] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [cancelingRevision, setCancelingRevision] = useState(false);
+  const [cancelAllConfirmOpen, setCancelAllConfirmOpen] = useState(false);
+  const [cancelingAll, setCancelingAll] = useState(false);
   const [search, setSearch] = useState(initialSearch);
 
   const CHECK_MODE_KEY = "tickets:qualityCheck";
@@ -230,6 +235,21 @@ export default function TicketsClient({
     startTransition(() => router.refresh());
   }
 
+  async function confirmCancelAll() {
+    setCancelingAll(true);
+    const result = await cancelAllOpenTicketRevisions("");
+    setCancelingAll(false);
+    setCancelAllConfirmOpen(false);
+    if (result.error) {
+      toast.error(`수정 요청 전체 취소 실패: ${result.error}`);
+      return;
+    }
+    if (result.warning) toast.error(result.warning);
+    else toast.success(`대기 중이던 수정 요청 ${result.canceled}건을 모두 취소했습니다.`);
+    setSelected(new Set());
+    startTransition(() => router.refresh());
+  }
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       {}
@@ -245,6 +265,16 @@ export default function TicketsClient({
               className="w-full text-sm border border-slate-200 rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          {isMaster && openRequestTotal > 0 && (
+            <button
+              type="button"
+              onClick={() => setCancelAllConfirmOpen(true)}
+              disabled={cancelingAll}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50 disabled:opacity-50"
+            >
+              수정 요청 전체 취소 {openRequestTotal}건
+            </button>
+          )}
           {isMaster && (
             <button
               type="button"
@@ -453,6 +483,19 @@ export default function TicketsClient({
         items={cancelTargets.map((t) => ({ id: t.id, label: t.title }))}
         onCancel={() => setCancelConfirmOpen(false)}
         onConfirm={confirmCancelRevisions}
+      />
+
+      <BulkConfirmDialog
+        open={cancelAllConfirmOpen}
+        title="수정 요청 전체 취소"
+        subtitle="이 페이지뿐 아니라 대기 중인 수정 요청 전부를 취소하고 담당자에게 알림을 보냅니다."
+        busy={cancelingAll}
+        confirmText="전체 취소"
+        confirmColor="red"
+        confirmQuestion={`대기 중인 수정 요청 ${openRequestTotal}건을 모두 취소합니다.`}
+        items={[{ id: "all", label: `대기 중인 수정 요청 ${openRequestTotal}건 전체` }]}
+        onCancel={() => setCancelAllConfirmOpen(false)}
+        onConfirm={confirmCancelAll}
       />
     </div>
   );

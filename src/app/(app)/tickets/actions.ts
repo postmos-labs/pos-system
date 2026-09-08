@@ -684,3 +684,45 @@ export async function cancelTicketRevisionsForTickets(
     skipped: { notOpen: ticketIds.length - ticketsWithOpenRequest.size },
   };
 }
+
+const CANCEL_ALL_LIMIT = 1000;
+const CANCEL_ALL_BATCH = 200;
+
+// 대기 중인 수정 요청을 전부 취소한다. 판정 규칙이 바뀌어 예전 기준으로 나간 요청을 한 번에
+// 거둘 때 쓴다. 알림 발송과 취소 기록은 cancelTicketRevisionsBulk가 맡으므로 여기서는 대상만 모은다.
+export async function cancelAllOpenTicketRevisions(note: string): Promise<BulkCancelResult> {
+  const emptySkipped = { notOpen: 0 };
+
+  const authError = await requireMaster();
+  if (authError) return { canceled: 0, skipped: emptySkipped, error: authError };
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("ticket_revision_requests")
+    .select("id")
+    .eq("status", "open")
+    .limit(CANCEL_ALL_LIMIT);
+  if (error) {
+    if (isMissingRevisionTable(error)) {
+      return {
+        canceled: 0,
+        skipped: emptySkipped,
+        error: "수정 요청 마이그레이션(supabase/139)이 아직 적용되지 않았습니다.",
+      };
+    }
+    return { canceled: 0, skipped: emptySkipped, error: error.message };
+  }
+
+  const requestIds = ((data ?? []) as { id: string }[]).map((r) => r.id);
+  if (requestIds.length === 0) return { canceled: 0, skipped: emptySkipped, error: null };
+
+  let canceled = 0;
+  let warning: string | undefined;
+  for (let i = 0; i < requestIds.length; i += CANCEL_ALL_BATCH) {
+    const result = await cancelTicketRevisionsBulk(requestIds.slice(i, i + CANCEL_ALL_BATCH), note);
+    canceled += result.canceled;
+    if (result.error) return { canceled, skipped: emptySkipped, error: result.error };
+    if (result.warning && !warning) warning = result.warning;
+  }
+  return { canceled, skipped: emptySkipped, error: null, ...(warning ? { warning } : {}) };
+}
