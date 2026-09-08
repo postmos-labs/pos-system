@@ -834,3 +834,61 @@ export async function fetchRevisionRows(
   const result = await loadRevisionRows(supabase, status);
   return { ...result, error: null };
 }
+
+export interface ResolvePassingResult {
+  resolved: number;
+  error: string | null;
+}
+
+// 전체 검토가 부른다. 대기 중 수정 요청 가운데 지금 내용이 규칙을 통과하는 건을 완료로 닫는다.
+// 담당자가 고쳤는데 자동 완료가 돌기 전(배포 전)에 고친 건이 대기에 남아 있어 마스터가 하나씩 눌러야 했다.
+export async function resolvePassingTicketRevisions(): Promise<ResolvePassingResult> {
+  const authError = await requireMaster();
+  if (authError) return { resolved: 0, error: authError };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { resolved: 0, error: "로그인이 필요합니다." };
+
+  const { rows, schemaReady } = await loadRevisionRows(supabase, "open");
+  if (!schemaReady) {
+    return {
+      resolved: 0,
+      error: "수정 요청 마이그레이션(supabase/139)이 아직 적용되지 않았습니다.",
+    };
+  }
+  const passingIds = rows.filter((row) => row.current_quality === "pass").map((row) => row.id);
+  if (passingIds.length === 0) return { resolved: 0, error: null };
+
+  const { data: resolverProfile } = await supabase
+    .from("profiles")
+    .select("name")
+    .eq("id", user.id)
+    .single();
+
+  const admin = createAdminClient();
+  let resolved = 0;
+  for (let i = 0; i < passingIds.length; i += CHUNK_SIZE) {
+    const chunk = passingIds.slice(i, i + CHUNK_SIZE);
+    const { data, error } = await admin
+      .from("ticket_revision_requests")
+      .update({
+        status: "resolved",
+        resolved_by: user.id,
+        resolved_by_name: resolverProfile?.name ?? null,
+        resolved_at: new Date().toISOString(),
+        resolved_note: "전체 검토에서 품질 점검 통과 확인 (자동 완료)",
+      })
+      .in("id", chunk)
+      .eq("status", "open")
+      .select("id");
+    if (error) return { resolved, error: error.message };
+    resolved += (data ?? []).length;
+  }
+
+  revalidatePath("/tickets");
+  revalidatePath("/tickets/revisions");
+  return { resolved, error: null };
+}

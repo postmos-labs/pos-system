@@ -11,6 +11,7 @@ import {
   requestTicketRevisionsBulk,
   cancelTicketRevisionsForTickets,
   cancelAllOpenTicketRevisions,
+  resolvePassingTicketRevisions,
 } from "./actions";
 import { fetchExportTargets } from "./exportActions";
 import { type QualityIssue } from "@/lib/resolutionQuality";
@@ -261,12 +262,22 @@ export default function TicketsClient({
   // 판정과 대기 중 요청 여부는 CSV 내보내기와 같은 조회(fetchExportTargets)를 그대로 쓴다.
   async function openReviewAll() {
     setReviewAllLoading(true);
+    // 먼저 대기 중 요청 가운데 지금 통과하는 건을 완료로 닫는다. 그다음 미달 건을 모은다.
+    const passing = await resolvePassingTicketRevisions();
+    if (passing.error) {
+      setReviewAllLoading(false);
+      toast.error(`전체 검토 실패: ${passing.error}`);
+      return;
+    }
     const result = await fetchExportTargets(true);
     setReviewAllLoading(false);
     if (result.error) {
       toast.error(`전체 검토 실패: ${result.error}`);
       return;
     }
+    const resolvedNote = passing.resolved
+      ? `고쳐서 통과한 ${passing.resolved}건은 완료 처리했습니다. `
+      : "";
     const inquiryById = new Map(result.rows.map((row) => [row.id, row.inquiry]));
     const targets = result.quality
       .filter((q) => q.issues.length > 0 && q.hasAssignee && !q.hasOpenRequest)
@@ -276,9 +287,13 @@ export default function TicketsClient({
         detail: q.issues.map((issue) => issue.label).join(" · "),
       }));
     if (targets.length === 0) {
-      toast.success("보낼 미달 건이 없습니다. 이미 요청 중이거나 담당자가 없는 건은 제외됩니다.");
+      toast.success(
+        `${resolvedNote}보낼 미달 건이 없습니다. 이미 요청 중이거나 담당자가 없는 건은 제외됩니다.`,
+      );
+      if (passing.resolved) startTransition(() => router.refresh());
       return;
     }
+    if (passing.resolved) toast.success(resolvedNote.trim());
     setReviewAllTargets(targets);
     setReviewAllConfirmOpen(true);
   }
