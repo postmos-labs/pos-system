@@ -30,7 +30,7 @@ export function todayStamp(): string {
 /** CSV를 파일로 내려준다. 앞에 UTF-8 BOM을 붙여야 엑셀에서 한글이 안 깨진다. */
 export function downloadCsv(filename: string, headers: string[], rows: CsvCell[][]): void {
   const csv = toCsv(headers, rows);
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
