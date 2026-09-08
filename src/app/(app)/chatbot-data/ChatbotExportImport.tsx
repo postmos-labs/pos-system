@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, Copy, Download, Upload } from "lucide-react";
 import FormModal from "@/components/ui/FormModal";
 import { useToast } from "@/components/ui/Toast";
+import { downloadCsv } from "@/lib/csv";
 import {
   fetchExportTargets,
   importCuratedRows,
@@ -212,6 +213,18 @@ function ExportModal({ onClose, isMaster }: ExportModalProps) {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  // CSV는 검토용·외부 도구 투입용 사본이다. 정제 파이프라인(JSON → LLM → 가져오기)과 달리
+  // 내보냄 표시를 찍지 않는다 — 찍으면 다음 배치에서 빠져 정제되지 않은 채 묻힌다.
+  function handleDownloadCsv() {
+    if (!exportRows.length) return;
+    downloadCsv(
+      `인입내역_문제상황_해결절차_${today()}.csv`,
+      ["문제상황", "해결절차"],
+      exportRows.map((row) => [row.inquiry, row.steps]),
+    );
+    toast.success(`${exportRows.length}건을 CSV로 받았습니다.`);
+  }
+
   return (
     <FormModal title="인입내역 내보내기" onClose={onClose} maxWidthClassName="max-w-2xl">
       <div className="flex flex-col gap-4">
@@ -219,7 +232,7 @@ function ExportModal({ onClose, isMaster }: ExportModalProps) {
           기술지원 인입내역에 적힌 해결 절차를 파일로 받습니다. 정제를 마친 뒤{" "}
           <span className="font-semibold text-slate-800">정제 결과 가져오기</span>로 되돌려
           넣으세요. 가맹점 상호와 연락처는 파일에 담기지 않습니다. 내보내기 전에 해결 절차 품질을
-          자동으로 점검합니다.
+          자동으로 점검합니다. CSV는 검토용 사본이라 내보냄 표시가 남지 않습니다.
         </p>
 
         <label className="flex items-center gap-2 text-sm text-slate-700">
@@ -366,12 +379,21 @@ function ExportModal({ onClose, isMaster }: ExportModalProps) {
           </button>
           <button
             type="button"
+            onClick={handleDownloadCsv}
+            disabled={loading || !exportRows.length}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <Download size={14} />
+            CSV로 받기
+          </button>
+          <button
+            type="button"
             onClick={handleDownload}
             disabled={loading || !exportRows.length}
             className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           >
             <Download size={14} />
-            파일로 받기
+            JSON으로 받기
           </button>
         </div>
       </div>

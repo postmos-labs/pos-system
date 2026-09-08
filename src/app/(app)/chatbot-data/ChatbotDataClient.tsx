@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Download, Plus, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import FormModal from "@/components/ui/FormModal";
 import { useToast } from "@/components/ui/Toast";
 import type { Profile } from "@/types";
+import { downloadCsv, todayStamp } from "@/lib/csv";
 import ChatbotDataDetailDrawer from "./ChatbotDataDetailDrawer";
 import ChatbotExportImport from "./ChatbotExportImport";
 
@@ -158,6 +159,15 @@ export default function ChatbotDataClient({ rows, profile }: Props) {
 
   const selectedRow = localRows.find((row) => row.id === selectedId) ?? null;
 
+  function handleDownloadCsv() {
+    if (filteredRows.length === 0) return;
+    downloadCsv(
+      `챗봇데이터_${todayStamp()}.csv`,
+      ["문제상황", "해결방법"],
+      filteredRows.map((row) => [row.problem_situation, row.solution]),
+    );
+  }
+
   async function handleCreate(value: ChatbotDataFormValue) {
     setSubmitting(true);
     const supabase = createClient();
@@ -223,6 +233,15 @@ export default function ChatbotDataClient({ rows, profile }: Props) {
           <div className="mr-1 text-sm text-slate-500">
             전체 {filteredRows.length.toLocaleString()}건
           </div>
+          <button
+            type="button"
+            onClick={handleDownloadCsv}
+            disabled={filteredRows.length === 0}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
+          >
+            <Download size={14} />
+            CSV 다운로드
+          </button>
           <ChatbotExportImport
             isMaster={profile.role === "master"}
             onImported={(imported) => setLocalRows((previous) => [...imported, ...previous])}
