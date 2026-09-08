@@ -528,6 +528,8 @@ export default function InstallsClient({
   vanCounts = { all: null, toss: null, kicc: null },
 }: Props) {
   const canEdit = ["tech", "cs", "admin", "master"].includes(profile.role);
+  // 일정변경은 서버(requestInstallationStatusApproval)가 tech/admin/master만 받는다. cs는 버튼을 숨긴다.
+  const canReschedule = ["tech", "admin", "master"].includes(profile.role);
   const canDelete = profile.role === "admin" || profile.role === "master" || !!profile.can_delete;
   const toast = useToast();
   const router = useRouter();
@@ -2098,6 +2100,7 @@ export default function InstallsClient({
           key={activeDetailInst.id}
           installation={activeDetailInst}
           canEdit={canEdit}
+          canReschedule={canReschedule}
           canDelete={canDelete}
           profile={profile}
           draft={detailDraft}
@@ -2940,18 +2943,20 @@ export default function InstallsClient({
                               <ApprovalNoteTimeline notes={approvalNoteHistory[inst.id]!} />
                             </div>
                           )}
-                          {inst.status !== "completed" && inst.status !== "rejected" && (
-                            <button
-                              onClick={() => handleStatusChange(inst.id, "reschedule")}
-                              disabled={blocksApprovalRequest(
-                                profile,
-                                completionApprovals[inst.id]?.status,
-                              )}
-                              className="w-full text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 disabled:opacity-50 px-3 py-2 rounded-lg"
-                            >
-                              일정변경
-                            </button>
-                          )}
+                          {canReschedule &&
+                            inst.status !== "completed" &&
+                            inst.status !== "rejected" && (
+                              <button
+                                onClick={() => handleStatusChange(inst.id, "reschedule")}
+                                disabled={blocksApprovalRequest(
+                                  profile,
+                                  completionApprovals[inst.id]?.status,
+                                )}
+                                className="w-full text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 disabled:opacity-50 px-3 py-2 rounded-lg"
+                              >
+                                일정변경
+                              </button>
+                            )}
                           {inst.status !== "completed" && (
                             <button
                               onClick={() => setTransitModal({ id: inst.id, eta: "" })}

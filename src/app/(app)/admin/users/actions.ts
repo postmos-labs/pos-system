@@ -49,6 +49,10 @@ export async function createUserAccount(form: {
   if (password.length < 4) return { error: "비밀번호는 4자 이상이어야 합니다." };
   if (!ROLES.includes(role)) return { error: "올바르지 않은 역할입니다." };
   if (!TEAMS.includes(team)) return { error: "올바르지 않은 팀입니다." };
+  if (role === "master") {
+    const masterError = await requireMaster();
+    if (masterError) return { error: "마스터 계정은 마스터만 만들 수 있습니다." };
+  }
 
   const supabase = createAdminClient();
 
@@ -149,6 +153,11 @@ export async function setUserRole(userId: string, role: string) {
   if (user?.id === userId) return { error: "본인 역할은 변경할 수 없습니다." };
 
   const supabase = createAdminClient();
+  const { data: target } = await supabase.from("profiles").select("role").eq("id", userId).single();
+  if (role === "master" || target?.role === "master") {
+    const masterError = await requireMaster();
+    if (masterError) return { error: "마스터 역할 부여·해제는 마스터만 할 수 있습니다." };
+  }
   const { error } = await supabase.from("profiles").update({ role }).eq("id", userId);
   if (error) return { error: error.message };
 

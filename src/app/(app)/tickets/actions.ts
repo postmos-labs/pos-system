@@ -359,10 +359,26 @@ export async function autoResolveTicketRevision(ticketId: string): Promise<AutoR
   const admin = createAdminClient();
   const { data: ticket, error: ticketError } = await admin
     .from("tickets")
-    .select("id, title, resolution_steps, merchant:merchants(business_name, owner_name)")
+    .select(
+      "id, title, resolution_steps, sales_id, cs_id, tech_id, merchant:merchants(business_name, owner_name)",
+    )
     .eq("id", ticketId)
     .single();
   if (ticketError || !ticket) return fail(ticketError?.message ?? "인입내역을 찾을 수 없습니다.");
+
+  const { data: callerProfile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  const isAssignee = [
+    ticket.sales_id as string | null,
+    ticket.cs_id as string | null,
+    ticket.tech_id as string | null,
+  ].includes(user.id);
+  if (!isAssignee && callerProfile?.role !== "master") {
+    return fail("이 건의 담당자나 마스터만 처리할 수 있습니다.");
+  }
 
   const rawMerchant = ticket.merchant as
     | { business_name?: string | null; owner_name?: string | null }

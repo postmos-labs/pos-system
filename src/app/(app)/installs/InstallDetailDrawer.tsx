@@ -71,6 +71,7 @@ export interface InstallDetailDraft {
 interface Props {
   installation: Installation;
   canEdit: boolean;
+  canReschedule: boolean;
   canDelete: boolean;
   profile: Profile;
   draft: InstallDetailDraft | null;
@@ -216,6 +217,7 @@ function FranchiseField({ label, value }: { label: string; value?: string | null
 export default function InstallDetailDrawer({
   installation,
   canEdit,
+  canReschedule,
   canDelete,
   profile,
   draft,
@@ -254,7 +256,7 @@ export default function InstallDetailDrawer({
     ((approval.status === "requested" && canApproveFirstBy(profile)) ||
       (canApproveFinalBy(profile) && approval.status === "responsible_approved"));
   const showReschedule =
-    canEdit && installation.status !== "completed" && installation.status !== "rejected";
+    canReschedule && installation.status !== "completed" && installation.status !== "rejected";
   // 표(데스크톱)에는 이 버튼과 동등한 단독 조작이 없다 — "이동중" 상태로 select를 바꾸면
   // 같은 setTransitModal이 열리는 것으로 갈음한다. 모바일카드(mineOnly 전용, "도착시간 알림
   // 발송" 버튼)에만 있던 조건을 그대로 옮겼다.
