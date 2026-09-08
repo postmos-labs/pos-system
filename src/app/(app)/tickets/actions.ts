@@ -633,3 +633,54 @@ export async function cancelTicketRevisionsBulk(
   revalidatePath("/tickets");
   return { canceled, skipped, error: null, ...(warning ? { warning } : {}) };
 }
+
+export async function cancelTicketRevisionsForTickets(
+  ticketIds: string[],
+  note: string,
+): Promise<BulkCancelResult> {
+  const emptySkipped = { notOpen: 0 };
+
+  const authError = await requireMaster();
+  if (authError) return { canceled: 0, skipped: emptySkipped, error: authError };
+
+  if (!ticketIds.length) return { canceled: 0, skipped: emptySkipped, error: null };
+  if (ticketIds.length > 200) {
+    return { canceled: 0, skipped: emptySkipped, error: "한 번에 200건까지만 취소할 수 있습니다." };
+  }
+
+  const admin = createAdminClient();
+
+  const openRequests: { id: string; ticket_id: string }[] = [];
+  for (let i = 0; i < ticketIds.length; i += CHUNK_SIZE) {
+    const chunk = ticketIds.slice(i, i + CHUNK_SIZE);
+    const { data, error } = await admin
+      .from("ticket_revision_requests")
+      .select("id, ticket_id")
+      .eq("status", "open")
+      .in("ticket_id", chunk);
+    if (error) {
+      if (isMissingRevisionTable(error)) {
+        return {
+          canceled: 0,
+          skipped: emptySkipped,
+          error: "수정 요청 마이그레이션(supabase/139)이 아직 적용되지 않았습니다.",
+        };
+      }
+      return { canceled: 0, skipped: emptySkipped, error: error.message };
+    }
+    if (data) openRequests.push(...data);
+  }
+
+  if (openRequests.length === 0) {
+    return { canceled: 0, skipped: { notOpen: ticketIds.length }, error: null };
+  }
+
+  const requestIds = openRequests.map((r) => r.id);
+  const ticketsWithOpenRequest = new Set(openRequests.map((r) => r.ticket_id));
+
+  const result = await cancelTicketRevisionsBulk(requestIds, note);
+  return {
+    ...result,
+    skipped: { notOpen: ticketIds.length - ticketsWithOpenRequest.size },
+  };
+}

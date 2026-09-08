@@ -6,7 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { AlertTriangle, ChevronRight, Search } from "lucide-react";
-import { deleteTickets, requestTicketRevisionsBulk } from "./actions";
+import {
+  deleteTickets,
+  requestTicketRevisionsBulk,
+  cancelTicketRevisionsForTickets,
+} from "./actions";
 import { type QualityIssue } from "@/lib/resolutionQuality";
 import { useToast } from "@/components/ui/Toast";
 import {
@@ -55,21 +59,26 @@ export default function TicketsClient({
   initialSearch = "",
   quality = {},
   isMaster = false,
+  openRequestTicketIds = [],
 }: {
   tickets: Ticket[];
   initialSearch?: string;
   quality?: Record<string, { issues: QualityIssue[]; hasOpenRequest: boolean }>;
   isMaster?: boolean;
+  openRequestTicketIds?: string[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const toast = useToast();
+  const openRequestSet = new Set(openRequestTicketIds);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [revisionConfirmOpen, setRevisionConfirmOpen] = useState(false);
   const [sendingRevision, setSendingRevision] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [cancelingRevision, setCancelingRevision] = useState(false);
   const [search, setSearch] = useState(initialSearch);
 
   const CHECK_MODE_KEY = "tickets:qualityCheck";
@@ -131,13 +140,18 @@ export default function TicketsClient({
 
   // 미달이면서 아직 대기 중인 수정 요청이 없는 건만 일괄 발송 대상이 된다.
   const revisionTargets = filteredTickets.filter(
-    (t) => selected.has(t.id) && quality[t.id] && !quality[t.id].hasOpenRequest,
+    (t) => selected.has(t.id) && quality[t.id] && !openRequestSet.has(t.id),
   );
 
   // 발송 버튼은 건을 골라야 나타난다. 고르기 전에도 미달이 있다는 사실은 보여야 하므로
   // 목록 위에 상시 안내 줄을 둔다.
   const flaggedTickets = filteredTickets.filter((t) => quality[t.id]);
-  const sendableFlagged = flaggedTickets.filter((t) => !quality[t.id].hasOpenRequest);
+  const sendableFlagged = flaggedTickets.filter((t) => !openRequestSet.has(t.id));
+
+  // 선택한 건 중 대기 중인 수정 요청이 걸린 것. 품질 점검을 켜지 않아도 마스터는 취소할 수 있어야 한다.
+  const cancelTargets = filteredTickets.filter(
+    (t) => selected.has(t.id) && openRequestSet.has(t.id),
+  );
 
   function selectFlagged() {
     setSelected(new Set(sendableFlagged.map((t) => t.id)));
@@ -194,6 +208,24 @@ export default function TicketsClient({
         ? `${result.sent}건을 보냈습니다. 건너뜀 — ${reasons.join(" · ")}`
         : `${result.sent}건을 보냈습니다.`,
     );
+    setSelected(new Set());
+    startTransition(() => router.refresh());
+  }
+
+  async function confirmCancelRevisions() {
+    setCancelingRevision(true);
+    const result = await cancelTicketRevisionsForTickets(
+      cancelTargets.map((t) => t.id),
+      "",
+    );
+    setCancelingRevision(false);
+    setCancelConfirmOpen(false);
+    if (result.error) {
+      toast.error(`수정 요청 취소 실패: ${result.error}`);
+      return;
+    }
+    if (result.warning) toast.error(result.warning);
+    else toast.success(`${result.canceled}건의 수정 요청을 취소했습니다.`);
     setSelected(new Set());
     startTransition(() => router.refresh());
   }
@@ -255,6 +287,16 @@ export default function TicketsClient({
           onDelete={handleDelete}
           onCancel={() => setSelected(new Set())}
         >
+          {isMaster && cancelTargets.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setCancelConfirmOpen(true)}
+              disabled={cancelingRevision}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
+            >
+              수정 요청 취소 {cancelTargets.length}건
+            </button>
+          )}
           {showQuality && revisionTargets.length > 0 && (
             <button
               type="button"
@@ -337,7 +379,7 @@ export default function TicketsClient({
                       </Badge>
                     </span>
                   )}
-                  {showQuality && quality[ticket.id]?.hasOpenRequest && (
+                  {isMaster && openRequestSet.has(ticket.id) && (
                     <Badge colorClass="bg-slate-100 text-slate-500">수정 요청 대기</Badge>
                   )}
                 </div>
@@ -398,6 +440,19 @@ export default function TicketsClient({
         }))}
         onCancel={() => setRevisionConfirmOpen(false)}
         onConfirm={confirmRevisionRequests}
+      />
+
+      <BulkConfirmDialog
+        open={cancelConfirmOpen}
+        title="수정 요청 취소"
+        subtitle="선택한 건에 걸린 대기 중 수정 요청을 취소하고 담당자에게 알림을 보냅니다."
+        busy={cancelingRevision}
+        confirmText="취소하기"
+        confirmColor="blue"
+        confirmQuestion="선택한 건의 수정 요청을 취소합니다."
+        items={cancelTargets.map((t) => ({ id: t.id, label: t.title }))}
+        onCancel={() => setCancelConfirmOpen(false)}
+        onConfirm={confirmCancelRevisions}
       />
     </div>
   );

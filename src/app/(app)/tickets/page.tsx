@@ -245,16 +245,19 @@ export default async function TicketsPage({ searchParams }: Props) {
     quality[row.id as string] = { issues, hasOpenRequest: false };
   }
 
-  // ticket_revision_requests(139번 마이그레이션)가 아직 없는 환경에서는 에러를 무시하고
-  // 전부 false로 둔다 — 페이지가 죽으면 안 된다.
-  const flaggedIds = Object.keys(quality);
-  if (flaggedIds.length > 0) {
+  // 이 페이지 티켓 중 대기 중인 수정 요청이 걸린 것. 미달 여부와 무관하게 본다 —
+  // 고쳐서 통과했지만 아직 안 닫힌 건도 목록에서 취소할 수 있어야 한다.
+  // ticket_revision_requests(139번 마이그레이션)가 아직 없는 환경에서는 에러를 무시하고 빈 값으로 둔다.
+  const pageTicketIds = rows.map((row) => row.id as string);
+  const openRequestTicketIds: string[] = [];
+  if (pageTicketIds.length > 0) {
     const { data: openRows } = await supabase
       .from("ticket_revision_requests")
       .select("ticket_id")
       .eq("status", "open")
-      .in("ticket_id", flaggedIds);
+      .in("ticket_id", pageTicketIds);
     for (const r of (openRows ?? []) as { ticket_id: string }[]) {
+      if (!openRequestTicketIds.includes(r.ticket_id)) openRequestTicketIds.push(r.ticket_id);
       if (quality[r.ticket_id]) quality[r.ticket_id].hasOpenRequest = true;
     }
   }
@@ -419,6 +422,7 @@ export default async function TicketsPage({ searchParams }: Props) {
         initialSearch={searchTerm}
         quality={quality}
         isMaster={p.role === "master"}
+        openRequestTicketIds={openRequestTicketIds}
       />
 
       {}
