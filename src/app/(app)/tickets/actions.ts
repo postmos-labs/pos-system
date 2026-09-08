@@ -197,6 +197,127 @@ export async function resolveTicketRevision(requestId: string, note: string) {
   return { error: null };
 }
 
+// 23514: CHECK 위반(canceled 값 미허용) / 42703·PGRST204: 컬럼 없음.
+// 142번 마이그레이션(canceled_* 컬럼, status CHECK 확장)이 아직 적용되지 않은 환경에서 쓴다.
+function isMissingCancelSchema(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "23514" ||
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /canceled_/i.test(error.message ?? "")
+  );
+}
+
+export async function cancelTicketRevision(
+  requestId: string,
+  note: string,
+): Promise<{ error: string | null; warning?: string }> {
+  const authError = await requireMaster();
+  if (authError) return { error: authError };
+
+  const trimmedNote = note.trim();
+  if (trimmedNote.length > 300) return { error: "사유는 300자 이내로 입력해주세요." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "로그인이 필요합니다." };
+
+  const { data: cancelerProfile } = await supabase
+    .from("profiles")
+    .select("name")
+    .eq("id", user.id)
+    .single();
+
+  const admin = createAdminClient();
+
+  const { data: request, error: fetchError } = await admin
+    .from("ticket_revision_requests")
+    .select("id, ticket_id, status, ticket:tickets(title, sales_id, cs_id, tech_id)")
+    .eq("id", requestId)
+    .single();
+  if (fetchError) {
+    if (isMissingRevisionTable(fetchError)) {
+      return { error: "수정 요청 마이그레이션(supabase/139)이 아직 적용되지 않았습니다." };
+    }
+    return { error: "수정 요청을 찾을 수 없습니다." };
+  }
+  if (!request) return { error: "수정 요청을 찾을 수 없습니다." };
+  if (request.status !== "open") return { error: "이미 처리된 요청입니다." };
+
+  const rawTicket = request.ticket as
+    | {
+        title: string | null;
+        sales_id: string | null;
+        cs_id: string | null;
+        tech_id: string | null;
+      }
+    | {
+        title: string | null;
+        sales_id: string | null;
+        cs_id: string | null;
+        tech_id: string | null;
+      }[]
+    | null;
+  const ticket = Array.isArray(rawTicket) ? rawTicket[0] : rawTicket;
+
+  const { data, error } = await admin
+    .from("ticket_revision_requests")
+    .update({
+      status: "canceled",
+      canceled_by: user.id,
+      canceled_by_name: cancelerProfile?.name ?? null,
+      canceled_at: new Date().toISOString(),
+      canceled_note: trimmedNote || null,
+    })
+    .eq("id", requestId)
+    .eq("status", "open")
+    .select("id");
+  if (error) {
+    if (isMissingCancelSchema(error)) {
+      return { error: "수정 요청 취소 마이그레이션(supabase/142)이 아직 적용되지 않았습니다." };
+    }
+    if (isMissingRevisionTable(error)) {
+      return { error: "수정 요청 마이그레이션(supabase/139)이 아직 적용되지 않았습니다." };
+    }
+    return { error: error.message };
+  }
+  if (!data || data.length === 0) return { error: "이미 처리된 요청입니다." };
+
+  const ticketId = request.ticket_id as string;
+  const ticketTitle = ticket?.title ?? "";
+  const recipientIds = Array.from(
+    new Set(
+      [ticket?.sales_id, ticket?.cs_id, ticket?.tech_id].filter(
+        (id): id is string => !!id && id !== user.id,
+      ),
+    ),
+  );
+
+  let warning: string | undefined;
+  if (recipientIds.length > 0) {
+    const { error: notifyError } = await admin.from("notifications").insert(
+      recipientIds.map((userId) => ({
+        user_id: userId,
+        ticket_id: ticketId,
+        type: "ticket_revision_canceled",
+        title: `수정 요청 취소: ${ticketTitle}`,
+        body: trimmedNote || "마스터가 수정 요청을 거둬들였습니다. 이 건은 고치지 않아도 됩니다.",
+      })),
+    );
+    if (notifyError) {
+      warning = `취소는 됐지만 알림 발송에 실패했습니다: ${notifyError.message}`;
+    }
+  }
+
+  revalidatePath("/tickets/revisions");
+  revalidatePath(`/tickets/${ticketId}`);
+  revalidatePath("/tickets");
+  return { error: null, ...(warning ? { warning } : {}) };
+}
+
 export async function requestTicketRevisionsBulk(ticketIds: string[]): Promise<BulkRevisionResult> {
   const emptySkipped = { noIssue: 0, noAssignee: 0, alreadyOpen: 0, tooOld: 0 };
 
