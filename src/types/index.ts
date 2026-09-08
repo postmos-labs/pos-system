@@ -111,6 +111,8 @@ export interface Ticket {
   progress_note?: string;
   // 기술지원 건에서만 쓰는 재사용 가능한 해결 절차(챗봇 학습 자료)
   resolution_steps?: string;
+  // 기술지원 건의 AS 응대 원칙 체크리스트 — 항목 id → true (src/lib/asChecklist.ts)
+  as_checklist?: Record<string, boolean> | null;
   // 해결 절차를 챗봇 학습용으로 내보낸 시각 — 다음 배치에서 같은 건을 또 내보내지 않기 위한 표시
   chatbot_exported_at?: string;
   document_status?: string;

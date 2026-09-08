@@ -21,6 +21,7 @@ import TicketActions from "./TicketActions";
 import TicketMerchantCard from "./TicketMerchantCard";
 import TicketLogs from "./TicketLogs";
 import TicketInfoEdit from "./TicketInfoEdit";
+import TicketAsChecklist from "./TicketAsChecklist";
 import RevisionRequestButton from "./RevisionRequestButton";
 
 interface Props {
@@ -150,6 +151,12 @@ export default async function TicketDetailPage({ params }: Props) {
         ticket={ticket as any}
         canEdit={["admin", "master", "sales", "cs", "tech"].includes((profile as Profile).role)}
       />
+
+      {ticket.team === "tech" && (
+        <TicketAsChecklist
+          checklist={(ticket as { as_checklist?: Record<string, boolean> | null }).as_checklist}
+        />
+      )}
 
       {}
       <TicketActions ticket={ticket as any} profile={profile as Profile} />

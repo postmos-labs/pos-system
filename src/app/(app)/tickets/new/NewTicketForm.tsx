@@ -23,6 +23,11 @@ import {
   MEMO_RESOLUTIONS,
   MEMO_RESOLUTION_LABEL,
 } from "@/app/(app)/merchants/merchant360";
+import {
+  AS_CHECKLIST_SECTIONS,
+  AS_CHECKLIST_ITEM_IDS,
+  isAsChecklistComplete,
+} from "@/lib/asChecklist";
 
 interface Props {
   salesId: string;
@@ -57,6 +62,7 @@ const DROPPED_COLUMN_LABEL: Record<string, string> = {
   issue_category: "문제 유형",
   resolution: "해결 방식",
   is_repeat: "반복 여부",
+  as_checklist: "AS 체크리스트",
 };
 
 // 마이그레이션(123 team / 124 AS 구분 / 125 reception_channel·progress_note)이 아직 적용되지
@@ -85,6 +91,13 @@ function missingColumnName(error: { message?: string } | null): string | null {
 export default function NewTicketForm({ salesId, role }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  // AS 응대 원칙 체크리스트 — 가맹점 360 메모의 AS 유형과 같은 항목. 기술지원 건은 전부 확인해야 등록된다.
+  const [asChecklist, setAsChecklist] = useState<Record<string, boolean>>({});
+  const asChecklistComplete = isAsChecklistComplete(asChecklist);
+  const asCheckedCount = AS_CHECKLIST_ITEM_IDS.filter((id) => asChecklist[id] === true).length;
+  function toggleChecklistItem(id: string) {
+    setAsChecklist((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
   const [form, setForm] = useState<{
     business_name: string;
     phone: string;
@@ -179,9 +192,10 @@ export default function NewTicketForm({ salesId, role }: Props) {
   // tickets.merchant_id가 NOT NULL이라 가맹점을 정하기 전에는 저장할 수 없다.
   const merchantChosen = !!linkedMerchant || (creatingNew && !!form.business_name.trim());
 
-  // 기술지원팀 인입은 AS 구분 3종을 모두 선택해야 등록할 수 있다.
+  // 기술지원팀 인입은 AS 구분 3종과 체크리스트를 모두 채워야 등록할 수 있다.
   const asIncomplete =
-    form.team === "tech" && (!form.issue_category || !form.resolution || form.is_repeat === null);
+    form.team === "tech" &&
+    (!form.issue_category || !form.resolution || form.is_repeat === null || !asChecklistComplete);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -248,6 +262,7 @@ export default function NewTicketForm({ salesId, role }: Props) {
             resolution: form.resolution,
             is_repeat: form.is_repeat,
             resolution_steps: form.resolution_steps.trim() || null,
+            as_checklist: asChecklist,
           }
         : {}),
     };
@@ -616,6 +631,48 @@ export default function NewTicketForm({ salesId, role }: Props) {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-amber-700">AS 응대 원칙 체크리스트 *</p>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      asChecklistComplete
+                        ? "bg-green-100 text-green-700"
+                        : "bg-white text-amber-700 border border-amber-200"
+                    }`}
+                  >
+                    {asCheckedCount}/{AS_CHECKLIST_ITEM_IDS.length}
+                  </span>
+                </div>
+                <div className="mt-2 max-h-72 space-y-3 overflow-y-auto">
+                  {AS_CHECKLIST_SECTIONS.map((section) => (
+                    <div key={section.id}>
+                      <p className="mb-1 text-xs font-bold text-slate-700">{section.title}</p>
+                      <ul className="space-y-1">
+                        {section.items.map((item) => (
+                          <li key={item.id}>
+                            <label className="flex cursor-pointer items-start gap-2 text-xs text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={asChecklist[item.id] === true}
+                                onChange={() => toggleChecklistItem(item.id)}
+                                className="mt-0.5 size-3.5 shrink-0"
+                              />
+                              <span>{item.label}</span>
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+                {!asChecklistComplete && (
+                  <p className="mt-2 text-[11px] font-semibold text-red-500">
+                    전 항목을 확인해야 등록할 수 있습니다.
+                  </p>
+                )}
               </div>
             </>
           )}
