@@ -10,6 +10,8 @@ import {
 } from "@/lib/auth/require-admin";
 import { revalidatePath } from "next/cache";
 import { inspectTicket, composeRevisionMessage } from "@/lib/resolutionQuality";
+import { loadRevisionRows, type RevisionStatusFilter } from "./revisionRows";
+import type { RevisionRow } from "./revisions/RevisionsClient";
 
 const CHUNK_SIZE = 100;
 
@@ -725,4 +727,15 @@ export async function cancelAllOpenTicketRevisions(note: string): Promise<BulkCa
     if (result.warning && !warning) warning = result.warning;
   }
   return { canceled, skipped: emptySkipped, error: null, ...(warning ? { warning } : {}) };
+}
+
+// 인입내역의 "수정 요청 내역" 상세창이 쓴다. 현황 페이지와 같은 조립 함수를 써서 판정이 같다.
+export async function fetchRevisionRows(
+  status: RevisionStatusFilter,
+): Promise<{ rows: RevisionRow[]; schemaReady: boolean; openCount: number; error: string | null }> {
+  const authError = await requireMaster();
+  if (authError) return { rows: [], schemaReady: true, openCount: 0, error: authError };
+  const supabase = await createClient();
+  const result = await loadRevisionRows(supabase, status);
+  return { ...result, error: null };
 }

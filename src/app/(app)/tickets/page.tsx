@@ -7,6 +7,7 @@ import TicketsClient from "./TicketsClient";
 import AuthorStats, { type AuthorStatRange, type AuthorStatRow } from "./AuthorStats";
 import MyRevisionRequests, { type MyRevisionRow } from "./MyRevisionRequests";
 import ExportCsvButton from "./ExportCsvButton";
+import RevisionRequestsButton from "./RevisionRequestsButton";
 import { inspectTicket, type QualityIssue } from "@/lib/resolutionQuality";
 
 // 42P01: relation does not exist / PGRST205: PostgREST 스키마 캐시에 표가 없음.
@@ -351,6 +352,7 @@ export default async function TicketsPage({ searchParams }: Props) {
           <p className="text-slate-500 text-sm mt-1">총 {totalCount}건</p>
         </div>
         <div className="flex items-center gap-2">
+          {p.role === "master" && <RevisionRequestsButton openCount={openRequestTotal} />}
           {(p.role === "sales" ||
             p.role === "cs" ||
             p.role === "tech" ||
