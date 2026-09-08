@@ -610,6 +610,10 @@ export default function InternetClient({ rows }: Props) {
               });
               const data = await res.json();
               if (!data.ok) toast.error("메시지 발송 실패: " + data.error);
+              else if (data.sent === false)
+                toast.warning(
+                  "알림톡이 발송되지 않았습니다 (연락처 없음 또는 템플릿 미설정). 고객에게 직접 안내해주세요.",
+                );
             } catch {
               toast.error("메시지 발송 실패");
             }

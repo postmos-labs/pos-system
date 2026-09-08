@@ -46,6 +46,14 @@ export async function notifyAndLogFranchiseStatus(
       toast.error(`알림톡 발송 실패: ${json.error ?? res.status} (상태는 변경됨)`);
       return;
     }
+    const json = await res.json().catch(() => ({}));
+    if (json.sent === false) {
+      // 번호가 없거나 템플릿이 설정되지 않아 발송 자체가 안 된 경우. 이력을 남기면 직원이 안내가 나간 줄 안다.
+      toast.warning(
+        "알림톡이 발송되지 않았습니다 (연락처 없음 또는 템플릿 미설정). 고객에게 직접 안내해주세요.",
+      );
+      return;
+    }
     const supabase = createClient();
     await supabase.from("franchise_application_logs").insert({
       franchise_application_id: franchiseId,

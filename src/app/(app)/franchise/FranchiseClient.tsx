@@ -1127,6 +1127,7 @@ export default function FranchiseClient({
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(true);
   const [bulkStatusModal, setBulkStatusModal] = useState(false);
   const [bulkStatus, setBulkStatus] = useState<FranchiseStatus | "">("");
+  const [bulkSendNotify, setBulkSendNotify] = useState(true);
   const [bulkChanging, setBulkChanging] = useState(false);
   const [bulkStatusConfirmOpen, setBulkStatusConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -1835,6 +1836,13 @@ export default function FranchiseClient({
           toast.error(
             `서류 안내 발송 실패: ${json.error ?? res.status} (접수는 등록됨 — 고객에게 직접 안내해주세요)`,
           );
+        } else {
+          const json = await res.json().catch(() => ({}));
+          if (json.sent === false) {
+            toast.warning(
+              "서류 안내가 발송되지 않았습니다 (연락처 없음 또는 템플릿 미설정). 고객에게 직접 안내해주세요.",
+            );
+          }
         }
       } catch {
         toast.error("서류 안내 발송에 실패했습니다. (접수는 등록됨 — 고객에게 직접 안내해주세요)");
@@ -1863,7 +1871,7 @@ export default function FranchiseClient({
     sendNotify: boolean,
     docCase?: DocCase,
     cancelMemo?: string,
-  ) {
+  ): Promise<boolean> {
     setBusyId(row.id);
     const supabase = createClient();
     const patch: Record<string, unknown> = { status };
@@ -1881,7 +1889,7 @@ export default function FranchiseClient({
     if (error) {
       setBusyId(null);
       toast.error("상태 변경 실패: " + error.message);
-      return;
+      return false;
     }
 
     await supabase.from("franchise_application_logs").insert({
@@ -1917,6 +1925,7 @@ export default function FranchiseClient({
           : r,
       ),
     );
+    return true;
   }
 
   async function updateApplicantType(row: FranchiseApplication, applicantType: ApplicantType) {
@@ -2214,37 +2223,25 @@ export default function FranchiseClient({
   async function handleBulkStatusChange() {
     if (!bulkStatus) return;
     setBulkChanging(true);
-    const supabase = createClient();
-    const ids = [...selected];
-    const rowsBefore = localRows.filter((r) => ids.includes(r.id));
-    const { error } = await supabase
-      .from("franchise_applications")
-      .update({ status: bulkStatus })
-      .in("id", ids);
-    if (error) {
-      setBulkChanging(false);
-      toast.error("일괄 변경 실패: " + error.message);
-      return;
-    }
-    await supabase.from("franchise_application_logs").insert(
-      rowsBefore.map((r) => ({
-        franchise_application_id: r.id,
-        user_id: currentUserId,
-        from_status: r.status,
-        to_status: bulkStatus,
-      })),
-    );
-    setBulkChanging(false);
-    const idSet = new Set(ids);
+    // 단건 변경과 같은 경로를 탄다. 따로 update하면 doc_template과 알림톡 부수효과가 빠진다.
     const status = bulkStatus;
-    setLocalRows((prev) =>
-      prev.map((r) =>
-        idSet.has(r.id) ? { ...r, status, updated_at: new Date().toISOString() } : r,
-      ),
-    );
+    const rowsBefore = localRows.filter((r) => selected.has(r.id));
+    let changed = 0;
+    for (const row of rowsBefore) {
+      const docCase =
+        status === "doc_waiting" ? docCaseOf(row.owner_name, row.business_name) : undefined;
+      const ok = await updateStatus(row, status, bulkSendNotify, docCase);
+      if (ok) changed += 1;
+    }
+    setBulkChanging(false);
     setBulkStatusModal(false);
     setBulkStatus("");
     setSelected(new Set());
+    if (changed < rowsBefore.length) {
+      toast.warning(`${changed}건 변경, ${rowsBefore.length - changed}건 실패했습니다.`);
+    } else {
+      toast.success(`${changed}건의 상태를 변경했습니다.`);
+    }
   }
 
   function requestTransferApproval(row: FranchiseApplication) {
@@ -2773,6 +2770,15 @@ export default function FranchiseClient({
                 })),
               ]}
             />
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={bulkSendNotify}
+                onChange={(e) => setBulkSendNotify(e.target.checked)}
+                className="h-4 w-4 accent-blue-600"
+              />
+              고객에게 알림톡 발송 (단건 변경과 같은 규칙)
+            </label>
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => setBulkStatusConfirmOpen(true)}
@@ -3341,7 +3347,9 @@ export default function FranchiseClient({
               onClose={() => setCallOpenId(null)}
               onRecordMissed={recordMissedCall}
               onRecordCompleted={recordCompletedCall}
-              onCancel={(row, reason) => updateStatus(row, "canceled", false, undefined, reason)}
+              onCancel={(row, reason) => {
+                updateStatus(row, "canceled", false, undefined, reason);
+              }}
             />
           );
         })()}

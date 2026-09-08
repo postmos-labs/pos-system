@@ -164,8 +164,8 @@ export async function sendFranchiseDocRequest({
   businessName?: string;
   applicantType: ApplicantType;
   docCase?: DocCase;
-}) {
-  if (!phone) return;
+}): Promise<boolean> {
+  if (!phone) return false;
   const docList = FRANCHISE_DOCS[applicantType].map((d) => `- ${d}`).join("\n");
   const photoNote =
     "\n* 간판이 없는 경우, 건물에 부착된 도로명주소 표지판 사진으로 대체 가능합니다.";
@@ -184,13 +184,14 @@ export async function sendFranchiseDocRequest({
     ...(ownerName ? { "#{고객명}": ownerName } : {}),
     ...(businessName ? { "#{상호명}": businessName } : {}),
   });
-  if (!ko) return;
+  if (!ko) return false;
   await solapiSend({
     to: phone,
     from: process.env.SOLAPI_SENDER!,
     text,
     kakaoOptions: ko,
   });
+  return true;
 }
 
 type FranchiseStatusUpdateKind =
@@ -238,8 +239,8 @@ export async function sendFranchiseStatusUpdate({
   businessName?: string | null;
   status: FranchiseStatusUpdateKind;
   equipmentSelectToken?: string;
-}) {
-  if (!phone) return;
+}): Promise<boolean> {
+  if (!phone) return false;
   const name = ownerName || businessName || "고객";
   const biz = businessName || ownerName || name;
   const text = `[가맹 진행 안내]\n${name}님, "${biz}" 가맹 진행상황을 안내드립니다.\n${FRANCHISE_STATUS_TEXT[status]}`;
@@ -254,16 +255,17 @@ export async function sendFranchiseStatusUpdate({
     console.warn(
       `[solapi] 가맹 상태(${status}) 알림톡 템플릿 미설정 — 발송 스킵 (상태 변경은 정상 반영됨)`,
     );
-    return;
+    return false;
   }
   const ko = kakaoOptions(FRANCHISE_STATUS_TEMPLATE_ENV_KEY[status], variables);
-  if (!ko) return;
+  if (!ko) return false;
   await solapiSend({
     to: phone,
     from: process.env.SOLAPI_SENDER!,
     text,
     kakaoOptions: ko,
   });
+  return true;
 }
 
 const INSTALL_STATUS_TEMPLATE: Record<string, string> = {

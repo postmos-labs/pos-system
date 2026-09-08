@@ -17,10 +17,17 @@ export async function POST(req: NextRequest) {
       body;
     const phone = typeof body.phone === "string" ? body.phone.replace(/\D/g, "") : "";
 
+    let sent: boolean;
     if (type === "doc_request") {
-      await sendFranchiseDocRequest({ phone, ownerName, businessName, applicantType, docCase });
+      sent = await sendFranchiseDocRequest({
+        phone,
+        ownerName,
+        businessName,
+        applicantType,
+        docCase,
+      });
     } else if (type === "status_update") {
-      await sendFranchiseStatusUpdate({
+      sent = await sendFranchiseStatusUpdate({
         phone,
         ownerName,
         businessName,
@@ -31,7 +38,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "unknown type" }, { status: 400 });
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, sent });
   } catch (e: any) {
     const failed =
       e?.failedMessageList ?? e?.response?.data?.failedMessageList ?? e?.data?.failedMessageList;
