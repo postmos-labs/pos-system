@@ -5,8 +5,9 @@
 //   - 문의 내용은 "무엇이 어떻게"가 있어야 검색이 된다
 //   - 해결 절차는 다른 가맹점에도 그대로 통해야 한다
 //
-// 관리자 모드·마스터 비밀번호는 사장님도 쓸 수 있으므로 잡지 않는다. 원격 접속은 직원이 대신 한
-// 일이라 잡는다. 사장님용 표현으로 다듬는 일은 정제 단계(프롬프트 7번 규칙)가 맡는다.
+// 관리자 모드·마스터 비밀번호는 사장님도 쓸 수 있으므로 잡지 않는다. 원격과 직원 전용 전산(밴
+// 전산·파트너스)은 직원이 대신 한 일이라 잡는다. 사장님용 표현으로 다듬는 일은 정제 단계(프롬프트
+// 7번 규칙)가 맡는다.
 //
 // 이 규칙은 등록·수정 화면에서 저장을 막는 데 쓰지 않는다. 마스터가 수정 요청을 돌릴 때와
 // 챗봇 데이터로 내보낼 때만 적용한다. 응대 중 급하게 적는 사람을 붙잡지 않기 위해서다.
@@ -16,8 +17,8 @@ export type QualityIssueCode =
   | "title_personal_info"
   | "too_short"
   | "too_few_steps"
-  | "no_ui_term"
   | "remote_access"
+  | "staff_system"
   | "dangerous"
   | "our_action"
   | "personal_info";
@@ -92,6 +93,30 @@ const SUBJECT_WORDS = [
   "부팅",
   "밴",
   "van",
+  "프론트",
+  "명의",
+  "선불권",
+  "스와이프",
+  "테블릿",
+  "데스크탑",
+  "윈도우",
+  "상품",
+  "옵션",
+  "사진",
+  "이미지",
+  "용량",
+  "인증키",
+  "서류",
+  "qr",
+  "nfc",
+  "매장",
+  "고유번호",
+  "핸드폰",
+  "asp",
+  "토스",
+  "유니온",
+  "플릭",
+  "아임유",
 ];
 
 const INTENT_WORDS = [
@@ -152,20 +177,35 @@ const INTENT_WORDS = [
   "하고싶",
   "알려",
   "궁금",
+  "연동",
+  "신청",
+  "사용법",
+  "정리",
+  "전환",
+  "활성화",
+  "조회",
+  "없음",
+  "나옴",
+  "풀려",
+  "넘어",
+  "종료",
 ];
 
 // ── 해결 절차 ─────────────────────────────────────────────────────────────
 // 단계 구분자. 작성 예시는 ">"로 잇지만 줄바꿈이나 번호 줄로 적은 예전 건도 단계로 인정한다.
-const STEP_SEPARATOR = /\n|>|＞|→|->|»/;
+// "상품선택 - 결제 - 현금"처럼 양쪽 공백 있는 대시도 단계로 본다.
+const STEP_SEPARATOR = /\n|>|＞|→|->|»|\s-\s/;
 const STEP_MARKER = /^\s*(\d+\s*[).]|[①-⑳]|[-•*])\s*/;
 
-// [메뉴관리]처럼 대괄호로 적힌 화면 용어
-const UI_TERM = /\[[^\]]+\]/;
+// 대괄호 표기 규칙은 뺐다. 실제 108건 중 대괄호를 쓴 건이 1건이라 판별력이 없었다.
 
 // 원격 접속은 직원이 대신 한 일이라 사장님이 따라 할 수 없다. 관리자 모드·마스터 비밀번호는
-// 사장님도 쓸 수 있으므로 잡지 않는다. "원격 지원 요청"은 사장님이 하는 행동이라 걸리지 않게
-// 접속·으로·처리·제어가 붙을 때만 본다.
-const REMOTE_ACCESS = /원격\s*(접속|으로|처리|제어)/;
+// 사장님도 쓸 수 있으므로 잡지 않는다. "1. 원격"처럼 한 단어로만 적힌 건도 직원이 붙은 것이므로
+// "원격"이 있으면 잡되, 사장님이 하는 행동인 "원격 지원 요청"만 뺀다.
+const REMOTE_ACCESS = /원격(?!\s*지원\s*요청)/;
+
+// 밴 전산·KOCES 전산·토스 파트너스는 직원만 들어갈 수 있다. 사장님이 따라 할 수 없는 단계다.
+const STAFF_SYSTEM = /전산|파트너스/;
 
 // 데이터가 지워질 수 있는 조작. "메뉴 삭제"처럼 정상적인 사용법은 잡지 않도록
 // 삭제는 데이터·전체·모두 같은 말이 붙을 때만 본다.
@@ -205,16 +245,17 @@ const ISSUES: Record<QualityIssueCode, QualityIssue> = {
     message:
       "해결 절차가 한 단계뿐입니다. '[설정] > [통신설정] > [재연결]'처럼 단계를 >로 나눠 적어주세요.",
   },
-  no_ui_term: {
-    code: "no_ui_term",
-    label: "버튼명 없음",
-    message: "화면에 보이는 버튼이나 메뉴 이름이 없습니다. [메뉴관리]처럼 대괄호로 적어주세요.",
-  },
   remote_access: {
     code: "remote_access",
     label: "원격 조치",
     message:
       "원격 접속으로 처리한 내용이 절차에 있습니다. 사장님은 따라 할 수 없으니, 사장님이 직접 할 수 있는 확인까지만 적고 '원격 지원 요청'으로 끝내주세요.",
+  },
+  staff_system: {
+    code: "staff_system",
+    label: "직원 전산",
+    message:
+      "밴 전산·KOCES 전산·토스 파트너스처럼 직원만 들어갈 수 있는 전산에서 처리한 내용이 절차에 있습니다. 사장님이 직접 할 수 있는 확인까지만 적고 '고객센터 문의'로 끝내주세요.",
   },
   dangerous: {
     code: "dangerous",
@@ -305,8 +346,8 @@ export function inspectResolutionSteps(input: InspectInput): QualityIssue[] {
   const issues: QualityIssue[] = [];
   if (trimmed.length < MIN_STEPS_LENGTH) issues.push(ISSUES.too_short);
   if (splitSteps(steps).length < MIN_STEP_COUNT) issues.push(ISSUES.too_few_steps);
-  if (!UI_TERM.test(steps)) issues.push(ISSUES.no_ui_term);
   if (REMOTE_ACCESS.test(steps)) issues.push(ISSUES.remote_access);
+  if (STAFF_SYSTEM.test(steps)) issues.push(ISSUES.staff_system);
   if (DANGEROUS.test(steps)) issues.push(ISSUES.dangerous);
   if (OUR_ACTION.test(steps)) issues.push(ISSUES.our_action);
   if (
