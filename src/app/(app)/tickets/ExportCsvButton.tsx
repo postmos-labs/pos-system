@@ -7,8 +7,7 @@ import { downloadCsv, todayStamp } from "@/lib/csv";
 import { fetchExportTargets } from "./exportActions";
 
 // 인입내역 상단에서 문제상황/해결절차 CSV를 바로 받는다.
-// 챗봇 데이터는 인입내역에서만 관리한다(별도 화면 폐기). 품질 미달 건은 뺀다 —
-// 챗봇에 넣을 사본이라 미달이 섞이면 안 된다.
+// 챗봇 데이터는 인입내역에서만 관리한다(별도 화면 폐기). 미달 건도 내려주되 품질 열로 표시한다.
 export default function ExportCsvButton() {
   const toast = useToast();
   const [loading, setLoading] = useState(false);
@@ -21,21 +20,26 @@ export default function ExportCsvButton() {
       toast.error(`불러오기 실패: ${result.error}`);
       return;
     }
-    const flagged = new Set(result.quality.filter((q) => q.issues.length > 0).map((q) => q.id));
-    const passed = result.rows.filter((row) => !flagged.has(row.id));
-    if (passed.length === 0) {
+    // 전부 내려주고 세 번째 열에 판정을 적는다. 통과 건만 주면 왜 빠졌는지 파일에서 알 수 없다.
+    // 통과가 위, 미달이 아래로 오게 해 챗봇에 넣을 때 위쪽만 잘라 쓰면 된다.
+    const labelsById = new Map(
+      result.quality.map((q) => [q.id, q.issues.map((issue) => issue.label).join(" · ")]),
+    );
+    const rows = result.rows
+      .map((row) => ({ row, verdict: labelsById.get(row.id) || "통과" }))
+      .sort((a, b) => (a.verdict === "통과" ? 0 : 1) - (b.verdict === "통과" ? 0 : 1));
+    if (rows.length === 0) {
       toast.error("받을 수 있는 해결 절차가 없습니다.");
       return;
     }
+    const passedCount = rows.filter((entry) => entry.verdict === "통과").length;
     downloadCsv(
       `인입내역_문제상황_해결절차_${todayStamp()}.csv`,
-      ["문제상황", "해결절차"],
-      passed.map((row) => [row.inquiry, row.steps]),
+      ["문제상황", "해결절차", "품질"],
+      rows.map(({ row, verdict }) => [row.inquiry, row.steps, verdict]),
     );
     toast.success(
-      flagged.size > 0
-        ? `${passed.length}건을 받았습니다. 품질 미달 ${flagged.size}건은 뺐습니다.`
-        : `${passed.length}건을 받았습니다.`,
+      `${rows.length}건을 받았습니다. 통과 ${passedCount}건, 미달 ${rows.length - passedCount}건.`,
     );
   }
 
