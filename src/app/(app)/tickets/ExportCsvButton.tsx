@@ -4,11 +4,11 @@ import { useState } from "react";
 import { Download } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { downloadCsv, todayStamp } from "@/lib/csv";
-import { fetchExportTargets } from "@/app/(app)/chatbot-data/actions";
+import { fetchExportTargets } from "./exportActions";
 
 // 인입내역 상단에서 문제상황/해결절차 CSV를 바로 받는다.
-// 같은 데이터가 챗봇 데이터 화면의 내보내기 모달에도 있지만, 사용자는 인입내역 관련 기능을
-// 인입내역 탭에서 찾는다. 품질 미달 건은 뺀다 — 챗봇에 넣을 사본이라 미달이 섞이면 안 된다.
+// 챗봇 데이터는 인입내역에서만 관리한다(별도 화면 폐기). 품질 미달 건은 뺀다 —
+// 챗봇에 넣을 사본이라 미달이 섞이면 안 된다.
 export default function ExportCsvButton() {
   const toast = useToast();
   const [loading, setLoading] = useState(false);

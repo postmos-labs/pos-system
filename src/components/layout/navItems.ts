@@ -5,7 +5,6 @@ import {
   ClipboardCheck,
   ClipboardList,
   Code2,
-  Database,
   FileBarChart2,
   Gauge,
   HardHat,
@@ -79,7 +78,6 @@ export const ROLE_FOLDERS: NavGroup[] = [
       { href: "/inventory", label: "재고 실사", icon: ClipboardList },
       { href: "/transfers", label: "전환건", icon: RefreshCw },
       { href: "/blueprints", label: "설계도", icon: Network },
-      { href: "/chatbot-data", label: "챗봇 데이터 수집", icon: Database },
     ],
   },
 ];

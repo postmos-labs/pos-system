@@ -4,11 +4,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { inspectTicket, type QualityIssue } from "@/lib/resolutionQuality";
 
-// 인입내역(tickets) 해결 절차 → 외부 LLM 정제 → 챗봇 학습 데이터(chatbot_training_data)
+// 인입내역 해결 절차를 챗봇용 CSV로 내려주기 위한 조회.
+//
+// 예전에는 별도 챗봇 데이터 화면에서 JSON → 외부 LLM 정제 → 가져오기 파이프라인을 돌렸다.
+// 사용자가 그 화면을 없애고 인입내역에서만 관리하기로 해서, 남은 것은 이 조회 하나다.
+// 품질 판정을 함께 돌려주므로 화면이 미달 건을 빼고 내려줄 수 있다.
 //
 // service_role 키를 쓰므로 RLS가 걸리지 않는다. 로그인 여부를 여기서 직접 확인한다.
-// 챗봇 데이터 화면 자체가 전 직원용이고 chatbot_training_data의 RLS도
-// authenticated면 읽기/쓰기를 허용하므로, 권한 축을 새로 만들지 않고 같은 수준으로 맞춘다.
 
 const CHUNK_SIZE = 100;
 
@@ -19,12 +21,6 @@ export interface ExportedTicket {
   category: string | null;
   repeat: boolean | null;
   occurred_on: string;
-}
-
-export interface CuratedRow {
-  problem_situation: string;
-  solution: string;
-  source_ticket_ids: string[];
 }
 
 export interface TicketQuality {
@@ -249,82 +245,4 @@ export async function fetchExportTargets(includeExported: boolean): Promise<{
   }
 
   return { rows, quality, exportColumnMissing, revisionTableMissing, error: null };
-}
-
-/**
- * 내보낸 티켓에 시각을 찍는다. 다음 배치에서 같은 건이 다시 나오지 않게 하는 표시.
- * 컬럼이 아직 없으면 실패로 보지 않고 미적용 사실만 알린다.
- */
-export async function markTicketsExported(ids: string[]): Promise<{
-  columnMissing: boolean;
-  error: string | null;
-}> {
-  const profile = await currentProfile();
-  if (!profile) return { columnMissing: false, error: "로그인이 필요합니다." };
-  if (!ids.length) return { columnMissing: false, error: null };
-
-  const admin = createAdminClient();
-  const now = new Date().toISOString();
-
-  for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
-    const chunk = ids.slice(i, i + CHUNK_SIZE);
-    const { error } = await admin
-      .from("tickets")
-      .update({ chatbot_exported_at: now })
-      .in("id", chunk);
-    if (isMissingColumn(error)) return { columnMissing: true, error: null };
-    if (error) return { columnMissing: false, error: error.message };
-  }
-
-  return { columnMissing: false, error: null };
-}
-
-/**
- * 정제해서 돌려받은 문제상황/해결방법을 학습 데이터로 넣는다.
- * 등록자는 이 작업을 실행한 사람으로 남는다.
- */
-export async function importCuratedRows(rows: CuratedRow[]): Promise<{
-  inserted: Record<string, unknown>[];
-  sourceColumnMissing: boolean;
-  error: string | null;
-}> {
-  const profile = await currentProfile();
-  if (!profile) return { inserted: [], sourceColumnMissing: false, error: "로그인이 필요합니다." };
-  if (!rows.length) return { inserted: [], sourceColumnMissing: false, error: null };
-
-  const admin = createAdminClient();
-  let sourceColumnMissing = false;
-  const inserted: Record<string, unknown>[] = [];
-
-  for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-    const chunk = rows.slice(i, i + CHUNK_SIZE);
-    const withSource = chunk.map((row) => ({
-      problem_situation: row.problem_situation,
-      solution: row.solution,
-      source_ticket_ids: row.source_ticket_ids.length ? row.source_ticket_ids : null,
-      registered_by: profile.id,
-      registrant_name: profile.name,
-    }));
-
-    let { data, error } = await admin.from("chatbot_training_data").insert(withSource).select("*");
-
-    // 출처 컬럼이 아직 없으면 그것만 빼고 넣는다. 학습 데이터 자체는 들어가야 한다.
-    if (isMissingColumn(error)) {
-      sourceColumnMissing = true;
-      const withoutSource = withSource.map((row) => {
-        const copy = { ...row } as Record<string, unknown>;
-        delete copy.source_ticket_ids;
-        return copy;
-      });
-      ({ data, error } = await admin
-        .from("chatbot_training_data")
-        .insert(withoutSource)
-        .select("*"));
-    }
-
-    if (error) return { inserted, sourceColumnMissing, error: error.message };
-    inserted.push(...(data ?? []));
-  }
-
-  return { inserted, sourceColumnMissing, error: null };
 }
