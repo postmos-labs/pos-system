@@ -1,5 +1,6 @@
 import type { createClient } from "@/lib/supabase/server";
 import { inspectTicket } from "@/lib/resolutionQuality";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 import type { RevisionRow } from "./revisions/RevisionsClient";
 
 // 수정 요청 목록 조립. 현황 페이지(/tickets/revisions)와 인입내역의 상세창이 같이 쓴다.
@@ -41,15 +42,21 @@ export async function loadRevisionRows(
   supabase: Awaited<ReturnType<typeof createClient>>,
   status: RevisionStatusFilter,
 ): Promise<{ rows: RevisionRow[]; schemaReady: boolean; openCount: number }> {
-  let query = supabase
-    .from("ticket_revision_requests")
-    .select(
-      "*, ticket:tickets(id, title, resolution_steps, updated_at, merchant:merchants(business_name, owner_name))",
-    )
-    .order("requested_at", { ascending: false });
-  if (status !== "all") query = query.eq("status", status);
-
-  const { data, error } = await query;
+  const { data, error } = await fetchAllRows<Record<string, unknown>>(
+    (from, to) => {
+      let q = supabase
+        .from("ticket_revision_requests")
+        .select(
+          "*, ticket:tickets(id, title, resolution_steps, updated_at, merchant:merchants(business_name, owner_name))",
+        )
+        .order("requested_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (status !== "all") q = q.eq("status", status);
+      return q;
+    },
+    { label: "revision rows" },
+  );
   const schemaReady = !isMissingRevisionTable(error);
 
   let openCount = 0;

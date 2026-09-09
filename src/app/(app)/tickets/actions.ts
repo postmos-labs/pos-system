@@ -118,6 +118,21 @@ export async function requestTicketRevision(ticketId: string, message: string) {
     .single();
   if (!ticket) return { error: "인입내역을 찾을 수 없습니다." };
 
+  const admin = createAdminClient();
+
+  const { data: openRequest, error: openCheckError } = await admin
+    .from("ticket_revision_requests")
+    .select("id")
+    .eq("ticket_id", ticketId)
+    .eq("status", "open")
+    .limit(1)
+    .maybeSingle();
+  if (!openCheckError && openRequest) {
+    return {
+      error: "이미 대기 중인 수정 요청이 있습니다. 취소하거나 확인 완료한 뒤 다시 보내주세요.",
+    };
+  }
+
   const recipientIds = Array.from(
     new Set(
       [ticket.sales_id, ticket.cs_id, ticket.tech_id].filter(
@@ -128,8 +143,6 @@ export async function requestTicketRevision(ticketId: string, message: string) {
   if (recipientIds.length === 0) {
     return { error: "이 건에 담당자가 지정돼 있지 않아 보낼 대상이 없습니다." };
   }
-
-  const admin = createAdminClient();
 
   // 기록은 부가 기능이라 표가 없어도(마이그레이션 미적용) 알림 발송은 그대로 진행한다.
   const { data: requesterProfile } = await supabase
@@ -580,10 +593,12 @@ export async function requestTicketRevisionsBulk(ticketIds: string[]): Promise<B
     body: string;
   }[] = [];
 
-  const cutoff = Date.now() - REVISION_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  const cutoffDate = new Date(Date.now() - REVISION_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
 
   for (const ticket of tickets) {
-    if (new Date(ticket.created_at).getTime() < cutoff) {
+    if (String(ticket.created_at).slice(0, 10) < cutoffDate) {
       skipped.tooOld += 1;
       continue;
     }
@@ -890,32 +905,39 @@ export async function cancelAllOpenTicketRevisions(note: string): Promise<BulkCa
   if (authError) return { canceled: 0, skipped: emptySkipped, error: authError };
 
   const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("ticket_revision_requests")
-    .select("id")
-    .eq("status", "open")
-    .limit(CANCEL_ALL_LIMIT);
-  if (error) {
-    if (isMissingRevisionTable(error)) {
-      return {
-        canceled: 0,
-        skipped: emptySkipped,
-        error: "수정 요청 마이그레이션(supabase/139)이 아직 적용되지 않았습니다.",
-      };
-    }
-    return { canceled: 0, skipped: emptySkipped, error: error.message };
-  }
-
-  const requestIds = ((data ?? []) as { id: string }[]).map((r) => r.id);
-  if (requestIds.length === 0) return { canceled: 0, skipped: emptySkipped, error: null };
 
   let canceled = 0;
   let warning: string | undefined;
-  for (let i = 0; i < requestIds.length; i += CANCEL_ALL_BATCH) {
-    const result = await cancelTicketRevisionsBulk(requestIds.slice(i, i + CANCEL_ALL_BATCH), note);
-    canceled += result.canceled;
-    if (result.error) return { canceled, skipped: emptySkipped, error: result.error };
-    if (result.warning && !warning) warning = result.warning;
+  // 대기 건이 CANCEL_ALL_LIMIT(1000)보다 많을 수 있어, 더 남지 않을 때까지 반복해서 훑는다.
+  for (let round = 0; round < 10; round++) {
+    const { data, error } = await admin
+      .from("ticket_revision_requests")
+      .select("id")
+      .eq("status", "open")
+      .limit(CANCEL_ALL_LIMIT);
+    if (error) {
+      if (isMissingRevisionTable(error)) {
+        return {
+          canceled,
+          skipped: emptySkipped,
+          error: "수정 요청 마이그레이션(supabase/139)이 아직 적용되지 않았습니다.",
+        };
+      }
+      return { canceled, skipped: emptySkipped, error: error.message };
+    }
+
+    const requestIds = ((data ?? []) as { id: string }[]).map((r) => r.id);
+    if (requestIds.length === 0) break;
+
+    for (let i = 0; i < requestIds.length; i += CANCEL_ALL_BATCH) {
+      const result = await cancelTicketRevisionsBulk(
+        requestIds.slice(i, i + CANCEL_ALL_BATCH),
+        note,
+      );
+      canceled += result.canceled;
+      if (result.error) return { canceled, skipped: emptySkipped, error: result.error };
+      if (result.warning && !warning) warning = result.warning;
+    }
   }
   return { canceled, skipped: emptySkipped, error: null, ...(warning ? { warning } : {}) };
 }

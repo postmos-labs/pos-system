@@ -116,6 +116,12 @@ export async function deleteUserAccount(userId: string) {
 
   const supabase = createAdminClient();
 
+  const { data: target } = await supabase.from("profiles").select("role").eq("id", userId).single();
+  if (target?.role === "master") {
+    const masterError = await requireMaster();
+    if (masterError) return { error: "마스터 계정은 마스터만 삭제할 수 있습니다." };
+  }
+
   // 삭제는 delete_user_account(supabase/072) 한 곳에서만 처리한다.
   // 이 함수는 profiles를 참조하는 FK를 실행 시점에 DB에서 직접 찾아
   //   NULL 허용 컬럼 -> 값만 비우고 (행은 남김)

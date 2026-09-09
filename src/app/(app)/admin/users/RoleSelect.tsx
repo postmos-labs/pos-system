@@ -11,9 +11,10 @@ const ROLES = ["master", "admin", "sales", "cs", "tech", "developer"];
 interface Props {
   userId: string;
   initialRole: string;
+  currentUserRole: string;
 }
 
-export default function RoleSelect({ userId, initialRole }: Props) {
+export default function RoleSelect({ userId, initialRole, currentUserRole }: Props) {
   const [role, setRole] = useState(initialRole);
   const [isPending, startTransition] = useTransition();
   const toast = useToast();
@@ -37,7 +38,9 @@ export default function RoleSelect({ userId, initialRole }: Props) {
       disabled={isPending}
       className="h-auto text-xs font-semibold px-2 py-1"
       aria-label="역할"
-      options={ROLES.map((r) => ({ value: r, label: ROLE_LABEL_KR[r] }))}
+      options={ROLES.filter(
+        (r) => r !== "master" || currentUserRole === "master" || role === "master",
+      ).map((r) => ({ value: r, label: ROLE_LABEL_KR[r] }))}
     />
   );
 }

@@ -280,7 +280,7 @@ export default function CalendarClient({
       };
       // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage는 SSR에서 읽을 수 없어 마운트 후 동기화가 불가피함
       if (parsed.categories) setSelectedCategories(new Set(parsed.categories));
-      if (parsed.tech) setTechFilter(parsed.tech);
+      if (parsed.tech && techProfiles.some((t) => t.id === parsed.tech)) setTechFilter(parsed.tech);
       if (parsed.tab)
         setActiveTab(parsed.tab === "assigned" && !canViewAssigned ? "all" : parsed.tab);
     } catch {

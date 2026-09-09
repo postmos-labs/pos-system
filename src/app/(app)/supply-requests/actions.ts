@@ -164,7 +164,7 @@ export async function updateSupplyRequest(
   }
 
   const update: Record<string, unknown> = { ...toRow(input) };
-  if (status === "반려") {
+  if (status === "반려" && existing.requester_id === user.id) {
     update.status = "요청";
     update.approver_id = null;
     update.approver_name = null;
@@ -257,13 +257,14 @@ export async function decideSupplyRequest(
 
 export async function deleteSupplyRequests(
   ids: string[],
-): Promise<{ deleted: number; error: string | null }> {
+): Promise<{ deleted: number; deletedIds: string[]; error: string | null }> {
   const caller = await requireCaller();
-  if (!caller.ok) return { deleted: 0, error: caller.error };
+  if (!caller.ok) return { deleted: 0, deletedIds: [], error: caller.error };
   const { user, profile } = caller;
 
-  if (!ids.length) return { deleted: 0, error: null };
-  if (ids.length > 200) return { deleted: 0, error: "한 번에 200건까지만 지울 수 있습니다." };
+  if (!ids.length) return { deleted: 0, deletedIds: [], error: null };
+  if (ids.length > 200)
+    return { deleted: 0, deletedIds: [], error: "한 번에 200건까지만 지울 수 있습니다." };
 
   const admin = createAdminClient();
   const { data: rows, error: fetchError } = await admin
@@ -271,8 +272,9 @@ export async function deleteSupplyRequests(
     .select("id, status, requester_id")
     .in("id", ids);
   if (fetchError) {
-    if (isMissingSupplyTable(fetchError)) return { deleted: 0, error: MISSING_TABLE_ERROR };
-    return { deleted: 0, error: fetchError.message };
+    if (isMissingSupplyTable(fetchError))
+      return { deleted: 0, deletedIds: [], error: MISSING_TABLE_ERROR };
+    return { deleted: 0, deletedIds: [], error: fetchError.message };
   }
 
   const isPrivileged = profile.role === "admin" || profile.role === "master";
@@ -283,14 +285,15 @@ export async function deleteSupplyRequests(
         (row.requester_id === user.id && isEditableByRequester(row.status as SupplyRequestStatus)),
     )
     .map((row) => row.id as string);
-  if (deletableIds.length === 0) return { deleted: 0, error: null };
+  if (deletableIds.length === 0) return { deleted: 0, deletedIds: [], error: null };
 
   const { error } = await admin.from("supply_requests").delete().in("id", deletableIds);
   if (error) {
-    if (isMissingSupplyTable(error)) return { deleted: 0, error: MISSING_TABLE_ERROR };
-    return { deleted: 0, error: error.message };
+    if (isMissingSupplyTable(error))
+      return { deleted: 0, deletedIds: [], error: MISSING_TABLE_ERROR };
+    return { deleted: 0, deletedIds: [], error: error.message };
   }
 
   revalidatePath("/supply-requests");
-  return { deleted: deletableIds.length, error: null };
+  return { deleted: deletableIds.length, deletedIds: deletableIds, error: null };
 }

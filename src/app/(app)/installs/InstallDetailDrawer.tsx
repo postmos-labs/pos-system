@@ -260,7 +260,7 @@ export default function InstallDetailDrawer({
   const showReschedule =
     canReschedule && installation.status !== "completed" && installation.status !== "rejected";
   const showChecklist =
-    canEdit &&
+    canReschedule &&
     installation.delivery_type === "delivery" &&
     installation.status !== "completed" &&
     installation.status !== "rejected";

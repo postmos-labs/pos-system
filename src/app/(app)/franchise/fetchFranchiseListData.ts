@@ -143,12 +143,15 @@ export async function fetchFranchiseListData(
           .is("franchise_application_id", null)
           .in("phone", chunk),
       ),
-      fetchByIdChunks(ids, (chunk) =>
-        supabase
-          .from("franchise_application_call_logs")
-          .select("franchise_application_id, call_type, created_at")
-          .in("franchise_application_id", chunk)
-          .order("created_at", { ascending: false }),
+      fetchByIdChunks(
+        ids,
+        (chunk) =>
+          supabase
+            .from("franchise_application_call_logs")
+            .select("franchise_application_id, call_type, created_at")
+            .in("franchise_application_id", chunk)
+            .order("created_at", { ascending: false }),
+        40,
       ),
     ]);
     const connectionError =

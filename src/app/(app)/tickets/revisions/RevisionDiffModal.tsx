@@ -18,7 +18,7 @@ function DiffSection({
       <div>
         <p className="mb-1.5 text-sm font-semibold text-slate-900">{title}</p>
         <p className="mb-2 text-xs text-slate-400">
-          변경 전 기록 없음 (이 요청은 스냅샷 기능 이전에 보냈습니다)
+          변경 전 기록 없음 (요청 당시 절차가 비어 있었거나 스냅샷 기능 이전에 보낸 요청입니다)
         </p>
         <div className="rounded-lg border border-slate-200 p-3 text-[13px] whitespace-pre-wrap text-slate-700">
           {after ?? ""}

@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { inspectTicket, type QualityIssue } from "@/lib/resolutionQuality";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 
 // 인입내역 해결 절차를 챗봇용 CSV로 내려주기 위한 조회.
 //
@@ -92,6 +93,8 @@ export async function fetchExportTargets(includeExported: boolean): Promise<{
   /** 139번 마이그레이션(ticket_revision_requests) 미적용 — 중복 요청 여부를 알 수 없는 경우 */
   revisionTableMissing: boolean;
   error: string | null;
+  /** 1000행 상한(fetchAllRows의 maxRows)에 걸려 뒤쪽 데이터가 잘렸을 수 있음 */
+  truncated?: boolean;
 }> {
   const profile = await currentProfile();
   if (!profile)
@@ -116,21 +119,39 @@ export async function fetchExportTargets(includeExported: boolean): Promise<{
 
   let data: Record<string, unknown>[] | null = null;
   let error: { code?: string; message?: string } | null = null;
+  let truncated = false;
 
   for (let attempt = 0; attempt < 10; attempt++) {
-    let query = admin
-      .from("tickets")
-      .select(selectColumns)
-      .not("resolution_steps", "is", null)
-      .neq("resolution_steps", "")
-      .order("created_at", { ascending: true });
-    if (useTeam) query = query.eq("team", "tech");
-    if (useDeleted) query = query.is("deleted_at", null);
-    if (useExported) query = query.is("chatbot_exported_at", null);
+    const currentSelectColumns = selectColumns;
+    const currentUseTeam = useTeam;
+    const currentUseDeleted = useDeleted;
+    const currentUseExported = useExported;
 
-    const result = await query;
-    data = result.data as Record<string, unknown>[] | null;
+    const result = await fetchAllRows<Record<string, unknown>>(
+      (from, to) => {
+        let q = admin
+          .from("tickets")
+          .select(currentSelectColumns)
+          .not("resolution_steps", "is", null)
+          .neq("resolution_steps", "")
+          .order("created_at", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (currentUseTeam) q = q.eq("team", "tech");
+        if (currentUseDeleted) q = q.is("deleted_at", null);
+        if (currentUseExported) q = q.is("chatbot_exported_at", null);
+        // selectColumns가 동적 문자열이라 supabase-js가 행 타입을 리터럴로 추론하지 못한다.
+        // 기존 코드도 결과를 Record<string, unknown>[]로 캐스트해서 썼다.
+        return q as unknown as PromiseLike<{
+          data: Record<string, unknown>[] | null;
+          error: { code?: string; message?: string } | null;
+        }>;
+      },
+      { label: "tickets export" },
+    );
+    data = result.data;
     error = result.error;
+    truncated = result.truncated;
     if (!isMissingColumn(error)) break;
 
     const missing = missingColumnName(error);
@@ -244,5 +265,12 @@ export async function fetchExportTargets(includeExported: boolean): Promise<{
     }
   }
 
-  return { rows, quality, exportColumnMissing, revisionTableMissing, error: null };
+  return {
+    rows,
+    quality,
+    exportColumnMissing,
+    revisionTableMissing,
+    error: null,
+    ...(truncated ? { truncated: true } : {}),
+  };
 }

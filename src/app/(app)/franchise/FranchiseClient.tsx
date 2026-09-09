@@ -2230,7 +2230,13 @@ export default function FranchiseClient({
     for (const row of rowsBefore) {
       const docCase =
         status === "doc_waiting" ? docCaseOf(row.owner_name, row.business_name) : undefined;
-      const ok = await updateStatus(row, status, bulkSendNotify, docCase);
+      const silentStatus =
+        status === "completed" ||
+        status === "hold" ||
+        status === "persistent_absence" ||
+        status === "canceled";
+      const canNotify = !silentStatus && !!row.phone;
+      const ok = await updateStatus(row, status, bulkSendNotify && canNotify, docCase);
       if (ok) changed += 1;
     }
     setBulkChanging(false);

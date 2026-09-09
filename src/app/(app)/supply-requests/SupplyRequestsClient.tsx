@@ -112,13 +112,14 @@ export default function SupplyRequestsClient({ rows, profile, schemaMissing }: P
     if (selected.size === 0) return;
     if (!confirm(`선택한 ${selected.size}건을 삭제하시겠습니까?`)) return;
     setDeleting(true);
-    const { deleted, error } = await deleteSupplyRequests([...selected]);
+    const { deleted, deletedIds, error } = await deleteSupplyRequests([...selected]);
     setDeleting(false);
     if (error) {
       toast.error("삭제 실패: " + error);
       return;
     }
-    setLocalRows((prev) => prev.filter((r) => !selected.has(r.id)));
+    const deletedSet = new Set(deletedIds);
+    setLocalRows((prev) => prev.filter((r) => !deletedSet.has(r.id)));
     setSelected(new Set());
     if (deleted < selected.size) {
       toast.warning(`${deleted}건 삭제, 나머지는 권한이 없어 건너뛰었습니다.`);

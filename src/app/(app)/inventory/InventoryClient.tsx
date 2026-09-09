@@ -12,7 +12,7 @@ import HistoryButton from "@/components/ui/HistoryButton";
 import MemoHistoryPanel from "@/components/ui/MemoHistoryPanel";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField } from "@/components/ui/DatePickerField";
-import { kstToday } from "@/lib/date";
+import { kstDate, kstToday } from "@/lib/date";
 import { INVENTORY_CATEGORY_TREE, INVENTORY_MAJOR_CATEGORIES } from "@/lib/inventoryCatalog";
 import {
   INVENTORY_LOG_TYPES,
@@ -244,8 +244,16 @@ export default function InventoryClient({
       merchant_name: merchant?.business_name ?? null,
     });
     if (logError && isMissingInventoryMerchantColumn(logError)) {
-      // 132번 마이그레이션 미적용 환경: 가맹점 정보 없이 기존처럼 기록한다.
-      ({ error: logError } = await supabase.from("inventory_logs").insert(basePayload));
+      // 132번 마이그레이션 미적용 환경: 가맹점 정보 없이 다시 시도한다.
+      ({ error: logError } = await supabase.from("inventory_logs").insert({
+        ...basePayload,
+        merchant_id: merchant?.id ?? null,
+        merchant_name: merchant?.business_name ?? null,
+      }));
+      if (logError && isMissingInventoryMerchantColumn(logError)) {
+        // 147번 마이그레이션도 미적용인 환경: 유형·가맹점 정보 없이 기존처럼 기록한다.
+        ({ error: logError } = await supabase.from("inventory_logs").insert(basePayload));
+      }
     }
     if (logError) toast.error("변동 이력 기록 실패: " + logError.message);
 
@@ -383,7 +391,7 @@ export default function InventoryClient({
           .includes(term)
       )
         return false;
-      const day = log.created_at.slice(0, 10);
+      const day = kstDate(new Date(log.created_at));
       if (logFrom && day < logFrom) return false;
       if (logTo && day > logTo) return false;
       return true;

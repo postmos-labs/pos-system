@@ -102,14 +102,17 @@ async function deductInventoryForCompletion(
     p_merchant_name: merchantRow?.business_name ?? installation.customer_name ?? null,
   };
 
+  const isSignatureMismatch = (e: { code?: string; message?: string } | null) =>
+    !!e &&
+    (e.code === "42883" ||
+      e.code === "PGRST202" ||
+      /function .* does not exist|schema cache/i.test(e.message ?? ""));
+
   let { data: unmatched, error: deductError } = await admin.rpc("deduct_inventory_on_install", {
     ...rpcArgs,
     p_log_type: isDelivery ? "delivery_out" : "install_out",
   });
-  if (
-    deductError &&
-    (deductError.code === "42883" || /function .* does not exist/i.test(deductError.message ?? ""))
-  ) {
+  if (deductError && isSignatureMismatch(deductError)) {
     ({ data: unmatched, error: deductError } = await admin.rpc(
       "deduct_inventory_on_install",
       rpcArgs,

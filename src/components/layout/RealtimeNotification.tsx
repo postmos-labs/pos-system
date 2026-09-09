@@ -20,6 +20,7 @@ function actionLabelFor(type: string | null, href?: string) {
   if (type === "install_transfer" || type === "install_assigned") return "설치건 보기";
   if (type === "ticket_revision") return "수정 요청 보기";
   if (type === "ticket_revision_resolved") return "인입내역 보기";
+  if (type === "ticket_revision_canceled") return "인입내역 보기";
   if (type === "supply_request") return "물품요청 보기";
   return "알림 보기";
 }

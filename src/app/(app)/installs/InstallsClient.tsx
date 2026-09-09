@@ -2244,6 +2244,9 @@ export default function InstallsClient({
                       : i,
                   ),
                 );
+                setDetailDraft((d) =>
+                  activeDetailInst?.id === inst.id && d ? { ...d, items: confirmedItems } : d,
+                );
                 const thenStatus = checklistModal.thenStatus;
                 setChecklistModal(null);
                 if (thenStatus) await requestStepApproval(inst.id, thenStatus);

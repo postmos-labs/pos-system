@@ -48,13 +48,15 @@ export default async function NotificationsPage({ searchParams }: Props) {
             key={n.id}
             id={n.id}
             href={
-              n.ticket_id
-                ? `/tickets/${n.ticket_id}`
-                : n.installation_id
-                  ? `/installs?id=${n.installation_id}`
-                  : n.franchise_application_id
-                    ? `/franchise?id=${n.franchise_application_id}`
-                    : "/notifications"
+              n.type === "supply_request"
+                ? "/supply-requests"
+                : n.ticket_id
+                  ? `/tickets/${n.ticket_id}`
+                  : n.installation_id
+                    ? `/installs?id=${n.installation_id}`
+                    : n.franchise_application_id
+                      ? `/franchise?id=${n.franchise_application_id}`
+                      : "/notifications"
             }
             title={n.title}
             body={n.body}

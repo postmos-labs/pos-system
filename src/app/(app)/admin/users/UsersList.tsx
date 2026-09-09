@@ -118,7 +118,11 @@ export default function UsersList({
                     </div>
                     {u.id !== currentUserId ? (
                       <div className="flex flex-wrap items-center justify-end gap-2">
-                        <RoleSelect userId={u.id} initialRole={u.role} />
+                        <RoleSelect
+                          userId={u.id}
+                          initialRole={u.role}
+                          currentUserRole={currentUserRole}
+                        />
                         <TeamSelect userId={u.id} initialTeam={u.team ?? defaultTeam(u.role)} />
                         {positionReady && (
                           <PositionSelect userId={u.id} position={u.position ?? ""} />
@@ -142,7 +146,10 @@ export default function UsersList({
                     {u.role !== "admin" && u.role !== "master" && (
                       <DeletePermissionToggle userId={u.id} initialCanDelete={!!u.can_delete} />
                     )}
-                    {u.id !== currentUserId && <DeleteUserButton userId={u.id} userName={u.name} />}
+                    {u.id !== currentUserId &&
+                      (u.role !== "master" || currentUserRole === "master") && (
+                        <DeleteUserButton userId={u.id} userName={u.name} />
+                      )}
                   </div>
                 ))}
               </div>
