@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import FormModal from "@/components/ui/FormModal";
+import { DatePickerField } from "@/components/ui/DatePickerField";
 import type { SupplyRequest, SupplyRequestInput } from "./supplyRequest";
 
 interface Props {
@@ -73,11 +74,11 @@ export default function SupplyRequestForm({ initial, onSubmit, submitting, onClo
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-slate-500">필요 시기</label>
-          <input
-            type="date"
+          <DatePickerField
             value={neededBy}
-            onChange={(e) => setNeededBy(e.target.value)}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onChange={setNeededBy}
+            ariaLabel="필요 시기"
+            placeholder="날짜 선택"
           />
         </div>
         <label className="flex items-center gap-2 text-sm text-slate-700">
