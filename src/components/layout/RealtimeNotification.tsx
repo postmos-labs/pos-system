@@ -19,6 +19,7 @@ function actionLabelFor(type: string | null, href?: string) {
   if (type?.startsWith("approval_")) return "승인요청 보기";
   if (type === "install_transfer" || type === "install_assigned") return "설치건 보기";
   if (type === "ticket_revision") return "수정 요청 보기";
+  if (type === "supply_request") return "물품요청 보기";
   return "알림 보기";
 }
 
@@ -63,13 +64,15 @@ export default function RealtimeNotification({ userId }: Props) {
         const href =
           type === "notice"
             ? undefined
-            : row.installation_id
-              ? `/installs?id=${row.installation_id}`
-              : row.franchise_application_id
-                ? `/franchise?id=${row.franchise_application_id}`
-                : row.ticket_id
-                  ? `/tickets/${row.ticket_id}`
-                  : "/notifications";
+            : type === "supply_request"
+              ? "/supply-requests"
+              : row.installation_id
+                ? `/installs?id=${row.installation_id}`
+                : row.franchise_application_id
+                  ? `/franchise?id=${row.franchise_application_id}`
+                  : row.ticket_id
+                    ? `/tickets/${row.ticket_id}`
+                    : "/notifications";
         popups.push({
           title: row.title,
           body: row.body ?? undefined,
