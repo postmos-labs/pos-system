@@ -6,6 +6,7 @@ import Link from "next/link";
 import { X } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { resolveTicketRevision, cancelTicketRevision, cancelTicketRevisionsBulk } from "../actions";
+import RevisionDiffModal from "./RevisionDiffModal";
 
 export interface RevisionRow {
   id: string;
@@ -24,6 +25,10 @@ export interface RevisionRow {
   canceled_by_name: string | null;
   canceled_at: string | null;
   canceled_note: string | null;
+  before_title: string | null;
+  before_steps: string | null;
+  current_title: string | null;
+  current_steps: string | null;
 }
 
 const TABS: {
@@ -46,7 +51,7 @@ const DATETIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
   hour12: false,
 });
 
-function formatDateTime(value: string) {
+export function formatDateTime(value: string) {
   const parts = DATETIME_FORMATTER.formatToParts(new Date(value));
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   const hour = get("hour").padStart(2, "0").replace("24", "00");
@@ -65,6 +70,7 @@ export default function RevisionsClient({
   const router = useRouter();
   const toast = useToast();
   const [target, setTarget] = useState<RevisionRow | null>(null);
+  const [diffRow, setDiffRow] = useState<RevisionRow | null>(null);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<"resolve" | "cancel" | "cancelBulk">("resolve");
@@ -275,6 +281,13 @@ export default function RevisionsClient({
 
               <p className="mt-2 text-xs text-slate-400">
                 {row.requested_by_name ?? "알 수 없음"} · {formatDateTime(row.requested_at)}
+                <button
+                  type="button"
+                  onClick={() => setDiffRow(row)}
+                  className="ml-2 font-semibold text-blue-600 hover:underline"
+                >
+                  변경 내용 보기
+                </button>
               </p>
 
               {row.status === "open" ? (
@@ -411,6 +424,8 @@ export default function RevisionsClient({
             </div>
           );
         })()}
+
+      {diffRow && <RevisionDiffModal row={diffRow} onClose={() => setDiffRow(null)} />}
     </>
   );
 }

@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/Toast";
 import { fetchRevisionRows, resolveTicketRevision } from "./actions";
 import type { RevisionRow } from "./revisions/RevisionsClient";
 import type { RevisionStatusFilter } from "./revisionRows";
+import RevisionDiffModal from "./revisions/RevisionDiffModal";
 
 const TABS: { key: RevisionStatusFilter; label: (openCount: number) => string }[] = [
   { key: "open", label: (n) => `대기 ${n}` },
@@ -41,6 +42,7 @@ export default function RevisionRequestsButton({ openCount }: { openCount: numbe
   const [loading, setLoading] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [rows, setRows] = useState<RevisionRow[]>([]);
+  const [diffRow, setDiffRow] = useState<RevisionRow | null>(null);
   const [schemaReady, setSchemaReady] = useState(true);
   const [count, setCount] = useState(openCount);
 
@@ -196,6 +198,13 @@ export default function RevisionRequestsButton({ openCount }: { openCount: numbe
 
                     <p className="mt-2 text-xs text-slate-400">
                       {row.requested_by_name ?? "알 수 없음"} · {formatDateTime(row.requested_at)}
+                      <button
+                        type="button"
+                        onClick={() => setDiffRow(row)}
+                        className="ml-2 font-semibold text-blue-600 hover:underline"
+                      >
+                        변경 내용 보기
+                      </button>
                     </p>
 
                     {row.status === "open" ? (
@@ -245,6 +254,8 @@ export default function RevisionRequestsButton({ openCount }: { openCount: numbe
           </div>
         </div>
       )}
+
+      {diffRow && <RevisionDiffModal row={diffRow} onClose={() => setDiffRow(null)} />}
     </>
   );
 }

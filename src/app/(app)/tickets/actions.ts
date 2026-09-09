@@ -113,7 +113,7 @@ export async function requestTicketRevision(ticketId: string, message: string) {
 
   const { data: ticket } = await supabase
     .from("tickets")
-    .select("sales_id, cs_id, tech_id, title")
+    .select("sales_id, cs_id, tech_id, title, resolution_steps")
     .eq("id", ticketId)
     .single();
   if (!ticket) return { error: "인입내역을 찾을 수 없습니다." };
@@ -137,12 +137,22 @@ export async function requestTicketRevision(ticketId: string, message: string) {
     .select("name")
     .eq("id", user.id)
     .single();
-  const { error: recordError } = await admin.from("ticket_revision_requests").insert({
+  let { error: recordError } = await admin.from("ticket_revision_requests").insert({
     ticket_id: ticketId,
     message: trimmed,
     requested_by: user.id,
     requested_by_name: requesterProfile?.name ?? null,
+    before_title: ticket.title ?? null,
+    before_steps: ticket.resolution_steps ?? null,
   });
+  if (recordError && isMissingColumn(recordError)) {
+    ({ error: recordError } = await admin.from("ticket_revision_requests").insert({
+      ticket_id: ticketId,
+      message: trimmed,
+      requested_by: user.id,
+      requested_by_name: requesterProfile?.name ?? null,
+    }));
+  }
   if (recordError && !isMissingRevisionTable(recordError)) {
     return { error: recordError.message };
   }
@@ -202,6 +212,49 @@ export async function resolveTicketRevision(requestId: string, note: string) {
   }
   if (!data || data.length === 0) return { error: "이미 처리된 요청입니다." };
 
+  const { data: request } = await admin
+    .from("ticket_revision_requests")
+    .select("ticket_id, ticket:tickets(title, sales_id, cs_id, tech_id)")
+    .eq("id", requestId)
+    .single();
+  const rawTicket = request?.ticket as
+    | {
+        title: string | null;
+        sales_id: string | null;
+        cs_id: string | null;
+        tech_id: string | null;
+      }
+    | {
+        title: string | null;
+        sales_id: string | null;
+        cs_id: string | null;
+        tech_id: string | null;
+      }[]
+    | null
+    | undefined;
+  const ticket = Array.isArray(rawTicket) ? rawTicket[0] : rawTicket;
+  const recipientIds = Array.from(
+    new Set(
+      [ticket?.sales_id, ticket?.cs_id, ticket?.tech_id].filter(
+        (id): id is string => !!id && id !== user.id,
+      ),
+    ),
+  );
+  if (request && recipientIds.length > 0) {
+    // 알림 실패는 완료 처리를 되돌리지 않는다.
+    await admin.from("notifications").insert(
+      recipientIds.map((userId) => ({
+        user_id: userId,
+        ticket_id: request.ticket_id as string,
+        type: "ticket_revision_resolved",
+        title: `수정 요청 확인 완료: ${ticket?.title ?? ""}`,
+        body:
+          trimmedNote ||
+          `${resolverProfile?.name ?? "마스터"}님이 고친 내용을 확인하고 닫았습니다.`,
+      })),
+    );
+  }
+
   revalidatePath("/tickets/revisions");
   return { error: null };
 }
@@ -215,6 +268,16 @@ function isMissingCancelSchema(error: { code?: string; message?: string } | null
     error.code === "42703" ||
     error.code === "PGRST204" ||
     /canceled_/i.test(error.message ?? "")
+  );
+}
+
+// 42703·PGRST204: 컬럼 없음. 146번(before_title/before_steps)이 아직 안 돈 환경에서 쓴다.
+function isMissingColumn(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /column .* does not exist|Could not find the '.*' column/i.test(error.message ?? "")
   );
 }
 
@@ -506,6 +569,8 @@ export async function requestTicketRevisionsBulk(ticketIds: string[]): Promise<B
     message: string;
     requested_by: string;
     requested_by_name: string | null;
+    before_title: string | null;
+    before_steps: string | null;
   }[] = [];
   const notificationRecords: {
     user_id: string;
@@ -554,6 +619,8 @@ export async function requestTicketRevisionsBulk(ticketIds: string[]): Promise<B
       message,
       requested_by: user.id,
       requested_by_name: requesterProfile?.name ?? null,
+      before_title: ticket.title ?? null,
+      before_steps: ticket.resolution_steps ?? null,
     });
     for (const recipientId of recipientIds) {
       notificationRecords.push({
@@ -567,9 +634,22 @@ export async function requestTicketRevisionsBulk(ticketIds: string[]): Promise<B
   }
 
   // 기록은 부가 기능이라 표가 없어도(마이그레이션 미적용) 알림 발송은 그대로 진행한다.
+  let stripSnapshot = false;
   for (let i = 0; i < revisionRecords.length; i += CHUNK_SIZE) {
     const chunk = revisionRecords.slice(i, i + CHUNK_SIZE);
-    const { error } = await admin.from("ticket_revision_requests").insert(chunk);
+    const withoutSnapshot = (records: typeof chunk) =>
+      records.map((record) => ({
+        ticket_id: record.ticket_id,
+        message: record.message,
+        requested_by: record.requested_by,
+        requested_by_name: record.requested_by_name,
+      }));
+    const payload = stripSnapshot ? withoutSnapshot(chunk) : chunk;
+    let { error } = await admin.from("ticket_revision_requests").insert(payload);
+    if (error && !stripSnapshot && isMissingColumn(error)) {
+      stripSnapshot = true;
+      ({ error } = await admin.from("ticket_revision_requests").insert(withoutSnapshot(chunk)));
+    }
     if (error && !isMissingRevisionTable(error)) {
       return { sent: revisionRecords.length, skipped, error: error.message };
     }
@@ -886,6 +966,7 @@ export async function resolvePassingTicketRevisions(): Promise<ResolvePassingRes
 
   const admin = createAdminClient();
   let resolved = 0;
+  const resolvedTicketIds = new Set<string>();
   for (let i = 0; i < passingIds.length; i += CHUNK_SIZE) {
     const chunk = passingIds.slice(i, i + CHUNK_SIZE);
     const { data, error } = await admin
@@ -901,7 +982,50 @@ export async function resolvePassingTicketRevisions(): Promise<ResolvePassingRes
       .eq("status", "open")
       .select("id");
     if (error) return { resolved, error: error.message };
-    resolved += (data ?? []).length;
+    const updatedIds = new Set((data ?? []).map((row) => row.id as string));
+    resolved += updatedIds.size;
+    for (const row of rows) {
+      if (updatedIds.has(row.id)) resolvedTicketIds.add(row.ticket_id);
+    }
+  }
+
+  // 알림 실패는 완료 처리를 되돌리지 않는다.
+  const ticketIds = Array.from(resolvedTicketIds);
+  const notificationRecords: {
+    user_id: string;
+    ticket_id: string;
+    type: string;
+    title: string;
+    body: string;
+  }[] = [];
+  for (let i = 0; i < ticketIds.length; i += CHUNK_SIZE) {
+    const chunk = ticketIds.slice(i, i + CHUNK_SIZE);
+    const { data: ticketsData } = await admin
+      .from("tickets")
+      .select("id, title, sales_id, cs_id, tech_id")
+      .in("id", chunk);
+    for (const ticket of ticketsData ?? []) {
+      const recipientIds = Array.from(
+        new Set(
+          [ticket.sales_id, ticket.cs_id, ticket.tech_id].filter(
+            (id): id is string => !!id && id !== user.id,
+          ),
+        ),
+      );
+      for (const userId of recipientIds) {
+        notificationRecords.push({
+          user_id: userId,
+          ticket_id: ticket.id,
+          type: "ticket_revision_resolved",
+          title: `수정 요청 확인 완료: ${ticket.title ?? ""}`,
+          body: "전체 검토에서 품질 점검 통과가 확인되어 닫았습니다.",
+        });
+      }
+    }
+  }
+  for (let i = 0; i < notificationRecords.length; i += CHUNK_SIZE) {
+    const chunk = notificationRecords.slice(i, i + CHUNK_SIZE);
+    await admin.from("notifications").insert(chunk);
   }
 
   revalidatePath("/tickets");

@@ -75,6 +75,8 @@ export async function loadRevisionRows(
     canceled_by_name?: string | null;
     canceled_at?: string | null;
     canceled_note?: string | null;
+    before_title?: string | null;
+    before_steps?: string | null;
   };
 
   const rows: RevisionRow[] = schemaReady
@@ -121,6 +123,10 @@ export async function loadRevisionRows(
           canceled_by_name: row.canceled_by_name ?? null,
           canceled_at: row.canceled_at ?? null,
           canceled_note: row.canceled_note ?? null,
+          before_title: row.before_title ?? null,
+          before_steps: row.before_steps ?? null,
+          current_title: ticket?.title ?? null,
+          current_steps: ticket?.resolution_steps ?? null,
         };
       })
     : [];
