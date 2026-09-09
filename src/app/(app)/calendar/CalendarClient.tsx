@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, X, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -117,6 +118,44 @@ const LEGEND_ITEMS = [
   { category: "메모", color: "bg-violet-500" },
 ] as const;
 
+// 원색 칩은 10px 흰 글씨라 읽기 어렵다. 연한 배경에 진한 글씨, 왼쪽 막대만 분류색으로 둔다.
+// 범례·패널의 분류색(ev.color)은 그대로 쓰고 이 표는 셀 칩에만 쓴다.
+const CHIP_STYLE: Record<string, string> = {
+  "bg-indigo-500": "bg-indigo-50 text-indigo-900 border-indigo-500",
+  "bg-emerald-500": "bg-emerald-50 text-emerald-900 border-emerald-500",
+  "bg-blue-500": "bg-blue-50 text-blue-900 border-blue-500",
+  "bg-orange-500": "bg-orange-50 text-orange-900 border-orange-500",
+  "bg-sky-500": "bg-sky-50 text-sky-900 border-sky-500",
+  "bg-teal-500": "bg-teal-50 text-teal-900 border-teal-500",
+  "bg-teal-600": "bg-teal-50 text-teal-900 border-teal-600",
+  "bg-fuchsia-500": "bg-fuchsia-50 text-fuchsia-900 border-fuchsia-500",
+  "bg-cyan-500": "bg-cyan-50 text-cyan-900 border-cyan-500",
+  "bg-amber-500": "bg-amber-50 text-amber-900 border-amber-500",
+  "bg-red-500": "bg-red-50 text-red-900 border-red-500",
+  "bg-pink-500": "bg-pink-50 text-pink-900 border-pink-500",
+  "bg-rose-500": "bg-rose-50 text-rose-900 border-rose-500",
+  "bg-violet-500": "bg-violet-50 text-violet-900 border-violet-500",
+};
+const chipClass = (color: string) =>
+  CHIP_STYLE[color] ?? "bg-slate-50 text-slate-800 border-slate-400";
+
+const CATEGORY_PRIORITY: Record<string, number> = {
+  AS: 0,
+  설치: 1,
+  "설치 관리": 1,
+  설치예정일: 1,
+  명변: 1,
+  전환: 1,
+  택배발송: 2,
+  오픈: 3,
+  오픈예정일: 3,
+  "우국상 오픈": 3,
+  "우국상 설치(월요일)": 3,
+  카드신청: 4,
+  일정: 5,
+  메모: 6,
+};
+
 const INSTALL_CATEGORY_BY_DELIVERY_TYPE: Record<
   string,
   { label: string; color: string; statusColor: string }
@@ -167,6 +206,22 @@ function mondayOfWeek(ymd: string): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function summarizeOverflow(
+  events: CalendarEvent[],
+): { category: string; color: string; count: number }[] {
+  const result: { category: string; color: string; count: number }[] = [];
+  const index: Record<string, number> = {};
+  for (const ev of events) {
+    if (index[ev.category] === undefined) {
+      index[ev.category] = result.length;
+      result.push({ category: ev.category, color: ev.color, count: 1 });
+    } else {
+      result[index[ev.category]].count += 1;
+    }
+  }
+  return result;
+}
+
 type CalendarTab = "all" | "personal" | "assigned";
 
 export default function CalendarClient({
@@ -207,13 +262,67 @@ export default function CalendarClient({
   const [newCategory, setNewCategory] = useState<string>(MANUAL_CATEGORY_OPTIONS[0].value);
   const [newAssignedTo, setNewAssignedTo] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [techFilter, setTechFilter] = useState("");
   const [activeTab, setActiveTab] = useState<CalendarTab>("all");
   const toast = useToast();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (compact) return;
+    try {
+      const raw = localStorage.getItem("calendar:filters");
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        categories?: string[];
+        tech?: string;
+        tab?: CalendarTab;
+      };
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage는 SSR에서 읽을 수 없어 마운트 후 동기화가 불가피함
+      if (parsed.categories) setSelectedCategories(new Set(parsed.categories));
+      if (parsed.tech) setTechFilter(parsed.tech);
+      if (parsed.tab)
+        setActiveTab(parsed.tab === "assigned" && !canViewAssigned ? "all" : parsed.tab);
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (compact) return;
+    try {
+      localStorage.setItem(
+        "calendar:filters",
+        JSON.stringify({
+          categories: Array.from(selectedCategories),
+          tech: techFilter,
+          tab: activeTab,
+        }),
+      );
+    } catch {
+      // ignore
+    }
+  }, [compact, selectedCategories, techFilter, activeTab]);
 
   const toggleCategory = useCallback((category: string) => {
-    setSelectedCategory((prev) => (prev === category ? null : category));
+    setSelectedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
+      return next;
+    });
   }, []);
+
+  function openEvent(e: React.MouseEvent, ev: CalendarEvent) {
+    e.stopPropagation();
+    if (ev.manualId || !ev.href) {
+      setSelectedDate(ev.date);
+      return;
+    }
+    if (ev.newTab) window.open(ev.href, "_blank", "noopener,noreferrer");
+    else router.push(ev.href);
+  }
 
   function resetAddForm() {
     setNewTitle("");
@@ -409,6 +518,10 @@ export default function CalendarClient({
         ownerIds: [ev.created_by, ev.assigned_to].filter((id): id is string => !!id),
       });
     }
+    for (const list of Object.values(map))
+      list.sort(
+        (a, b) => (CATEGORY_PRIORITY[a.category] ?? 9) - (CATEGORY_PRIORITY[b.category] ?? 9),
+      );
     return map;
   }, [tickets, franchiseRows, wooRows, localInstallRows, localManualEvents]);
 
@@ -443,14 +556,18 @@ export default function CalendarClient({
   }, [eventMap]);
 
   const visibleEventMap = useMemo(() => {
-    if (!selectedCategory) return tabFilteredEventMap;
+    if (selectedCategories.size === 0 && !techFilter) return tabFilteredEventMap;
     const map: Record<string, CalendarEvent[]> = {};
     for (const [date, events] of Object.entries(tabFilteredEventMap)) {
-      const filtered = events.filter((ev) => ev.category === selectedCategory);
+      const filtered = events.filter(
+        (ev) =>
+          (selectedCategories.size === 0 || selectedCategories.has(ev.category)) &&
+          (!techFilter || ev.ownerIds.includes(techFilter)),
+      );
       if (filtered.length) map[date] = filtered;
     }
     return map;
-  }, [tabFilteredEventMap, selectedCategory]);
+  }, [tabFilteredEventMap, selectedCategories, techFilter]);
 
   function prevMonth() {
     if (month === 0) {
@@ -496,6 +613,66 @@ export default function CalendarClient({
   const numRows = cells.length / 7;
   const maxEventsPerCell = compact ? 2 : 3;
 
+  const upcomingDates = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
+
+  function renderEvent(ev: CalendarEvent, key: string) {
+    const content = (
+      <>
+        <div className="flex items-center gap-2 mb-1">
+          <span
+            className={`text-white text-[10px] font-bold px-1.5 py-0.5 rounded ${ev.color} ${
+              ev.glow ? "ring-2 ring-amber-300" : ""
+            }`}
+          >
+            {ev.label}
+          </span>
+          {ev.statusLabel && ev.statusColor && (
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ev.statusColor}`}>
+              {ev.statusLabel}
+            </span>
+          )}
+        </div>
+        <p className="text-sm font-semibold text-slate-900 break-words">{ev.businessName}</p>
+        {ev.subtitle && <p className="text-xs text-slate-500 break-words mt-0.5">{ev.subtitle}</p>}
+        <div className="flex gap-2 mt-1 text-xs text-slate-400">
+          {ev.type && <span>{TYPE_LABEL[ev.type]}</span>}
+          {ev.techName && <span>· {ev.techName}</span>}
+          {ev.salesName && <span>· {ev.salesName}</span>}
+        </div>
+      </>
+    );
+    if (ev.manualId) {
+      return (
+        <div
+          key={key}
+          className="flex items-start px-4 py-3 hover:bg-slate-50 transition-colors group"
+        >
+          <div className="flex-1 min-w-0">{content}</div>
+          <button
+            onClick={() => handleDeleteEvent(ev.manualId!)}
+            className="text-slate-300 hover:text-red-500 transition-colors ml-2 opacity-0 group-hover:opacity-100"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      );
+    }
+    return (
+      <Link
+        key={key}
+        href={ev.href}
+        {...(ev.newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+        className="block px-4 py-3 hover:bg-slate-50 transition-colors"
+      >
+        {content}
+      </Link>
+    );
+  }
+
   return (
     <div className={`flex h-full ${compact ? "gap-2" : "gap-4"}`}>
       {}
@@ -534,7 +711,7 @@ export default function CalendarClient({
 
         {}
         <div
-          className={`flex gap-1 border-b border-slate-200 flex-shrink-0 ${compact ? "mb-1.5" : "mb-3"}`}
+          className={`flex items-center gap-1 border-b border-slate-200 flex-shrink-0 ${compact ? "mb-1.5" : "mb-3"}`}
         >
           {(
             [
@@ -548,7 +725,7 @@ export default function CalendarClient({
               type="button"
               onClick={() => {
                 setActiveTab(tab);
-                setSelectedCategory(null);
+                setSelectedCategories(new Set());
                 setSelectedDate(null);
               }}
               className={`font-medium border-b-2 -mb-px transition-colors ${compact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm"} ${
@@ -560,20 +737,33 @@ export default function CalendarClient({
               {label}
             </button>
           ))}
+          {!compact && (
+            <div className="ml-auto mb-1 w-40">
+              <AppSelect
+                value={techFilter}
+                onValueChange={setTechFilter}
+                aria-label="담당 기사"
+                options={[
+                  { value: "", label: "전체 기사" },
+                  ...techProfiles.map((tech) => ({ value: tech.id, label: tech.name })),
+                ]}
+              />
+            </div>
+          )}
         </div>
 
         {}
         {showLegend && (
-          <div className="flex flex-wrap gap-3 mb-3 flex-shrink-0">
+          <div className="flex flex-wrap items-center gap-3 mb-3 flex-shrink-0">
             {visibleLegendItems.map((li) => (
               <button
                 key={li.category}
                 type="button"
                 onClick={() => toggleCategory(li.category)}
                 className={`flex items-center gap-1.5 text-[13px] px-1.5 py-1 rounded-md cursor-pointer transition-all hover:bg-slate-100 ${
-                  selectedCategory === li.category
+                  selectedCategories.has(li.category)
                     ? "bg-slate-100 text-slate-800 font-semibold"
-                    : selectedCategory
+                    : selectedCategories.size > 0
                       ? "text-slate-400 opacity-40 hover:opacity-70"
                       : "text-slate-500"
                 }`}
@@ -582,6 +772,15 @@ export default function CalendarClient({
                 {li.category}
               </button>
             ))}
+            {selectedCategories.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedCategories(new Set())}
+                className="text-[12px] text-blue-600 hover:underline"
+              >
+                전체 보기
+              </button>
+            )}
           </div>
         )}
 
@@ -641,22 +840,34 @@ export default function CalendarClient({
                     <div
                       key={i}
                       title={`${ev.label} ${ev.businessName}`}
-                      className={`text-white font-bold rounded truncate ${compact ? "text-[9px] px-1 py-px" : "text-[10px] px-1.5 py-0.5"} ${ev.color} ${
-                        ev.glow
-                          ? "ring-2 ring-amber-300 shadow-[0_0_8px_2px_rgba(245,158,11,0.75)] animate-pulse"
-                          : ""
-                      }`}
+                      onClick={(e) => openEvent(e, ev)}
+                      className={`flex items-center gap-1 truncate rounded-sm border-l-2 ${chipClass(ev.color)} ${
+                        compact ? "px-1 py-px text-[9px]" : "px-1.5 py-0.5 text-[10.5px]"
+                      } ${ev.glow ? "ring-1 ring-amber-400" : ""} ${ev.href || ev.manualId ? "cursor-pointer hover:brightness-95" : ""}`}
                     >
-                      {ev.label} {ev.businessName}
+                      <span className="shrink-0 font-medium opacity-70">{ev.label}</span>
+                      <span className="truncate font-semibold">{ev.businessName}</span>
                     </div>
                   ))}
-                  {events.length > maxEventsPerCell && (
-                    <div
-                      className={`text-slate-400 px-1 ${compact ? "text-[9px]" : "text-[10px]"}`}
-                    >
-                      +{events.length - maxEventsPerCell}건
-                    </div>
-                  )}
+                  {events.length > maxEventsPerCell &&
+                    (compact ? (
+                      <div className="px-1 text-[9px] text-slate-400">
+                        +{events.length - maxEventsPerCell}건
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 px-1 text-[10px] text-slate-500">
+                        {summarizeOverflow(events.slice(maxEventsPerCell)).map((s) => (
+                          <span
+                            key={s.category}
+                            className="flex items-center gap-0.5"
+                            title={s.category}
+                          >
+                            <span className={`inline-block h-2 w-2 rounded-sm ${s.color}`} />
+                            {s.count}
+                          </span>
+                        ))}
+                      </div>
+                    ))}
                 </div>
               </div>
             );
@@ -666,11 +877,9 @@ export default function CalendarClient({
 
       {}
       {!compact && (
-        <div
-          className={`w-72 flex-shrink-0 transition-all ${selectedDate ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-        >
-          {selectedDate && (
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm h-fit">
+        <div className="w-72 flex-shrink-0">
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm h-fit">
+            {selectedDate ? (
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
                 <p className="font-semibold text-slate-900 text-sm">
                   {selectedDate.slice(5).replace("-", "/")} 일정
@@ -690,143 +899,114 @@ export default function CalendarClient({
                   </button>
                 </div>
               </div>
+            ) : (
+              <div className="px-4 py-3 border-b border-slate-100">
+                <p className="font-semibold text-slate-900 text-sm">오늘부터 7일</p>
+              </div>
+            )}
 
-              {showAddForm && (
-                <div className="px-4 py-3 border-b border-slate-100 flex flex-col gap-2">
-                  <div className="flex flex-wrap gap-1.5">
-                    {MANUAL_CATEGORY_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setNewCategory(opt.value)}
-                        className={`flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-md border transition-colors ${
-                          newCategory === opt.value
-                            ? "border-slate-300 bg-slate-100 text-slate-800"
-                            : "border-transparent text-slate-500 hover:bg-slate-50"
-                        }`}
-                      >
-                        <span className={`w-2 h-2 rounded-sm ${opt.color}`} />
-                        {opt.value}
-                      </button>
-                    ))}
-                  </div>
-                  <input
-                    autoFocus
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleAddEvent();
-                    }}
-                    placeholder="일정 제목"
-                    className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
-                  />
-                  <input
-                    value={newMemo}
-                    onChange={(e) => setNewMemo(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleAddEvent();
-                    }}
-                    placeholder="메모 (선택)"
-                    className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
-                  />
-                  {(newCategory === "설치" || newCategory === "택배발송") && (
-                    <AppSelect
-                      value={newAssignedTo}
-                      onValueChange={setNewAssignedTo}
-                      aria-label="담당자"
-                      options={[
-                        { value: "", label: "담당자 미배정" },
-                        ...techProfiles.map((tech) => ({ value: tech.id, label: tech.name })),
-                      ]}
-                    />
-                  )}
-                  <div className="flex justify-end gap-2">
+            {selectedDate && showAddForm && (
+              <div className="px-4 py-3 border-b border-slate-100 flex flex-col gap-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {MANUAL_CATEGORY_OPTIONS.map((opt) => (
                     <button
-                      onClick={resetAddForm}
-                      className="text-xs px-2.5 py-1.5 rounded-lg text-slate-500 hover:bg-slate-50"
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setNewCategory(opt.value)}
+                      className={`flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-md border transition-colors ${
+                        newCategory === opt.value
+                          ? "border-slate-300 bg-slate-100 text-slate-800"
+                          : "border-transparent text-slate-500 hover:bg-slate-50"
+                      }`}
                     >
-                      취소
+                      <span className={`w-2 h-2 rounded-sm ${opt.color}`} />
+                      {opt.value}
                     </button>
-                    <button
-                      onClick={handleAddEvent}
-                      disabled={submitting || !newTitle.trim()}
-                      className="text-xs px-2.5 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                    >
-                      등록
-                    </button>
-                  </div>
+                  ))}
                 </div>
-              )}
+                <input
+                  autoFocus
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddEvent();
+                  }}
+                  placeholder="일정 제목"
+                  className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
+                />
+                <input
+                  value={newMemo}
+                  onChange={(e) => setNewMemo(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddEvent();
+                  }}
+                  placeholder="메모 (선택)"
+                  className="text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
+                />
+                {(newCategory === "설치" || newCategory === "택배발송") && (
+                  <AppSelect
+                    value={newAssignedTo}
+                    onValueChange={setNewAssignedTo}
+                    aria-label="담당자"
+                    options={[
+                      { value: "", label: "담당자 미배정" },
+                      ...techProfiles.map((tech) => ({ value: tech.id, label: tech.name })),
+                    ]}
+                  />
+                )}
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={resetAddForm}
+                    className="text-xs px-2.5 py-1.5 rounded-lg text-slate-500 hover:bg-slate-50"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={handleAddEvent}
+                    disabled={submitting || !newTitle.trim()}
+                    className="text-xs px-2.5 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    등록
+                  </button>
+                </div>
+              </div>
+            )}
 
-              {selectedEvents.length === 0 ? (
+            {selectedDate ? (
+              selectedEvents.length === 0 ? (
                 <p className="text-slate-400 text-sm text-center py-8">일정 없음</p>
               ) : (
                 <div className="divide-y divide-slate-50 max-h-[600px] overflow-y-auto">
-                  {selectedEvents.map((ev, i) => {
-                    const content = (
-                      <>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span
-                            className={`text-white text-[10px] font-bold px-1.5 py-0.5 rounded ${ev.color} ${
-                              ev.glow
-                                ? "ring-2 ring-amber-300 shadow-[0_0_8px_2px_rgba(245,158,11,0.75)] animate-pulse"
-                                : ""
-                            }`}
-                          >
-                            {ev.label}
-                          </span>
-                          {ev.statusLabel && ev.statusColor && (
-                            <span
-                              className={`text-xs px-2 py-0.5 rounded-full font-medium ${ev.statusColor}`}
-                            >
-                              {ev.statusLabel}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm font-semibold text-slate-900 break-words">
-                          {ev.businessName}
-                        </p>
-                        {ev.subtitle && (
-                          <p className="text-xs text-slate-500 break-words mt-0.5">{ev.subtitle}</p>
-                        )}
-                        <div className="flex gap-2 mt-1 text-xs text-slate-400">
-                          {ev.type && <span>{TYPE_LABEL[ev.type]}</span>}
-                          {ev.techName && <span>· {ev.techName}</span>}
-                          {ev.salesName && <span>· {ev.salesName}</span>}
-                        </div>
-                      </>
-                    );
-                    if (ev.manualId) {
-                      return (
-                        <div
-                          key={i}
-                          className="flex items-start px-4 py-3 hover:bg-slate-50 transition-colors group"
-                        >
-                          <div className="flex-1 min-w-0">{content}</div>
-                          <button
-                            onClick={() => handleDeleteEvent(ev.manualId!)}
-                            className="text-slate-300 hover:text-red-500 transition-colors ml-2 opacity-0 group-hover:opacity-100"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      );
-                    }
-                    return (
-                      <Link
-                        key={i}
-                        href={ev.href}
-                        {...(ev.newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                        className="block px-4 py-3 hover:bg-slate-50 transition-colors"
-                      >
-                        {content}
-                      </Link>
-                    );
-                  })}
+                  {selectedEvents.map((ev, i) => renderEvent(ev, String(i)))}
                 </div>
-              )}
-            </div>
-          )}
+              )
+            ) : upcomingDates.every((d) => !visibleEventMap[d]?.length) ? (
+              <p className="text-slate-400 text-sm text-center py-8">이번 주 일정 없음</p>
+            ) : (
+              <div className="divide-y divide-slate-50 max-h-[600px] overflow-y-auto">
+                {upcomingDates.map((date) => {
+                  const events = visibleEventMap[date] ?? [];
+                  if (events.length === 0) return null;
+                  const [y, m, d] = date.split("-").map(Number);
+                  const dow = new Date(y, m - 1, d).getDay();
+                  return (
+                    <div key={date}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDate(date)}
+                        className={`w-full text-left px-4 py-2 text-xs font-semibold bg-slate-50 hover:bg-slate-100 ${
+                          date === todayStr ? "text-blue-600" : "text-slate-500"
+                        }`}
+                      >
+                        {m}/{d} ({DAYS[dow]}){date === todayStr ? " 오늘" : ""}
+                      </button>
+                      {events.map((ev, i) => renderEvent(ev, `${date}-${i}`))}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
