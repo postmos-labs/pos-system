@@ -437,6 +437,15 @@ export default function InstallDetailDrawer({
                 </Field>
                 {installation.delivery_checklist && (
                   <Field label="발송 체크리스트">
+                    {showChecklist && (
+                      <button
+                        type="button"
+                        onClick={onOpenChecklist}
+                        className="mb-1 text-xs font-semibold text-emerald-700 hover:underline"
+                      >
+                        수정
+                      </button>
+                    )}
                     <ReadValue>
                       {installation.delivery_checklist.items
                         .filter((i) => i.quantity > 0)

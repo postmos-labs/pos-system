@@ -154,7 +154,9 @@ export default async function TicketDetailPage({ params }: Props) {
 
       {ticket.team === "tech" && (
         <TicketAsChecklist
+          ticketId={ticket.id as string}
           checklist={(ticket as { as_checklist?: Record<string, boolean> | null }).as_checklist}
+          canEdit={["admin", "master", "sales", "cs", "tech"].includes((profile as Profile).role)}
         />
       )}
 
