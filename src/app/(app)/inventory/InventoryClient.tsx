@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Plus, Trash2, Search, AlertTriangle, Download } from "lucide-react";
 import { format } from "date-fns";
@@ -10,7 +11,13 @@ import FormModal from "@/components/ui/FormModal";
 import HistoryButton from "@/components/ui/HistoryButton";
 import MemoHistoryPanel from "@/components/ui/MemoHistoryPanel";
 import { AppSelect } from "@/components/ui/AppSelect";
+import { DatePickerField } from "@/components/ui/DatePickerField";
 import { kstToday } from "@/lib/date";
+import {
+  INVENTORY_LOG_TYPES,
+  INVENTORY_LOG_TYPE_LABEL,
+  type InventoryLogType,
+} from "@/app/(app)/installs/deliveryChecklist";
 
 const CATEGORY_TREE: Record<string, Record<string, string[]>> = {
   포스장비: {
@@ -67,6 +74,8 @@ interface InventoryLog {
   user: { name: string } | null;
   created_at: string;
   merchant_name?: string | null;
+  log_type?: string | null;
+  installation_id?: string | null;
 }
 
 interface MerchantSearchResult {
@@ -86,6 +95,21 @@ function isMissingInventoryMerchantColumn(error: { code?: string; message?: stri
     /column .* does not exist/i.test(error.message ?? "")
   );
 }
+
+// 147 이전 이력은 log_type이 비어 있다. 부호로 입고/수동출고를 추정해 보여준다.
+function logTypeOf(log: { log_type?: string | null; change: number }): InventoryLogType {
+  if (log.log_type && (INVENTORY_LOG_TYPES as readonly string[]).includes(log.log_type))
+    return log.log_type as InventoryLogType;
+  return log.change > 0 ? "in" : "manual_out";
+}
+const LOG_TYPE_STYLE: Record<InventoryLogType, string> = {
+  in: "bg-green-50 text-green-700",
+  delivery_out: "bg-rose-50 text-rose-700",
+  install_out: "bg-fuchsia-50 text-fuchsia-700",
+  manual_out: "bg-slate-100 text-slate-600",
+  audit_adjust: "bg-amber-50 text-amber-700",
+  return: "bg-blue-50 text-blue-700",
+};
 
 const EMPTY_FORM = {
   major_category: MAJOR_CATEGORIES[0],
@@ -147,6 +171,10 @@ export default function InventoryClient({
   const [merchantQuery, setMerchantQuery] = useState("");
   const [merchantResults, setMerchantResults] = useState<MerchantSearchResult[]>([]);
   const [merchantSearching, setMerchantSearching] = useState(false);
+  const [logTypeFilter, setLogTypeFilter] = useState<"" | InventoryLogType>("");
+  const [logSearch, setLogSearch] = useState("");
+  const [logFrom, setLogFrom] = useState("");
+  const [logTo, setLogTo] = useState("");
 
   const supabase = createClient();
 
@@ -234,8 +262,10 @@ export default function InventoryClient({
       change: delta,
       reason: reason || null,
     };
+    const logType: InventoryLogType = delta > 0 ? "in" : "manual_out";
     let { error: logError } = await supabase.from("inventory_logs").insert({
       ...basePayload,
+      log_type: logType,
       merchant_id: merchant?.id ?? null,
       merchant_name: merchant?.business_name ?? null,
     });
@@ -260,6 +290,7 @@ export default function InventoryClient({
         user: { name: currentUserName },
         created_at: new Date().toISOString(),
         merchant_name: merchant?.business_name ?? null,
+        log_type: logType,
       },
       ...prev,
     ]);
@@ -279,12 +310,19 @@ export default function InventoryClient({
       return;
     }
     const newQty = (updated as InventoryItem).quantity;
-    const { error: logError } = await supabase.from("inventory_logs").insert({
+    const auditPayload = {
       item_id: item.id,
       item_name: item.name,
       change: delta,
       reason: "직접 수정",
-    });
+    };
+    let { error: logError } = await supabase
+      .from("inventory_logs")
+      .insert({ ...auditPayload, log_type: "audit_adjust" });
+    if (logError && isMissingInventoryMerchantColumn(logError)) {
+      // log_type 컬럼 미적용 환경: 유형 없이 기존처럼 기록한다.
+      ({ error: logError } = await supabase.from("inventory_logs").insert(auditPayload));
+    }
     if (logError) toast.error("변동 이력 기록 실패: " + logError.message);
     setItems((prev) =>
       prev.map((i) =>
@@ -358,6 +396,25 @@ export default function InventoryClient({
   }, [items, search, majorFilter, lowStockOnly]);
 
   const lowCount = items.filter((i) => i.quantity <= i.min_quantity).length;
+
+  const logFilterActive = !!(logTypeFilter || logSearch || logFrom || logTo);
+  const filteredLogs = useMemo(() => {
+    return logs.filter((log) => {
+      if (logTypeFilter && logTypeOf(log) !== logTypeFilter) return false;
+      const term = logSearch.trim().toLowerCase();
+      if (
+        term &&
+        !`${log.item_name} ${log.merchant_name ?? ""} ${log.reason ?? ""}`
+          .toLowerCase()
+          .includes(term)
+      )
+        return false;
+      const day = log.created_at.slice(0, 10);
+      if (logFrom && day < logFrom) return false;
+      if (logTo && day > logTo) return false;
+      return true;
+    });
+  }, [logs, logTypeFilter, logSearch, logFrom, logTo]);
 
   async function handleExport() {
     setExporting(true);
@@ -550,39 +607,102 @@ export default function InventoryClient({
 
       {showLogs ? (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100">
+          <div className="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center gap-2">
             <p className="text-sm font-semibold text-slate-800">재고 변동 이력</p>
+            <AppSelect
+              value={logTypeFilter}
+              onValueChange={(v) => setLogTypeFilter(v as "" | InventoryLogType)}
+              aria-label="유형 필터"
+              options={[
+                { value: "", label: "유형 전체" },
+                ...INVENTORY_LOG_TYPES.map((t) => ({
+                  value: t,
+                  label: INVENTORY_LOG_TYPE_LABEL[t],
+                })),
+              ]}
+            />
+            <input
+              value={logSearch}
+              onChange={(e) => setLogSearch(e.target.value)}
+              placeholder="품목명, 상호, 사유"
+              className="px-3 py-2 text-sm border border-slate-200 rounded-lg w-44 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <DatePickerField
+              value={logFrom}
+              onChange={setLogFrom}
+              ariaLabel="시작일"
+              placeholder="시작일"
+              className="w-32"
+            />
+            <span className="text-xs text-slate-400">~</span>
+            <DatePickerField
+              value={logTo}
+              onChange={setLogTo}
+              ariaLabel="종료일"
+              placeholder="종료일"
+              className="w-32"
+            />
+            {logFilterActive && (
+              <button
+                onClick={() => {
+                  setLogTypeFilter("");
+                  setLogSearch("");
+                  setLogFrom("");
+                  setLogTo("");
+                }}
+                className="text-xs text-slate-400 hover:text-slate-600"
+              >
+                초기화
+              </button>
+            )}
+            <span className="ml-auto text-sm text-slate-500">{filteredLogs.length}건</span>
           </div>
           <div className="divide-y divide-slate-50">
-            {logs.length === 0 ? (
+            {filteredLogs.length === 0 ? (
               <p className="text-center text-sm text-slate-400 py-10">변동 이력이 없습니다.</p>
             ) : (
-              logs.map((log) => (
-                <div key={log.id} className="px-4 py-3 flex items-center gap-3">
-                  <span
-                    className={`text-sm font-bold w-12 text-right ${log.change > 0 ? "text-green-600" : "text-red-600"}`}
-                  >
-                    {log.change > 0 ? `+${log.change}` : log.change}
-                  </span>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-800">
-                      {log.item_name}
-                      {log.merchant_name && (
-                        <span className="ml-1.5 text-xs font-normal text-blue-600">
-                          {log.merchant_name}
+              filteredLogs.map((log) => {
+                const type = logTypeOf(log);
+                return (
+                  <div key={log.id} className="px-4 py-3 flex items-center gap-3">
+                    <span
+                      className={`text-sm font-bold w-12 text-right ${log.change > 0 ? "text-green-600" : "text-red-600"}`}
+                    >
+                      {log.change > 0 ? `+${log.change}` : log.change}
+                    </span>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-slate-800">
+                        <span
+                          className={`mr-1.5 rounded px-1.5 py-0.5 text-[11px] font-semibold ${LOG_TYPE_STYLE[type]}`}
+                        >
+                          {INVENTORY_LOG_TYPE_LABEL[type]}
                         </span>
+                        {log.item_name}
+                        {log.merchant_name && (
+                          <span className="ml-1.5 text-xs font-normal text-blue-600">
+                            {log.merchant_name}
+                          </span>
+                        )}
+                      </p>
+                      {log.reason && <p className="text-xs text-slate-500">{log.reason}</p>}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-slate-500">{log.user?.name ?? "알수없음"}</p>
+                      <p className="text-xs text-slate-400">
+                        {format(new Date(log.created_at), "M/d HH:mm", { locale: ko })}
+                      </p>
+                      {log.installation_id && (
+                        <Link
+                          href={`/installs?id=${log.installation_id}`}
+                          className="text-[11px] text-blue-600 hover:underline"
+                        >
+                          설치건 보기
+                        </Link>
                       )}
-                    </p>
-                    {log.reason && <p className="text-xs text-slate-500">{log.reason}</p>}
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-slate-500">{log.user?.name ?? "알수없음"}</p>
-                    <p className="text-xs text-slate-400">
-                      {format(new Date(log.created_at), "M/d HH:mm", { locale: ko })}
-                    </p>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

@@ -62,6 +62,8 @@ import {
 } from "./actions";
 import type { MerchantEquipmentItem } from "../merchants/merchant360";
 import InstallDetailDrawer, { type InstallFranchiseDetail } from "./InstallDetailDrawer";
+import type { DeliveryChecklist } from "./deliveryChecklist";
+import DeliveryChecklistModal from "./DeliveryChecklistModal";
 import {
   STATUS_LABELS,
   STATUS_COLORS,
@@ -149,6 +151,7 @@ export interface Installation {
   sort_order?: number | null;
   last_notify_status?: string;
   last_notify_at?: string;
+  delivery_checklist?: DeliveryChecklist | null;
 }
 
 interface Props {
@@ -591,6 +594,10 @@ export default function InstallsClient({
   const [rejectModal, setRejectModal] = useState<{ id: string; reason: string } | null>(null);
   const [rejecting, setRejecting] = useState(false);
   const [transitModal, setTransitModal] = useState<{ id: string; eta: string } | null>(null);
+  const [checklistModal, setChecklistModal] = useState<{
+    id: string;
+    thenStatus: string | null;
+  } | null>(null);
   const [transitNoticeModal, setTransitNoticeModal] = useState<{ id: string; eta: string } | null>(
     null,
   );
@@ -932,6 +939,18 @@ export default function InstallsClient({
         isReschedule: true,
       });
       return;
+    }
+    if (status === "preparing") {
+      const inst = installs.find((i) => i.id === id);
+      if (inst?.delivery_type === "delivery") {
+        // 택배 건은 제품준비 전에 실제 발송 장비를 확정한다. 저장되면 이어서 승인요청으로 간다.
+        if (completionApprovals[id]) {
+          toast.warning("이미 승인 대기 중인 요청이 있습니다. 승인 처리 후 다시 시도해주세요.");
+          return;
+        }
+        setChecklistModal({ id, thenStatus: "preparing" });
+        return;
+      }
     }
     if (APPROVAL_TARGETS.has(status)) {
       // 대기 중 요청이 있으면 서버가 중복 요청을 거절한다(requestInstallationStatusApproval).
@@ -2111,6 +2130,7 @@ export default function InstallsClient({
           onAssign={(value) => handleAssign(activeDetailInst.id, value)}
           onStatusChange={(value) => handleStatusChange(activeDetailInst.id, value)}
           onTransit={() => setTransitModal({ id: activeDetailInst.id, eta: "" })}
+          onOpenChecklist={() => setChecklistModal({ id: activeDetailInst.id, thenStatus: null })}
           franchiseLoading={loadingDetail}
           franchiseDetail={franchiseDetail}
           merchantId={compositionMerchantId}
@@ -2205,6 +2225,32 @@ export default function InstallsClient({
           </div>
         </div>
       )}
+      {checklistModal &&
+        (() => {
+          const inst = installs.find((i) => i.id === checklistModal.id);
+          if (!inst) return null;
+          return (
+            <DeliveryChecklistModal
+              installation={inst}
+              onClose={() => setChecklistModal(null)}
+              onSaved={async (checklist) => {
+                const confirmedItems = checklist.items
+                  .filter((i) => i.quantity > 0)
+                  .map(({ name, quantity }) => ({ name, quantity }));
+                setInstalls((prev) =>
+                  prev.map((i) =>
+                    i.id === inst.id
+                      ? { ...i, delivery_checklist: checklist, items: confirmedItems }
+                      : i,
+                  ),
+                );
+                const thenStatus = checklistModal.thenStatus;
+                setChecklistModal(null);
+                if (thenStatus) await requestStepApproval(inst.id, thenStatus);
+              }}
+            />
+          );
+        })()}
       {}
       {transitModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">

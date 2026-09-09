@@ -26,7 +26,7 @@ export default async function InventoryPage() {
     .from("inventory_logs")
     .select("*, user:profiles!inventory_logs_user_id_fkey(name)")
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(300);
 
   return (
     <InventoryClient

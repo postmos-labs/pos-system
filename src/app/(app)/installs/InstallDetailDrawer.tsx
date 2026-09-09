@@ -106,6 +106,7 @@ interface Props {
 
   onCopyLink: () => void;
   onReschedule: () => void;
+  onOpenChecklist: () => void;
   onTechReject: () => void;
   onDelete: () => void;
   onOpenPostHistory: () => void;
@@ -240,6 +241,7 @@ export default function InstallDetailDrawer({
   onRejectCompletion,
   onCopyLink,
   onReschedule,
+  onOpenChecklist,
   onTechReject,
   onDelete,
   onOpenPostHistory,
@@ -257,6 +259,11 @@ export default function InstallDetailDrawer({
       (canApproveFinalBy(profile) && approval.status === "responsible_approved"));
   const showReschedule =
     canReschedule && installation.status !== "completed" && installation.status !== "rejected";
+  const showChecklist =
+    canEdit &&
+    installation.delivery_type === "delivery" &&
+    installation.status !== "completed" &&
+    installation.status !== "rejected";
   // 표(데스크톱)에는 이 버튼과 동등한 단독 조작이 없다 — "이동중" 상태로 select를 바꾸면
   // 같은 setTransitModal이 열리는 것으로 갈음한다. 모바일카드(mineOnly 전용, "도착시간 알림
   // 발송" 버튼)에만 있던 조건을 그대로 옮겼다.
@@ -428,6 +435,22 @@ export default function InstallDetailDrawer({
                     </ReadValue>
                   )}
                 </Field>
+                {installation.delivery_checklist && (
+                  <Field label="발송 체크리스트">
+                    <ReadValue>
+                      {installation.delivery_checklist.items
+                        .filter((i) => i.quantity > 0)
+                        .map((i) => `${i.checked ? "☑" : "☐"} ${i.name} x${i.quantity}`)
+                        .join(", ") || "-"}
+                      {installation.delivery_checklist.note
+                        ? ` · ${installation.delivery_checklist.note}`
+                        : ""}
+                      {installation.delivery_checklist.saved_by_name
+                        ? ` (${installation.delivery_checklist.saved_by_name})`
+                        : ""}
+                    </ReadValue>
+                  </Field>
+                )}
                 <Field label="비고">
                   {canEdit ? (
                     <textarea
@@ -704,6 +727,15 @@ export default function InstallDetailDrawer({
               className="rounded-lg border border-teal-200 px-2.5 py-1.5 text-xs font-semibold text-teal-600 hover:bg-teal-50"
             >
               우국상 원본 보기
+            </button>
+          )}
+          {showChecklist && (
+            <button
+              type="button"
+              onClick={onOpenChecklist}
+              className="rounded-lg border border-emerald-200 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+            >
+              발송 체크리스트
             </button>
           )}
           {showReschedule && (

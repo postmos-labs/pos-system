@@ -13,6 +13,11 @@ import {
   skipsFirstApproval,
   canForceCompleteBy,
 } from "@/lib/auth/installApproval";
+import {
+  formatDeliveryNoteLine,
+  type DeliveryChecklist,
+  type DeliveryChecklistItem,
+} from "./deliveryChecklist";
 
 const INSTALL_STATUSES = new Set([
   "received",
@@ -59,6 +64,89 @@ function isMissingInstallationPostHistoryTable(error: { code?: string; message?:
     error.code === "PGRST205" ||
     /installation_post_history|schema cache|relation .* does not exist/i.test(error.message ?? "")
   );
+}
+
+// 완료 시 재고 차감. 147번 이후엔 이력 유형(p_log_type)을 넘기고, 그 전(함수 인자 불일치 42883)이면 예전 인자로 다시 부른다.
+// 택배 건은 확정 장비를 비고에 한 줄로 남겨 나중에 A/S·재출고 때 무엇이 나갔는지 바로 본다.
+async function deductInventoryForCompletion(
+  admin: ReturnType<typeof createAdminClient>,
+  installation: {
+    id: string;
+    customer_name: string | null;
+    delivery_type?: string | null;
+    franchise_application_id?: string | null;
+    items: unknown;
+    notes?: string | null;
+  },
+): Promise<string | null> {
+  let inventoryWarning: string | null = null;
+
+  const { data: merchantRow } = installation.franchise_application_id
+    ? await admin
+        .from("merchants")
+        .select("id, business_name")
+        .eq("franchise_application_id", installation.franchise_application_id)
+        .limit(1)
+        .maybeSingle()
+    : { data: null };
+
+  const isDelivery = installation.delivery_type === "delivery";
+  const note = isDelivery
+    ? `택배출고 자동차감 (${installation.customer_name ?? "미입력"})`
+    : `설치완료 자동차감 (${installation.customer_name ?? "미입력"})`;
+  const rpcArgs = {
+    p_items: installation.items,
+    p_install_id: installation.id,
+    p_note: note,
+    p_merchant_id: merchantRow?.id ?? null,
+    p_merchant_name: merchantRow?.business_name ?? installation.customer_name ?? null,
+  };
+
+  let { data: unmatched, error: deductError } = await admin.rpc("deduct_inventory_on_install", {
+    ...rpcArgs,
+    p_log_type: isDelivery ? "delivery_out" : "install_out",
+  });
+  if (
+    deductError &&
+    (deductError.code === "42883" || /function .* does not exist/i.test(deductError.message ?? ""))
+  ) {
+    ({ data: unmatched, error: deductError } = await admin.rpc(
+      "deduct_inventory_on_install",
+      rpcArgs,
+    ));
+  }
+
+  if (deductError) {
+    inventoryWarning = "재고 자동차감에 실패했습니다: " + deductError.message;
+  } else {
+    if (Array.isArray(unmatched) && unmatched.length > 0) {
+      const names = unmatched
+        .map((row: { unmatched_name: string }) => row.unmatched_name)
+        .filter(Boolean);
+      if (names.length > 0) {
+        inventoryWarning = "재고에서 찾지 못해 차감되지 않은 품목: " + names.join(", ");
+      }
+    }
+    if (isDelivery && Array.isArray(installation.items)) {
+      const noteLine = formatDeliveryNoteLine(
+        installation.items as { name: string; quantity: number }[],
+      );
+      if (noteLine && !(installation.notes ?? "").includes(noteLine)) {
+        const nextNotes = installation.notes ? `${installation.notes}\n${noteLine}` : noteLine;
+        const { error: notesError } = await admin
+          .from("installations")
+          .update({ notes: nextNotes })
+          .eq("id", installation.id);
+        if (notesError) {
+          inventoryWarning = inventoryWarning
+            ? `${inventoryWarning} / 비고 기록 실패: ${notesError.message}`
+            : `비고 기록 실패: ${notesError.message}`;
+        }
+      }
+    }
+  }
+
+  return inventoryWarning;
 }
 
 export type InstallationPostHistoryRecord = {
@@ -764,7 +852,7 @@ export async function approveInstallationStatusByTeamLead(installationId: string
   const { data: installation } = await admin
     .from("installations")
     .select(
-      "status, scheduled_date, scheduled_time, items, customer_name, franchise_application_id",
+      "status, scheduled_date, scheduled_time, items, customer_name, franchise_application_id, delivery_type, notes",
     )
     .eq("id", installationId)
     .single();
@@ -892,36 +980,14 @@ export async function approveInstallationStatusByTeamLead(installationId: string
   if (approval.target_status === "completed") {
     const items = installation.items;
     if (Array.isArray(items) && items.length > 0) {
-      // 어느 가맹점으로 나갔는지 함께 남겨 가맹점 360의 "장비 입출고"에 뜨게 한다.
-      const { data: merchantRow } = installation.franchise_application_id
-        ? await admin
-            .from("merchants")
-            .select("id, business_name")
-            .eq("franchise_application_id", installation.franchise_application_id)
-            .limit(1)
-            .maybeSingle()
-        : { data: null };
-
-      const { data: unmatched, error: deductError } = await admin.rpc(
-        "deduct_inventory_on_install",
-        {
-          p_items: items,
-          p_install_id: installationId,
-          p_note: `설치완료 자동차감 (${installation.customer_name ?? "미입력"})`,
-          p_merchant_id: merchantRow?.id ?? null,
-          p_merchant_name: merchantRow?.business_name ?? installation.customer_name ?? null,
-        },
-      );
-      if (deductError) {
-        inventoryWarning = "재고 자동차감에 실패했습니다: " + deductError.message;
-      } else if (Array.isArray(unmatched) && unmatched.length > 0) {
-        const names = unmatched
-          .map((row: { unmatched_name: string }) => row.unmatched_name)
-          .filter(Boolean);
-        if (names.length > 0) {
-          inventoryWarning = "재고에서 찾지 못해 차감되지 않은 품목: " + names.join(", ");
-        }
-      }
+      inventoryWarning = await deductInventoryForCompletion(admin, {
+        id: installationId,
+        customer_name: installation.customer_name,
+        delivery_type: installation.delivery_type,
+        franchise_application_id: installation.franchise_application_id,
+        items,
+        notes: installation.notes,
+      });
     }
   }
 
@@ -967,7 +1033,9 @@ export async function completeInstallationByTeamLead(installationId: string, not
 
   const { data: installation } = await admin
     .from("installations")
-    .select("status, items, customer_name, franchise_application_id, assigned_to")
+    .select(
+      "status, items, customer_name, franchise_application_id, assigned_to, delivery_type, notes",
+    )
     .eq("id", installationId)
     .single();
   if (!installation) return { error: "설치건을 찾을 수 없습니다.", notificationError: null };
@@ -1023,30 +1091,14 @@ export async function completeInstallationByTeamLead(installationId: string, not
   let inventoryWarning: string | null = null;
   const items = installation.items;
   if (Array.isArray(items) && items.length > 0) {
-    const { data: merchantRow } = installation.franchise_application_id
-      ? await admin
-          .from("merchants")
-          .select("id, business_name")
-          .eq("franchise_application_id", installation.franchise_application_id)
-          .limit(1)
-          .maybeSingle()
-      : { data: null };
-    const { data: unmatched, error: deductError } = await admin.rpc("deduct_inventory_on_install", {
-      p_items: items,
-      p_install_id: installationId,
-      p_note: `설치완료 자동차감 (${installation.customer_name ?? "미입력"})`,
-      p_merchant_id: merchantRow?.id ?? null,
-      p_merchant_name: merchantRow?.business_name ?? installation.customer_name ?? null,
+    inventoryWarning = await deductInventoryForCompletion(admin, {
+      id: installationId,
+      customer_name: installation.customer_name,
+      delivery_type: installation.delivery_type,
+      franchise_application_id: installation.franchise_application_id,
+      items,
+      notes: installation.notes,
     });
-    if (deductError) {
-      inventoryWarning = "재고 자동차감에 실패했습니다: " + deductError.message;
-    } else if (Array.isArray(unmatched) && unmatched.length > 0) {
-      const names = unmatched
-        .map((row: { unmatched_name: string }) => row.unmatched_name)
-        .filter(Boolean);
-      if (names.length > 0)
-        inventoryWarning = "재고에서 찾지 못해 차감되지 않은 품목: " + names.join(", ");
-    }
   }
 
   // 승인 절차를 건너뛰고 마무리하는 경로라 고객 알림톡은 보내지 않는다.
@@ -1350,4 +1402,181 @@ export async function deleteInstallations(ids: string[]) {
   revalidatePath("/installs/mine");
   revalidatePath("/calendar");
   return { error: null };
+}
+
+// 147번이 아직 적용되지 않은 환경에서는 delivery_checklist 컬럼이 없어
+// "column does not exist"(42703) 에러가 난다.
+function isMissingDeliveryChecklistColumn(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /column .* does not exist/i.test(error.message ?? "")
+  );
+}
+
+export async function saveDeliveryChecklist(input: {
+  installationId: string;
+  items: DeliveryChecklistItem[];
+  note: string;
+}): Promise<{
+  error: string | null;
+  shortages: { name: string; stock: number; requested: number }[];
+  unmatched: string[];
+  checklist: DeliveryChecklist | null;
+}> {
+  const editor = await getInstallationEditor();
+  if ("error" in editor) {
+    return {
+      error: editor.error ?? "설치건 변경 권한이 없습니다.",
+      shortages: [],
+      unmatched: [],
+      checklist: null,
+    };
+  }
+  if (!["tech", "admin", "master"].includes(editor.profile.role)) {
+    return {
+      error: "기술지원팀만 발송 체크리스트를 저장할 수 있습니다.",
+      shortages: [],
+      unmatched: [],
+      checklist: null,
+    };
+  }
+
+  const admin = createAdminClient();
+  const { data: installation } = await admin
+    .from("installations")
+    .select("id, status, delivery_type, customer_name")
+    .eq("id", input.installationId)
+    .single();
+  if (!installation) {
+    return { error: "설치건을 찾을 수 없습니다.", shortages: [], unmatched: [], checklist: null };
+  }
+  if (installation.delivery_type !== "delivery") {
+    return {
+      error: "택배 발송 건에만 체크리스트를 저장할 수 있습니다.",
+      shortages: [],
+      unmatched: [],
+      checklist: null,
+    };
+  }
+  if (installation.status === "completed" || installation.status === "rejected") {
+    return {
+      error: "완료된 건은 수정할 수 없습니다.",
+      shortages: [],
+      unmatched: [],
+      checklist: null,
+    };
+  }
+
+  if (input.items.length > 200) {
+    return {
+      error: "장비 목록은 최대 200개까지 입력할 수 있습니다.",
+      shortages: [],
+      unmatched: [],
+      checklist: null,
+    };
+  }
+  const items = input.items
+    .map((item) => ({
+      name: (item.name ?? "").trim(),
+      quantity: Math.max(0, Math.floor(item.quantity)),
+      checked: item.checked,
+    }))
+    .filter((item) => item.name.length > 0);
+
+  const activeItems = items.filter((item) => item.quantity > 0);
+  if (activeItems.length === 0) {
+    return {
+      error: "발송할 장비를 하나 이상 입력해주세요.",
+      shortages: [],
+      unmatched: [],
+      checklist: null,
+    };
+  }
+  const uncheckedNames = activeItems.filter((item) => !item.checked).map((item) => item.name);
+  if (uncheckedNames.length > 0) {
+    return {
+      error: "체크되지 않은 장비가 있습니다: " + uncheckedNames.join(", "),
+      shortages: [],
+      unmatched: [],
+      checklist: null,
+    };
+  }
+
+  const note = (input.note ?? "").trim();
+  if (note.length > 1000) {
+    return {
+      error: "비고는 1,000자 이하로 입력해주세요.",
+      shortages: [],
+      unmatched: [],
+      checklist: null,
+    };
+  }
+
+  const names = [...new Set(activeItems.map((item) => item.name))];
+  const { data: stockRows } = await admin
+    .from("inventory_items")
+    .select("name, quantity")
+    .in("name", names);
+  const stockByName = new Map<string, number>();
+  for (const row of stockRows ?? []) {
+    if (!stockByName.has(row.name)) stockByName.set(row.name, row.quantity);
+  }
+
+  const unmatched: string[] = [];
+  const shortages: { name: string; stock: number; requested: number }[] = [];
+  for (const item of activeItems) {
+    const stock = stockByName.get(item.name);
+    if (stock === undefined) {
+      unmatched.push(item.name);
+      continue;
+    }
+    if (stock < item.quantity) {
+      shortages.push({ name: item.name, stock, requested: item.quantity });
+    }
+  }
+  if (shortages.length > 0) {
+    return {
+      error:
+        "재고 부족: " +
+        shortages.map((s) => `${s.name} (재고 ${s.stock} / 발송 ${s.requested})`).join(", "),
+      shortages,
+      unmatched,
+      checklist: null,
+    };
+  }
+
+  const now = new Date().toISOString();
+  const checklist: DeliveryChecklist = {
+    items,
+    note: note || null,
+    saved_by: editor.user.id,
+    saved_by_name: editor.profile.name,
+    saved_at: now,
+  };
+
+  const { error: updateError } = await admin
+    .from("installations")
+    .update({
+      delivery_checklist: checklist,
+      items: activeItems.map(({ name, quantity }) => ({ name, quantity })),
+    })
+    .eq("id", input.installationId);
+  if (updateError) {
+    if (isMissingDeliveryChecklistColumn(updateError)) {
+      return {
+        error: "택배 체크리스트 마이그레이션(supabase/147)이 아직 적용되지 않았습니다.",
+        shortages: [],
+        unmatched: [],
+        checklist: null,
+      };
+    }
+    return { error: updateError.message, shortages: [], unmatched: [], checklist: null };
+  }
+
+  revalidatePath("/installs");
+  revalidatePath("/installs/delivery");
+  revalidatePath("/installs/mine");
+  return { error: null, shortages: [], unmatched, checklist };
 }
