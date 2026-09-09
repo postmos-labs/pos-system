@@ -9,6 +9,11 @@ import { useToast } from "@/components/ui/Toast";
 import { saveDeliveryChecklist } from "./actions";
 import type { DeliveryChecklist, DeliveryChecklistItem } from "./deliveryChecklist";
 import type { Installation } from "./InstallsClient";
+import {
+  INVENTORY_ITEM_GROUPS,
+  INVENTORY_ITEM_NAMES,
+  POS_ITEM_NAMES,
+} from "@/lib/inventoryCatalog";
 
 interface Props {
   installation: Installation;
@@ -16,9 +21,8 @@ interface Props {
   onSaved: (checklist: DeliveryChecklist) => void | Promise<void>;
 }
 
-// 자주 나가는 포스 기종. 누르면 행이 추가되고, 이미 있으면 수량이 1 오른다.
-// 재고 품목명과 글자가 같아야 완료 시 차감되므로 재고 실사의 품목명과 맞춰 둔다.
-const QUICK_ITEMS = ["윙포스", "G250", "J100", "T100"];
+// 품목명은 재고 실사 등록 폼과 같은 카탈로그에서 고른다. 완료 시 차감이 이름 일치로 되기 때문이다.
+// 포스기는 자주 나가므로 버튼으로, 나머지는 목록에서 고른다. 직접 입력도 되지만 그때는 차감이 안 될 수 있다.
 
 function initialRows(installation: Installation): DeliveryChecklistItem[] {
   if (installation.delivery_checklist?.items?.length) {
@@ -107,9 +111,9 @@ export default function DeliveryChecklistModal({ installation, onClose, onSaved 
           })}
         </p>
       )}
-      <div className="mb-3 flex flex-wrap items-center gap-1.5">
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
         <span className="text-xs text-slate-500">포스 기종</span>
-        {QUICK_ITEMS.map((name) => (
+        {POS_ITEM_NAMES.map((name) => (
           <button
             key={name}
             type="button"
@@ -120,6 +124,33 @@ export default function DeliveryChecklistModal({ installation, onClose, onSaved 
           </button>
         ))}
       </div>
+      <div className="mb-3 flex items-center gap-2">
+        <span className="text-xs text-slate-500">재고 품목에서 추가</span>
+        <select
+          value=""
+          onChange={(e) => {
+            if (e.target.value) addQuickItem(e.target.value);
+          }}
+          aria-label="재고 품목에서 추가"
+          className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-700"
+        >
+          <option value="">선택…</option>
+          {INVENTORY_ITEM_GROUPS.map((group) => (
+            <optgroup key={group.group} label={group.group}>
+              {group.names.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </div>
+      <datalist id="delivery-checklist-item-names">
+        {INVENTORY_ITEM_NAMES.map((name) => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
       <div className="flex flex-col gap-2">
         {rows.map((row, index) => (
           <div key={index} className="flex items-center gap-2">
@@ -133,6 +164,7 @@ export default function DeliveryChecklistModal({ installation, onClose, onSaved 
               value={row.name}
               onChange={(e) => updateRow(index, { name: e.target.value })}
               placeholder="장비명"
+              list="delivery-checklist-item-names"
               className="flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-200"
             />
             <input

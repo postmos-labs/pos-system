@@ -13,42 +13,16 @@ import MemoHistoryPanel from "@/components/ui/MemoHistoryPanel";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField } from "@/components/ui/DatePickerField";
 import { kstToday } from "@/lib/date";
+import { INVENTORY_CATEGORY_TREE, INVENTORY_MAJOR_CATEGORIES } from "@/lib/inventoryCatalog";
 import {
   INVENTORY_LOG_TYPES,
   INVENTORY_LOG_TYPE_LABEL,
   type InventoryLogType,
 } from "@/app/(app)/installs/deliveryChecklist";
 
-const CATEGORY_TREE: Record<string, Record<string, string[]>> = {
-  포스장비: {
-    포스기: [
-      "J100 화이트",
-      "J100 블랙",
-      "J200 화이트",
-      "J200 블랙",
-      "T100 화이트",
-      "T100 블랙",
-      "T200 화이트",
-      "T200 블랙",
-      "G250 화이트",
-      "G250 블랙",
-      "윙포스 화이트",
-    ],
-  },
-  주변기기: {
-    영수증프린터: ["ZPP-3000 화이트", "ZPP-3000 블랙"],
-    금전함: ["금전함"],
-    "테블릿 PC": ["테블릿 PC"],
-    "테이블 오더 브라켓": ["테이블 오더 브라켓"],
-    핸드스캐너: ["핸드스캐너"],
-  },
-  결제장비: {
-    프론트: ["프론트"],
-    카드리더기: ["코세스/코밴 SDR-300"],
-    "블루투스 스와이프 단말기": ["코세스/코밴 KRE-C100+"],
-  },
-};
-const MAJOR_CATEGORIES = Object.keys(CATEGORY_TREE);
+// 품목 카탈로그는 택배 발송 체크리스트와 공유한다(src/lib/inventoryCatalog.ts).
+const CATEGORY_TREE = INVENTORY_CATEGORY_TREE;
+const MAJOR_CATEGORIES = INVENTORY_MAJOR_CATEGORIES;
 
 interface InventoryItem {
   id: string;
