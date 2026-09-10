@@ -395,3 +395,62 @@ export function composeRevisionMessage(issues: QualityIssue[]): string {
   const lines = issues.map((issue) => `- ${issue.message}`);
   return `챗봇 학습 데이터 점검에서 아래 항목이 걸렸습니다. 문의 내용과 해결 절차는 챗봇이 사장님께 그대로 안내하는 데 쓰이니 확인 후 고쳐주세요.\n\n${lines.join("\n")}`;
 }
+
+/** 모델이 판정하는 항목. 나머지는 규칙이 본다(글자 수·단계 수·개인정보). */
+export const AI_JUDGED_CODES: QualityIssueCode[] = [
+  "title_no_subject",
+  "remote_access",
+  "staff_system",
+  "dangerous",
+  "our_action",
+];
+
+/** 코드로 라벨·문구를 꺼낸다. 모델 판정 결과를 화면·수정 요청 본문에 쓰기 위해 필요하다. */
+export function issueByCode(code: QualityIssueCode): QualityIssue {
+  return ISSUES[code];
+}
+
+/** 규칙만 보는 항목 — 글자 수, 단계 수, 개인정보. 모델을 부르든 안 부르든 항상 이쪽이 판정한다. */
+export function inspectMechanical(input: InspectInput): QualityIssue[] {
+  const steps = input.steps ?? "";
+  const trimmed = steps.trim();
+  if (!trimmed) return [];
+  const issues: QualityIssue[] = [];
+  if (trimmed.length < MIN_STEPS_LENGTH) issues.push(ISSUES.too_short);
+  if (splitSteps(steps).length < MIN_STEP_COUNT) issues.push(ISSUES.too_few_steps);
+  if (
+    hasPersonalNumber(steps) ||
+    hasName(steps, input.businessName) ||
+    hasName(steps, input.ownerName)
+  ) {
+    issues.push(ISSUES.personal_info);
+  }
+  const title = (input.title ?? "").trim();
+  if (
+    title &&
+    (hasPersonalNumber(title) ||
+      hasName(title, input.businessName) ||
+      hasName(title, input.ownerName))
+  ) {
+    issues.push(ISSUES.title_personal_info);
+  }
+  return issues;
+}
+
+/** 모델에 보내기 전에 가맹점 식별 정보를 지운다. 외부로 나가는 값이라 반드시 거친다. */
+export function maskPersonalInfo(
+  text: string,
+  businessName?: string | null,
+  ownerName?: string | null,
+): string {
+  let out = text;
+  for (const name of [businessName, ownerName]) {
+    const trimmedName = (name ?? "").trim();
+    if (trimmedName.length >= 2) out = out.split(trimmedName).join("○○");
+  }
+  return out
+    .replace(new RegExp(PHONE.source, "g"), "010-0000-0000")
+    .replace(new RegExp(BUSINESS_NUMBER.source, "g"), "000-00-00000")
+    .replace(new RegExp(CARD_NUMBER.source, "g"), "0000-0000-0000-0000")
+    .replace(new RegExp(ACCOUNT_NUMBER.source, "g"), "계좌번호 0000");
+}

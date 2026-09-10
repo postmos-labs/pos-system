@@ -20,7 +20,12 @@ interface Props {
   ticket: Ticket;
   canEdit: boolean;
   /** 서버가 미리 돌린 지금 판정. 저장 전에도 통과·미달을 보여주기 위한 값 */
-  initialQuality?: { passed: boolean; labels: string[] } | null;
+  initialQuality?: {
+    passed: boolean;
+    labels: string[];
+    reason?: string | null;
+    suggestion?: string | null;
+  } | null;
 }
 
 // 렌더 중 컴포넌트 생성(react-hooks/static-components) 방지를 위해 모듈 레벨에 두고 상태를 props로 받는다.
@@ -45,12 +50,16 @@ function StatusDot({
 export default function TicketInfoEdit({ ticket, canEdit, initialQuality }: Props) {
   const router = useRouter();
   const [qualityNote, setQualityNote] = useState<AutoResolveResult | null>(null);
+  // 모델 판정은 몇 초 걸린다. 저장이 끝난 것과 판정을 기다리는 것을 갈라 보여준다.
+  const [judging, setJudging] = useState(false);
   // 저장하면 그 결과가 우선한다. 저장 전에는 서버가 내려준 판정을 보여준다.
   const shownQuality: {
     passed: boolean;
     labels: string[];
     resolved: boolean;
     hadOpenRequest: boolean;
+    reason?: string | null;
+    suggestion?: string | null;
   } | null =
     qualityNote ??
     (initialQuality ? { ...initialQuality, resolved: false, hadOpenRequest: false } : null);
@@ -95,7 +104,9 @@ export default function TicketInfoEdit({ ticket, canEdit, initialQuality }: Prop
       // 문의 내용과 해결 절차는 챗봇 품질 규칙의 대상이다. 저장 직후 서버가 다시 판정해
       // 통과하면 대기 중 수정 요청을 자동으로 닫는다. 결과는 해결 절차 칸 아래에 보여준다.
       if (key === "title" || key === "resolution_steps") {
+        setJudging(true);
         const result = await autoResolveTicketRevision(ticket.id);
+        setJudging(false);
         if (!result.error) setQualityNote(result);
         if (key === "title" || result.resolved) router.refresh();
       }
@@ -267,7 +278,10 @@ export default function TicketInfoEdit({ ticket, canEdit, initialQuality }: Prop
             className="w-full border-0 border-b border-slate-200 bg-transparent px-0 py-1 text-sm text-slate-900 focus:outline-none focus:border-blue-400 transition-colors resize-none"
             placeholder="같은 문제가 또 왔을 때 따라 할 순서 (가맹점 정보는 쓰지 마세요)"
           />
-          {shownQuality && form.resolution_steps.trim() && (
+          {judging && form.resolution_steps.trim() && (
+            <p className="mt-1 text-[11px] font-medium text-slate-400">품질 점검 중...</p>
+          )}
+          {!judging && shownQuality && form.resolution_steps.trim() && (
             <p
               className={`mt-1 text-[11px] font-medium ${
                 shownQuality.passed ? "text-green-700" : "text-amber-700"
@@ -281,6 +295,18 @@ export default function TicketInfoEdit({ ticket, canEdit, initialQuality }: Prop
                     shownQuality.hadOpenRequest ? " · 수정 요청은 대기로 남습니다" : ""
                   }`}
             </p>
+          )}
+          {!judging && shownQuality && !shownQuality.passed && form.resolution_steps.trim() && (
+            <>
+              {shownQuality.reason && (
+                <p className="mt-0.5 text-[11px] text-slate-500">{shownQuality.reason}</p>
+              )}
+              {shownQuality.suggestion && (
+                <p className="mt-0.5 text-[11px] font-medium text-blue-600">
+                  이렇게 고쳐보세요: {shownQuality.suggestion}
+                </p>
+              )}
+            </>
           )}
         </div>
       )}

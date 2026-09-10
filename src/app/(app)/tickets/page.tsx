@@ -9,6 +9,7 @@ import MyRevisionRequests, { type MyRevisionRow } from "./MyRevisionRequests";
 import ExportCsvButton from "./ExportCsvButton";
 import RevisionRequestsButton from "./RevisionRequestsButton";
 import { inspectTicket, type QualityIssue } from "@/lib/resolutionQuality";
+import { qualityInputHash, verdictFromStored } from "@/lib/qualityJudge";
 
 // 42P01: relation does not exist / PGRST205: PostgREST 스키마 캐시에 표가 없음.
 // 139번 마이그레이션(ticket_revision_requests)이 아직 적용되지 않은 환경에서 쓴다.
@@ -237,12 +238,18 @@ export default async function TicketsPage({ searchParams }: Props) {
       business_name?: string | null;
       owner_name?: string | null;
     } | null;
-    const issues = inspectTicket({
-      title: (row.title as string | null) ?? "",
-      steps: (row.resolution_steps as string | null) ?? "",
-      businessName: merchant?.business_name ?? null,
-      ownerName: merchant?.owner_name ?? null,
-    });
+    const title = (row.title as string | null) ?? "";
+    const steps = (row.resolution_steps as string | null) ?? "";
+    const stored = verdictFromStored(row.quality_verdict);
+    const useStored = !!stored && row.quality_hash === qualityInputHash(title, steps);
+    const issues = useStored
+      ? stored.issues
+      : inspectTicket({
+          title,
+          steps,
+          businessName: merchant?.business_name ?? null,
+          ownerName: merchant?.owner_name ?? null,
+        });
     if (issues.length === 0) continue;
     quality[row.id as string] = { issues, hasOpenRequest: false };
   }

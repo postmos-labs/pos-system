@@ -10,6 +10,7 @@ import {
 } from "@/lib/auth/require-admin";
 import { revalidatePath } from "next/cache";
 import { inspectTicket, composeRevisionMessage } from "@/lib/resolutionQuality";
+import { judgeTicketQuality, qualityInputHash, verdictFromStored } from "@/lib/qualityJudge";
 import { loadRevisionRows, type RevisionStatusFilter } from "./revisionRows";
 import type { RevisionRow } from "./revisions/RevisionsClient";
 
@@ -412,6 +413,10 @@ export interface AutoResolveResult {
   /** 통과해서 대기 요청을 완료 처리했는지 */
   resolved: boolean;
   error: string | null;
+  /** 왜 걸렸는지 한 문장. 모델 판정일 때만 채워진다 */
+  reason: string | null;
+  /** 어떻게 고치면 되는지 한 문장 */
+  suggestion: string | null;
 }
 
 // 담당자가 문의 내용이나 해결 절차를 저장한 직후 부른다. 지금 내용에 규칙을 돌려 통과하면
@@ -424,6 +429,8 @@ export async function autoResolveTicketRevision(ticketId: string): Promise<AutoR
     hadOpenRequest: false,
     resolved: false,
     error,
+    reason: null,
+    suggestion: null,
   });
 
   const supabase = await createClient();
@@ -462,16 +469,28 @@ export async function autoResolveTicketRevision(ticketId: string): Promise<AutoR
     | null;
   const merchant = Array.isArray(rawMerchant) ? (rawMerchant[0] ?? null) : rawMerchant;
   const steps = (ticket.resolution_steps as string | null) ?? "";
-  const issues = steps.trim()
-    ? inspectTicket({
+  const verdict = steps.trim()
+    ? await judgeTicketQuality({
         title: (ticket.title as string | null) ?? "",
         steps,
         businessName: merchant?.business_name ?? null,
         ownerName: merchant?.owner_name ?? null,
       })
-    : [];
+    : null;
+  const issues = verdict?.issues ?? [];
   const passed = !!steps.trim() && issues.length === 0;
   const labels = issues.map((issue) => issue.label);
+
+  if (verdict) {
+    // 컬럼이 없는 환경(148 미적용)에서는 조용히 넘긴다. 판정 자체는 이미 끝났다.
+    await admin
+      .from("tickets")
+      .update({
+        quality_verdict: verdict,
+        quality_hash: qualityInputHash((ticket.title as string | null) ?? "", steps),
+      })
+      .eq("id", ticketId);
+  }
 
   const { data: openRows, error: openError } = await admin
     .from("ticket_revision_requests")
@@ -480,13 +499,29 @@ export async function autoResolveTicketRevision(ticketId: string): Promise<AutoR
     .eq("status", "open");
   if (openError) {
     if (isMissingRevisionTable(openError)) {
-      return { passed, labels, hadOpenRequest: false, resolved: false, error: null };
+      return {
+        passed,
+        labels,
+        hadOpenRequest: false,
+        resolved: false,
+        error: null,
+        reason: verdict?.reason ?? null,
+        suggestion: verdict?.suggestion ?? null,
+      };
     }
     return fail(openError.message);
   }
   const openIds = (openRows ?? []).map((row) => row.id as string);
   if (openIds.length === 0 || !passed) {
-    return { passed, labels, hadOpenRequest: openIds.length > 0, resolved: false, error: null };
+    return {
+      passed,
+      labels,
+      hadOpenRequest: openIds.length > 0,
+      resolved: false,
+      error: null,
+      reason: verdict?.reason ?? null,
+      suggestion: verdict?.suggestion ?? null,
+    };
   }
 
   const { data: resolverProfile } = await supabase
@@ -511,7 +546,15 @@ export async function autoResolveTicketRevision(ticketId: string): Promise<AutoR
   revalidatePath("/tickets");
   revalidatePath("/tickets/revisions");
   revalidatePath(`/tickets/${ticketId}`);
-  return { passed, labels, hadOpenRequest: true, resolved: true, error: null };
+  return {
+    passed,
+    labels,
+    hadOpenRequest: true,
+    resolved: true,
+    error: null,
+    reason: verdict?.reason ?? null,
+    suggestion: verdict?.suggestion ?? null,
+  };
 }
 
 export async function requestTicketRevisionsBulk(ticketIds: string[]): Promise<BulkRevisionResult> {
@@ -548,15 +591,27 @@ export async function requestTicketRevisionsBulk(ticketIds: string[]): Promise<B
     cs_id: string | null;
     tech_id: string | null;
     merchant: { business_name: string | null; owner_name: string | null } | null;
+    quality_verdict?: unknown;
+    quality_hash?: string | null;
   }[] = [];
   for (let i = 0; i < ticketIds.length; i += CHUNK_SIZE) {
     const chunk = ticketIds.slice(i, i + CHUNK_SIZE);
-    const { data, error } = await admin
+    let { data, error } = await admin
       .from("tickets")
       .select(
-        "id, title, created_at, resolution_steps, sales_id, cs_id, tech_id, merchant:merchants(business_name, owner_name)",
+        "id, title, created_at, resolution_steps, sales_id, cs_id, tech_id, merchant:merchants(business_name, owner_name), quality_verdict, quality_hash",
       )
       .in("id", chunk);
+    if (error && isMissingColumn(error)) {
+      const fallback = await admin
+        .from("tickets")
+        .select(
+          "id, title, created_at, resolution_steps, sales_id, cs_id, tech_id, merchant:merchants(business_name, owner_name)",
+        )
+        .in("id", chunk);
+      data = fallback.data as typeof data;
+      error = fallback.error;
+    }
     if (error) return { sent: 0, skipped: emptySkipped, error: error.message };
     if (data) tickets.push(...(data as unknown as typeof tickets));
   }
@@ -602,12 +657,18 @@ export async function requestTicketRevisionsBulk(ticketIds: string[]): Promise<B
       skipped.tooOld += 1;
       continue;
     }
-    const issues = inspectTicket({
-      title: ticket.title,
-      steps: ticket.resolution_steps,
-      businessName: ticket.merchant?.business_name ?? null,
-      ownerName: ticket.merchant?.owner_name ?? null,
-    });
+    const stored = verdictFromStored(ticket.quality_verdict);
+    const useStored =
+      !!stored &&
+      ticket.quality_hash === qualityInputHash(ticket.title ?? "", ticket.resolution_steps ?? "");
+    const issues = useStored
+      ? stored.issues
+      : inspectTicket({
+          title: ticket.title,
+          steps: ticket.resolution_steps,
+          businessName: ticket.merchant?.business_name ?? null,
+          ownerName: ticket.merchant?.owner_name ?? null,
+        });
     if (issues.length === 0) {
       skipped.noIssue += 1;
       continue;

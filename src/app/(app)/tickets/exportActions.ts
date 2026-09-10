@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { inspectTicket, type QualityIssue } from "@/lib/resolutionQuality";
+import { qualityInputHash, verdictFromStored } from "@/lib/qualityJudge";
 import { fetchAllRows } from "@/lib/fetchAllRows";
 
 // 인입내역 해결 절차를 챗봇용 CSV로 내려주기 위한 조회.
@@ -111,7 +112,7 @@ export async function fetchExportTargets(includeExported: boolean): Promise<{
   // 마이그레이션이 밀린 환경을 감안해, 없는 컬럼이 걸리면 그 조건만 빼고 다시 시도한다.
   // team(123) / issue_category(124) / chatbot_exported_at(138) / deleted_at 모두 대상이다.
   let selectColumns =
-    "id, title, resolution_steps, issue_category, is_repeat, created_at, sales_id, cs_id, tech_id, merchant:merchants(business_name, owner_name)";
+    "id, title, resolution_steps, issue_category, is_repeat, created_at, sales_id, cs_id, tech_id, quality_verdict, quality_hash, merchant:merchants(business_name, owner_name)";
   let useTeam = true;
   let useDeleted = true;
   let useExported = !includeExported;
@@ -185,6 +186,14 @@ export async function fetchExportTargets(includeExported: boolean): Promise<{
       selectColumns = selectColumns.replace(", tech_id", "");
       continue;
     }
+    if (missing === "quality_verdict" && selectColumns.includes("quality_verdict")) {
+      selectColumns = selectColumns.replace(", quality_verdict", "");
+      continue;
+    }
+    if (missing === "quality_hash" && selectColumns.includes("quality_hash")) {
+      selectColumns = selectColumns.replace(", quality_hash", "");
+      continue;
+    }
     if (missing === "resolution_steps") {
       // 128번이 안 돌았으면 내보낼 원본 자체가 없다. 에러 코드 대신 이유를 알린다.
       return {
@@ -221,14 +230,20 @@ export async function fetchExportTargets(includeExported: boolean): Promise<{
       business_name?: string | null;
       owner_name?: string | null;
     } | null;
+    const title = (row.title as string | null) ?? "";
+    const steps = (row.resolution_steps as string | null) ?? "";
+    const stored = verdictFromStored(row.quality_verdict);
+    const useStored = !!stored && row.quality_hash === qualityInputHash(title, steps);
     return {
       id: row.id as string,
-      issues: inspectTicket({
-        title: (row.title as string | null) ?? "",
-        steps: (row.resolution_steps as string | null) ?? "",
-        businessName: merchant?.business_name ?? null,
-        ownerName: merchant?.owner_name ?? null,
-      }),
+      issues: useStored
+        ? stored.issues
+        : inspectTicket({
+            title,
+            steps,
+            businessName: merchant?.business_name ?? null,
+            ownerName: merchant?.owner_name ?? null,
+          }),
       hasAssignee: !!(row.sales_id || row.cs_id || row.tech_id),
       hasOpenRequest: false,
     };

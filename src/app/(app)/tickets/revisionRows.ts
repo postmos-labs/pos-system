@@ -1,6 +1,7 @@
 import type { createClient } from "@/lib/supabase/server";
 import { inspectTicket } from "@/lib/resolutionQuality";
-import { fetchAllRows } from "@/lib/fetchAllRows";
+import { qualityInputHash, verdictFromStored } from "@/lib/qualityJudge";
+import { fetchAllRows, fetchByIdChunks } from "@/lib/fetchAllRows";
 import type { RevisionRow } from "./revisions/RevisionsClient";
 
 // 수정 요청 목록 조립. 현황 페이지(/tickets/revisions)와 인입내역의 상세창이 같이 쓴다.
@@ -94,6 +95,31 @@ export async function loadRevisionRows(
     before_steps?: string | null;
   };
 
+  // 148 미적용 환경에서는 이 조회가 실패한다. 그때는 규칙 판정으로 떨어진다.
+  const ticketIds = [
+    ...new Set(
+      ((data ?? []) as RawRow[])
+        .map((row) => ticketInfo(row.ticket)?.id)
+        .filter((id): id is string => !!id),
+    ),
+  ];
+  const verdictByTicketId = new Map<string, { verdict: unknown; hash: string | null }>();
+  if (schemaReady && ticketIds.length > 0) {
+    const { data: verdictRows } = await fetchByIdChunks<{
+      id: string;
+      quality_verdict: unknown;
+      quality_hash: string | null;
+    }>(ticketIds, (chunk) =>
+      supabase.from("tickets").select("id, quality_verdict, quality_hash").in("id", chunk),
+    );
+    for (const row of verdictRows ?? []) {
+      verdictByTicketId.set(row.id, {
+        verdict: row.quality_verdict,
+        hash: row.quality_hash ?? null,
+      });
+    }
+  }
+
   const rows: RevisionRow[] = schemaReady
     ? ((data ?? []) as RawRow[]).map((row) => {
         const ticket = ticketInfo(row.ticket);
@@ -110,14 +136,21 @@ export async function loadRevisionRows(
             : null;
         // 지금 내용에 규칙을 다시 돌린다. 절차가 비어 있으면 "통과"가 아니라 "절차 없음"이다.
         const steps = ticket?.resolution_steps ?? "";
-        const issues = steps.trim()
-          ? inspectTicket({
-              title: ticket?.title ?? "",
-              steps,
-              businessName: merchant?.business_name ?? null,
-              ownerName: merchant?.owner_name ?? null,
-            })
-          : [];
+        const title = ticket?.title ?? "";
+        const stored = ticket ? verdictFromStored(verdictByTicketId.get(ticket.id)?.verdict) : null;
+        const useStored =
+          !!stored &&
+          verdictByTicketId.get(ticket?.id ?? "")?.hash === qualityInputHash(title, steps);
+        const issues = !steps.trim()
+          ? []
+          : useStored
+            ? stored.issues
+            : inspectTicket({
+                title,
+                steps,
+                businessName: merchant?.business_name ?? null,
+                ownerName: merchant?.owner_name ?? null,
+              });
         const currentQuality: "pass" | "fail" | "empty" = !steps.trim()
           ? "empty"
           : issues.length

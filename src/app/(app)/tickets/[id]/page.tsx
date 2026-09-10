@@ -24,6 +24,7 @@ import TicketInfoEdit from "./TicketInfoEdit";
 import TicketAsChecklist from "./TicketAsChecklist";
 import RevisionRequestButton from "./RevisionRequestButton";
 import { inspectTicket } from "@/lib/resolutionQuality";
+import { qualityInputHash, verdictFromStored } from "@/lib/qualityJudge";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -93,16 +94,35 @@ export default async function TicketDetailPage({ params }: Props) {
     business_name?: string | null;
     owner_name?: string | null;
   } | null;
+  const storedVerdict = verdictFromStored(
+    (ticket as { quality_verdict?: unknown }).quality_verdict,
+  );
+  const storedHashMatches =
+    !!storedVerdict &&
+    (ticket as { quality_hash?: string | null }).quality_hash ===
+      qualityInputHash((ticket.title as string | null) ?? "", steps);
   const initialQuality = steps.trim()
-    ? (() => {
-        const issues = inspectTicket({
-          title: (ticket.title as string | null) ?? "",
-          steps,
-          businessName: merchantRow?.business_name ?? null,
-          ownerName: merchantRow?.owner_name ?? null,
-        });
-        return { passed: issues.length === 0, labels: issues.map((i) => i.label) };
-      })()
+    ? storedHashMatches && storedVerdict
+      ? {
+          passed: storedVerdict.passed,
+          labels: storedVerdict.issues.map((i) => i.label),
+          reason: storedVerdict.reason,
+          suggestion: storedVerdict.suggestion,
+        }
+      : (() => {
+          const issues = inspectTicket({
+            title: (ticket.title as string | null) ?? "",
+            steps,
+            businessName: merchantRow?.business_name ?? null,
+            ownerName: merchantRow?.owner_name ?? null,
+          });
+          return {
+            passed: issues.length === 0,
+            labels: issues.map((i) => i.label),
+            reason: null,
+            suggestion: null,
+          };
+        })()
     : null;
 
   return (
