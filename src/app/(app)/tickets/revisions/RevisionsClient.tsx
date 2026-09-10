@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { X } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
-import { resolveTicketRevision, cancelTicketRevision, cancelTicketRevisionsBulk } from "../actions";
+import {
+  resolveTicketRevision,
+  cancelTicketRevision,
+  cancelTicketRevisionsBulk,
+  resolvePassingTicketRevisions,
+} from "../actions";
 import RevisionDiffModal from "./RevisionDiffModal";
 
 export interface RevisionRow {
@@ -29,6 +34,7 @@ export interface RevisionRow {
   before_steps: string | null;
   current_title: string | null;
   current_steps: string | null;
+  assignee_name: string | null;
 }
 
 const TABS: {
@@ -75,8 +81,13 @@ export default function RevisionsClient({
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<"resolve" | "cancel" | "cancelBulk">("resolve");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [resolvingPassing, setResolvingPassing] = useState(false);
 
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  // 고쳐서 지금 통과하는 대기 건. 마스터가 하나씩 확인 완료를 누르지 않아도 되게 한 번에 닫는다.
+  const passingCount = rows.filter(
+    (r) => r.status === "open" && r.current_quality === "pass",
+  ).length;
 
   function changeTab(key: string) {
     setSelected(new Set());
@@ -174,6 +185,20 @@ export default function RevisionsClient({
     router.refresh();
   }
 
+  async function confirmResolvePassing() {
+    if (!confirm(`지금 품질 점검을 통과하는 ${passingCount}건을 완료 처리하시겠습니까?`)) return;
+    setResolvingPassing(true);
+    const result = await resolvePassingTicketRevisions();
+    setResolvingPassing(false);
+    if (result.error) {
+      toast.error("완료 처리 실패: " + result.error);
+      return;
+    }
+    toast.success(`${result.resolved}건을 완료 처리했습니다.`);
+    setSelected(new Set());
+    router.refresh();
+  }
+
   return (
     <>
       <div className="mb-5 flex w-fit gap-1 rounded-xl bg-slate-100 p-1">
@@ -202,6 +227,16 @@ export default function RevisionsClient({
             className="h-4 w-4 cursor-pointer accent-blue-600"
           />
           <span className="text-xs font-medium text-slate-400">전체 선택</span>
+          {passingCount > 0 && (
+            <button
+              type="button"
+              onClick={confirmResolvePassing}
+              disabled={resolvingPassing}
+              className="ml-auto rounded-lg border border-green-300 px-3 py-1 text-xs font-semibold text-green-700 transition-colors hover:bg-green-50 disabled:opacity-50"
+            >
+              {resolvingPassing ? "처리 중..." : `지금 통과 ${passingCount}건 완료 처리`}
+            </button>
+          )}
         </div>
       )}
 
@@ -280,7 +315,7 @@ export default function RevisionsClient({
               )}
 
               <p className="mt-2 text-xs text-slate-400">
-                {row.requested_by_name ?? "알 수 없음"} · {formatDateTime(row.requested_at)}
+                작성 {row.assignee_name ?? "담당자 없음"} · 요청 {formatDateTime(row.requested_at)}
                 <button
                   type="button"
                   onClick={() => setDiffRow(row)}

@@ -197,7 +197,8 @@ export default function RevisionRequestsButton({ openCount }: { openCount: numbe
                     )}
 
                     <p className="mt-2 text-xs text-slate-400">
-                      {row.requested_by_name ?? "알 수 없음"} · {formatDateTime(row.requested_at)}
+                      작성 {row.assignee_name ?? "담당자 없음"} · 요청{" "}
+                      {formatDateTime(row.requested_at)}
                       <button
                         type="button"
                         onClick={() => setDiffRow(row)}

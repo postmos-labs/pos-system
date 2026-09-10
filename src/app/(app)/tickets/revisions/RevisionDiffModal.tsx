@@ -77,7 +77,8 @@ export default function RevisionDiffModal({
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           <div className="mb-4 flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
             <span>
-              요청 {row.requested_by_name ?? "알 수 없음"} · {formatDateTime(row.requested_at)}
+              작성 {row.assignee_name ?? "담당자 없음"} · 요청{" "}
+              {row.requested_by_name ?? "알 수 없음"} · {formatDateTime(row.requested_at)}
             </span>
             {row.edited_at ? (
               <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">

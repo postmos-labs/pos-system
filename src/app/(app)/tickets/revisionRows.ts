@@ -21,6 +21,7 @@ export function isMissingRevisionTable(error: { code?: string; message?: string 
 }
 
 type TicketMerchant = { business_name?: string | null; owner_name?: string | null };
+type JoinedProfile = { name?: string | null };
 
 type TicketJoin = {
   id: string;
@@ -28,6 +29,9 @@ type TicketJoin = {
   resolution_steps: string | null;
   updated_at: string | null;
   merchant: TicketMerchant[] | TicketMerchant | null;
+  sales: JoinedProfile[] | JoinedProfile | null;
+  cs: JoinedProfile[] | JoinedProfile | null;
+  tech: JoinedProfile[] | JoinedProfile | null;
 };
 
 function ticketInfo(value: TicketJoin[] | TicketJoin | null) {
@@ -35,6 +39,10 @@ function ticketInfo(value: TicketJoin[] | TicketJoin | null) {
 }
 
 function merchantInfo(value: TicketMerchant[] | TicketMerchant | null | undefined) {
+  return Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
+}
+
+function profileInfo(value: JoinedProfile[] | JoinedProfile | null | undefined) {
   return Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
 }
 
@@ -47,7 +55,7 @@ export async function loadRevisionRows(
       let q = supabase
         .from("ticket_revision_requests")
         .select(
-          "*, ticket:tickets(id, title, resolution_steps, updated_at, merchant:merchants(business_name, owner_name))",
+          "*, ticket:tickets(id, title, resolution_steps, updated_at, merchant:merchants(business_name, owner_name), sales:profiles!tickets_sales_id_fkey(name), cs:profiles!tickets_cs_id_fkey(name), tech:profiles!tickets_tech_id_fkey(name))",
         )
         .order("requested_at", { ascending: false })
         .order("id", { ascending: true })
@@ -90,6 +98,9 @@ export async function loadRevisionRows(
     ? ((data ?? []) as RawRow[]).map((row) => {
         const ticket = ticketInfo(row.ticket);
         const merchant = merchantInfo(ticket?.merchant);
+        const salesName = profileInfo(ticket?.sales)?.name ?? null;
+        const csName = profileInfo(ticket?.cs)?.name ?? null;
+        const techName = profileInfo(ticket?.tech)?.name ?? null;
 
         // 요청 이후에 인입내역이 바뀌었는지. tickets.updated_at은 수정할 때마다 트리거로 갱신된다.
         const editedAt =
@@ -134,6 +145,9 @@ export async function loadRevisionRows(
           before_steps: row.before_steps ?? null,
           current_title: ticket?.title ?? null,
           current_steps: ticket?.resolution_steps ?? null,
+          // 등록하면 등록자가 자기 팀 담당으로 들어가므로 담당자 이름이 곧 작성자 이름이다.
+          assignee_name:
+            [salesName, csName, techName].filter((n): n is string => !!n).join(" · ") || null,
         };
       })
     : [];
