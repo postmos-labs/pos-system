@@ -39,7 +39,7 @@ const EQUIPMENT_CATALOG = [
   "보조배터리",
   "원격",
 ];
-const INTERNET_PROVIDERS = ["3S", "백메가"];
+const INTERNET_PROVIDERS = ["3S", "백메가", "엑티브"];
 
 export interface FranchiseCreateInput {
   business_name: string;

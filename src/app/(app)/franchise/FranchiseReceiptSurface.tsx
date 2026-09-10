@@ -841,6 +841,7 @@ export default function FranchiseReceiptSurface(props: Props) {
                   { value: "all", label: "인터넷 전체" },
                   { value: "3S", label: "3S" },
                   { value: "백메가", label: "백메가" },
+                  { value: "엑티브", label: "엑티브" },
                 ]}
               />
             </div>
