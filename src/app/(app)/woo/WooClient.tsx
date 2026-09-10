@@ -45,10 +45,10 @@ const SELECT_OPTIONS: Partial<Record<keyof WooCustomer, string[]>> = {
   setting: ["PC세팅", "포스세팅"],
 };
 
-// 가맹여부는 표에서 가장 먼저 봐야 하는 값이라 배경·글자·테두리를 모두 진하게 둔다.
+// 가맹여부는 표에서 가장 먼저 봐야 하는 값이라 흰 글자에 진한 단색 배경으로 멀리서도 갈리게 한다.
 function cardApplyStatusColor(value: string) {
-  if (value === "가맹완료") return "bg-green-100 text-green-800 border-green-400 font-semibold";
-  if (value === "가맹미확인") return "bg-red-100 text-red-800 border-red-400 font-semibold";
+  if (value === "가맹완료") return "bg-green-600 text-white border-green-700 font-bold";
+  if (value === "가맹미확인") return "bg-red-600 text-white border-red-700 font-bold";
   return "bg-slate-100 text-slate-700 border-slate-200";
 }
 
