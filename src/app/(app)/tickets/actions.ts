@@ -15,6 +15,8 @@ import { loadRevisionRows, type RevisionStatusFilter } from "./revisionRows";
 import type { RevisionRow } from "./revisions/RevisionsClient";
 
 const CHUNK_SIZE = 100;
+const JUDGE_BATCH_LIMIT = 60;
+const JUDGE_CONCURRENCY = 5;
 
 // 이보다 오래된 건에는 일괄 수정 요청을 보내지 않는다. 기억으로 다시 적은 절차는 지어낸 절차다.
 const REVISION_WINDOW_DAYS = 30;
@@ -1114,4 +1116,79 @@ export async function resolvePassingTicketRevisions(): Promise<ResolvePassingRes
   revalidatePath("/tickets");
   revalidatePath("/tickets/revisions");
   return { resolved, error: null };
+}
+
+export interface JudgePendingResult {
+  /** 이번에 모델로 판정한 건수 */
+  judged: number;
+  /** 아직 판정이 남은 건수. 0이 아니면 버튼을 다시 눌러 이어서 판정한다 */
+  remaining: number;
+  error: string | null;
+}
+
+// 전체 검토가 부른다. 저장된 판정이 없거나 내용이 바뀐 건, 규칙으로만 판정된 건을 모델에 물어본다.
+// 한 번에 JUDGE_BATCH_LIMIT건까지만 처리해 버튼이 오래 붙잡히지 않게 한다. 결과는 저장되므로
+// 다음 호출은 남은 건부터 이어서 본다.
+export async function judgePendingTicketQuality(): Promise<JudgePendingResult> {
+  const authError = await requireMaster();
+  if (authError) return { judged: 0, remaining: 0, error: authError };
+
+  const admin = createAdminClient();
+  const { data: rows, error } = await admin
+    .from("tickets")
+    .select(
+      "id, title, resolution_steps, quality_verdict, quality_hash, merchant:merchants(business_name, owner_name)",
+    )
+    .eq("team", "tech")
+    .is("deleted_at", null)
+    .not("resolution_steps", "is", null)
+    .neq("resolution_steps", "")
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (error) {
+    if (isMissingColumn(error)) return { judged: 0, remaining: 0, error: null };
+    return { judged: 0, remaining: 0, error: error.message };
+  }
+
+  const candidates = (rows ?? []).filter((row) => {
+    const title = (row.title as string | null) ?? "";
+    const steps = (row.resolution_steps as string | null) ?? "";
+    const hash = qualityInputHash(title, steps);
+    const stored = verdictFromStored(row.quality_verdict);
+    return !stored || row.quality_hash !== hash || stored.source !== "ai";
+  });
+
+  const targets = candidates.slice(0, JUDGE_BATCH_LIMIT);
+  const remaining = candidates.length - targets.length;
+
+  let judged = 0;
+  for (let i = 0; i < targets.length; i += JUDGE_CONCURRENCY) {
+    const chunk = targets.slice(i, i + JUDGE_CONCURRENCY);
+    await Promise.all(
+      chunk.map(async (row) => {
+        const title = (row.title as string | null) ?? "";
+        const steps = (row.resolution_steps as string | null) ?? "";
+        const rawMerchant = row.merchant as
+          | { business_name: string | null; owner_name: string | null }
+          | { business_name: string | null; owner_name: string | null }[]
+          | null;
+        const merchant = Array.isArray(rawMerchant) ? (rawMerchant[0] ?? null) : rawMerchant;
+        const verdict = await judgeTicketQuality({
+          title,
+          steps,
+          businessName: merchant?.business_name ?? null,
+          ownerName: merchant?.owner_name ?? null,
+        });
+        if (verdict.source === "ai") judged += 1;
+        await admin
+          .from("tickets")
+          .update({ quality_verdict: verdict, quality_hash: qualityInputHash(title, steps) })
+          .eq("id", row.id);
+      }),
+    );
+  }
+
+  revalidatePath("/tickets");
+  revalidatePath("/tickets/revisions");
+  return { judged, remaining, error: null };
 }

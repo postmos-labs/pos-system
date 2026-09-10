@@ -12,6 +12,7 @@ import {
   cancelTicketRevisionsForTickets,
   cancelAllOpenTicketRevisions,
   resolvePassingTicketRevisions,
+  judgePendingTicketQuality,
 } from "./actions";
 import { fetchExportTargets } from "./exportActions";
 import { type QualityIssue } from "@/lib/resolutionQuality";
@@ -275,6 +276,13 @@ export default function TicketsClient({
   // 판정과 대기 중 요청 여부는 CSV 내보내기와 같은 조회(fetchExportTargets)를 그대로 쓴다.
   async function openReviewAll() {
     setReviewAllLoading(true);
+    // 판정이 없거나 내용이 바뀐 건을 먼저 모델에 물어본다. 결과가 저장되므로 다음부터는 호출이 없다.
+    const judged = await judgePendingTicketQuality();
+    if (judged.error) {
+      setReviewAllLoading(false);
+      toast.error(`전체 검토 실패: ${judged.error}`);
+      return;
+    }
     // 먼저 대기 중 요청 가운데 지금 통과하는 건을 완료로 닫는다. 그다음 미달 건을 모은다.
     const passing = await resolvePassingTicketRevisions();
     if (passing.error) {
@@ -290,6 +298,9 @@ export default function TicketsClient({
     }
     const resolvedNote = passing.resolved
       ? `고쳐서 통과한 ${passing.resolved}건은 완료 처리했습니다. `
+      : "";
+    const judgedNote = judged.judged
+      ? `${judged.judged}건을 새로 점검했습니다.${judged.remaining ? ` ${judged.remaining}건이 남아 다시 누르면 이어서 점검합니다.` : ""} `
       : "";
     // 서버는 30일 지난 건에 요청을 보내지 않는다(기억으로 다시 적은 절차는 지어낸 절차다). 확인창 건수를 실제 발송과 맞추려고 여기서 미리 뺀다.
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -311,12 +322,12 @@ export default function TicketsClient({
       }));
     if (targets.length === 0) {
       toast.success(
-        `${resolvedNote}보낼 미달 건이 없습니다.${tooOldCount ? ` 30일 지난 ${tooOldCount}건은 보내지 않습니다.` : ""} 이미 요청 중이거나 담당자가 없는 건은 제외됩니다.`,
+        `${judgedNote}${resolvedNote}보낼 미달 건이 없습니다.${tooOldCount ? ` 30일 지난 ${tooOldCount}건은 보내지 않습니다.` : ""} 이미 요청 중이거나 담당자가 없는 건은 제외됩니다.`,
       );
       if (passing.resolved) startTransition(() => router.refresh());
       return;
     }
-    if (passing.resolved) toast.success(resolvedNote.trim());
+    if (judgedNote || resolvedNote) toast.success(`${judgedNote}${resolvedNote}`.trim());
     setReviewAllTooOld(tooOldCount);
     setReviewAllTargets(targets);
     setReviewAllConfirmOpen(true);
