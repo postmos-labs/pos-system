@@ -26,6 +26,7 @@ interface Props {
     reason?: string | null;
     suggestion?: string | null;
     kind?: "owner" | "staff" | null;
+    source?: "ai" | "rule" | null;
   } | null;
 }
 
@@ -53,6 +54,8 @@ export default function TicketInfoEdit({ ticket, canEdit, initialQuality }: Prop
   const [qualityNote, setQualityNote] = useState<AutoResolveResult | null>(null);
   // 모델 판정은 몇 초 걸린다. 저장이 끝난 것과 판정을 기다리는 것을 갈라 보여준다.
   const [judging, setJudging] = useState(false);
+  // 서버 액션 호출 자체가 실패한 경우(배포 직후 옛 화면 등). 새로고침하면 풀린다.
+  const [judgeFailed, setJudgeFailed] = useState(false);
   // 저장하면 그 결과가 우선한다. 저장 전에는 서버가 내려준 판정을 보여준다.
   const shownQuality: {
     passed: boolean;
@@ -62,10 +65,18 @@ export default function TicketInfoEdit({ ticket, canEdit, initialQuality }: Prop
     reason?: string | null;
     suggestion?: string | null;
     kind?: "owner" | "staff" | null;
+    source?: "ai" | "rule" | null;
   } | null =
     qualityNote ??
     (initialQuality ? { ...initialQuality, resolved: false, hadOpenRequest: false } : null);
   const kindPrefix = shownQuality?.kind === "staff" ? "고객센터 처리 건 · " : "";
+  // 통과 건도 모델이 봤는지 규칙으로 떨어졌는지 보이게 한다. 키가 없거나 호출이 실패하면 규칙이다.
+  const sourceSuffix =
+    shownQuality?.source === "ai"
+      ? " · 모델 판정"
+      : shownQuality?.source === "rule"
+        ? " · 규칙 판정"
+        : "";
   const [form, setForm] = useState({
     title: ticket.title ?? "",
     reception_channel: ticket.reception_channel ?? "",
@@ -108,10 +119,17 @@ export default function TicketInfoEdit({ ticket, canEdit, initialQuality }: Prop
       // 통과하면 대기 중 수정 요청을 자동으로 닫는다. 결과는 해결 절차 칸 아래에 보여준다.
       if (key === "title" || key === "resolution_steps") {
         setJudging(true);
-        const result = await autoResolveTicketRevision(ticket.id);
-        setJudging(false);
-        if (!result.error) setQualityNote(result);
-        if (key === "title" || result.resolved) router.refresh();
+        setJudgeFailed(false);
+        try {
+          const result = await autoResolveTicketRevision(ticket.id);
+          if (!result.error) setQualityNote(result);
+          if (key === "title" || result.resolved) router.refresh();
+        } catch {
+          // 배포 직후 옛 화면에서 저장하면 서버 액션을 못 찾는다. 저장은 이미 끝났으니 판정만 실패로 알린다.
+          setJudgeFailed(true);
+        } finally {
+          setJudging(false);
+        }
       }
     },
     [ticket.id, router],
@@ -284,6 +302,11 @@ export default function TicketInfoEdit({ ticket, canEdit, initialQuality }: Prop
           {judging && form.resolution_steps.trim() && (
             <p className="mt-1 text-[11px] font-medium text-slate-400">품질 점검 중...</p>
           )}
+          {!judging && judgeFailed && (
+            <p className="mt-1 text-[11px] font-medium text-red-500">
+              품질 점검 실패 · 화면을 새로고침한 뒤 다시 저장해 주세요
+            </p>
+          )}
           {!judging && shownQuality && form.resolution_steps.trim() && (
             <p
               className={`mt-1 text-[11px] font-medium ${
@@ -292,11 +315,11 @@ export default function TicketInfoEdit({ ticket, canEdit, initialQuality }: Prop
             >
               {shownQuality.passed
                 ? shownQuality.resolved
-                  ? `${kindPrefix}품질 점검 통과 · 수정 요청이 완료 처리됐습니다`
-                  : `${kindPrefix}품질 점검 통과`
+                  ? `${kindPrefix}품질 점검 통과 · 수정 요청이 완료 처리됐습니다${sourceSuffix}`
+                  : `${kindPrefix}품질 점검 통과${sourceSuffix}`
                 : `아직 미달: ${shownQuality.labels.join(" · ")}${
                     shownQuality.hadOpenRequest ? " · 수정 요청은 대기로 남습니다" : ""
-                  }`}
+                  }${sourceSuffix}`}
             </p>
           )}
           {!judging && shownQuality && !shownQuality.passed && form.resolution_steps.trim() && (

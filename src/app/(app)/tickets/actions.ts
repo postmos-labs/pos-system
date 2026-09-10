@@ -421,6 +421,8 @@ export interface AutoResolveResult {
   suggestion: string | null;
   /** 사장님 직접 / 고객센터 처리. 판정하지 않았으면 null */
   kind: "owner" | "staff" | null;
+  /** 판정 출처. 모델(ai)이 봤는지 규칙(rule)으로 떨어졌는지. 판정하지 않았으면 null */
+  source: "ai" | "rule" | null;
 }
 
 // 담당자가 문의 내용이나 해결 절차를 저장한 직후 부른다. 지금 내용에 규칙을 돌려 통과하면
@@ -436,6 +438,7 @@ export async function autoResolveTicketRevision(ticketId: string): Promise<AutoR
     reason: null,
     suggestion: null,
     kind: null,
+    source: null,
   });
 
   const supabase = await createClient();
@@ -513,6 +516,7 @@ export async function autoResolveTicketRevision(ticketId: string): Promise<AutoR
         reason: verdict?.reason ?? null,
         suggestion: verdict?.suggestion ?? null,
         kind: verdict?.kind ?? null,
+        source: verdict?.source ?? null,
       };
     }
     return fail(openError.message);
@@ -528,6 +532,7 @@ export async function autoResolveTicketRevision(ticketId: string): Promise<AutoR
       reason: verdict?.reason ?? null,
       suggestion: verdict?.suggestion ?? null,
       kind: verdict?.kind ?? null,
+      source: verdict?.source ?? null,
     };
   }
 
@@ -562,6 +567,7 @@ export async function autoResolveTicketRevision(ticketId: string): Promise<AutoR
     reason: verdict?.reason ?? null,
     suggestion: verdict?.suggestion ?? null,
     kind: verdict?.kind ?? null,
+    source: verdict?.source ?? null,
   };
 }
 

@@ -108,6 +108,7 @@ export default async function TicketDetailPage({ params }: Props) {
           reason: storedVerdict.reason,
           suggestion: storedVerdict.suggestion,
           kind: storedVerdict.kind,
+          source: storedVerdict.source,
         }
       : (() => {
           const v = verdictFromRules({
@@ -122,6 +123,7 @@ export default async function TicketDetailPage({ params }: Props) {
             reason: null,
             suggestion: null,
             kind: v.kind,
+            source: v.source,
           };
         })()
     : null;
