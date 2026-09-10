@@ -211,6 +211,14 @@ const STAFF_SYSTEM = /전산(?!\s*장애)|토스(플레이스)?\s*파트너스/;
 // 데이터가 지워질 수 있는 조작. "메뉴 삭제"처럼 정상적인 사용법은 잡지 않도록
 // 삭제는 데이터·전체·모두 같은 말이 붙을 때만 본다.
 const DANGEROUS = /초기화|포맷|재설치|공장\s*초기|(데이터|전체|모두|전부)\s*삭제/;
+// 임시 파일·캐시·로그 파일 정리는 지워도 매출·설정이 남는 사장님용 작업이다. 그 줄에서는 위험으로 보지 않는다.
+// "프로그램"에 "로그"가 들어가므로 로그는 파일·삭제·정리가 붙을 때만 본다.
+const HARMLESS_CLEANUP = /temp|tmp|임시\s*파일|캐시|cache|로그\s*(파일|삭제|정리)/i;
+
+/** 줄 단위로 위험 조작을 본다. 임시 파일 정리 줄은 "전체 삭제"라 적혀 있어도 넘긴다. */
+function hasDangerousStep(steps: string): boolean {
+  return steps.split(/\r?\n/).some((line) => DANGEROUS.test(line) && !HARMLESS_CLEANUP.test(line));
+}
 
 // 우리가 한 행동. "안내"는 예시 6의 "고객센터로 안내"처럼 정당한 마지막 단계라 빼고,
 // 유선·통화·콜백과 "~드림/드렸/드릴/해드" 꼴만 잡는다.
@@ -262,7 +270,7 @@ const ISSUES: Record<QualityIssueCode, QualityIssue> = {
     code: "dangerous",
     label: "위험 조작",
     message:
-      "초기화·포맷·재설치처럼 데이터가 지워질 수 있는 조작이 절차에 있습니다. 사장님께 직접 시키면 안 되니 '원격 지원 요청'으로 바꿔주세요.",
+      "데이터가 지워질 수 있는 조작이 절차에 있습니다. 사장님이 직접 해도 되는 작업(임시 파일 정리 등)이면 어느 화면에서 무엇을 지우는지 정확히 적어주세요. 매출·설정이 지워지는 초기화·포맷·재설치면 '원격 지원 요청'으로 바꿔주세요.",
   },
   our_action: {
     code: "our_action",
@@ -349,7 +357,7 @@ export function inspectResolutionSteps(input: InspectInput): QualityIssue[] {
   if (splitSteps(steps).length < MIN_STEP_COUNT) issues.push(ISSUES.too_few_steps);
   if (REMOTE_ACCESS.test(steps)) issues.push(ISSUES.remote_access);
   if (STAFF_SYSTEM.test(steps)) issues.push(ISSUES.staff_system);
-  if (DANGEROUS.test(steps)) issues.push(ISSUES.dangerous);
+  if (hasDangerousStep(steps)) issues.push(ISSUES.dangerous);
   if (OUR_ACTION.test(steps)) issues.push(ISSUES.our_action);
   if (
     hasPersonalNumber(steps) ||
