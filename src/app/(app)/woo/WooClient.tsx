@@ -46,9 +46,10 @@ const SELECT_OPTIONS: Partial<Record<keyof WooCustomer, string[]>> = {
 };
 
 // 가맹여부는 표에서 가장 먼저 봐야 하는 값이라 흰 글자에 진한 단색 배경으로 멀리서도 갈리게 한다.
+// AppSelect 기본 클래스(bg-white·text-slate-700)에 밀리지 않도록 !로 우선한다.
 function cardApplyStatusColor(value: string) {
-  if (value === "가맹완료") return "bg-green-600 text-white border-green-700 font-bold";
-  if (value === "가맹미확인") return "bg-red-600 text-white border-red-700 font-bold";
+  if (value === "가맹완료") return "bg-green-600! text-white! border-green-700! font-bold";
+  if (value === "가맹미확인") return "bg-red-600! text-white! border-red-700! font-bold";
   return "bg-slate-100 text-slate-700 border-slate-200";
 }
 
