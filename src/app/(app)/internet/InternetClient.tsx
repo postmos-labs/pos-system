@@ -674,7 +674,7 @@ export default function InternetClient({ rows }: Props) {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirmOpen(false)}
       />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8 mb-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7 mb-3">
         <KpiCard
           label="오늘 접수"
           value={kpis.today}
