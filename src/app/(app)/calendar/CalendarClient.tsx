@@ -457,7 +457,10 @@ export default function CalendarClient({
         label,
         category: special ? label : "설치 관리",
         color,
-        href: `/installs?id=${row.id}`,
+        href:
+          row.delivery_type === "delivery"
+            ? `/installs/delivery?id=${row.id}`
+            : `/installs?id=${row.id}`,
         businessName: row.customer_name || "고객명 미입력",
         subtitle: special ? label : "설치 관리",
         statusLabel: INSTALL_STATUS_LABEL[row.status] ?? row.status,

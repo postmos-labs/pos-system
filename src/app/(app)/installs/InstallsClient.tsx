@@ -607,10 +607,30 @@ export default function InstallsClient({
     initialHighlightId ??
     (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("id") : null);
   const highlightAppliedRef = useRef(false);
+  const fetchedHighlightRef = useRef<string | null>(null);
   useEffect(() => {
     if (!highlightId || highlightAppliedRef.current) return;
     const target = installs.find((i) => i.id === highlightId);
-    if (!target) return;
+    if (!target) {
+      // 목록은 300건 상한이라 오래된 건이나 다른 배송유형 건은 실려 있지 않다.
+      // 캘린더에서 넘어온 경우가 이에 해당하므로 그 건만 따로 불러와 상세를 연다.
+      if (fetchedHighlightRef.current === highlightId) return;
+      fetchedHighlightRef.current = highlightId;
+      void (async () => {
+        const { data } = await supabase
+          .from("installations")
+          .select(
+            "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications(van_company, open_date)",
+          )
+          .eq("id", highlightId)
+          .maybeSingle();
+        if (data)
+          setInstalls((prev) =>
+            prev.some((i) => i.id === data.id) ? prev : [data as unknown as Installation, ...prev],
+          );
+      })();
+      return;
+    }
     highlightAppliedRef.current = true;
     setMobileExpandedId(highlightId);
     openInstallDetail(target);
