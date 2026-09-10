@@ -55,9 +55,9 @@ function cardApplyStatusColor(value: string) {
 
 // 인터넷 대행사 알약 색 — 인터넷 관리 화면의 구분 열과 같은 색
 function internetTypeColor(value: string) {
-  if (value === "3S") return "bg-blue-100 text-blue-700 border-blue-200";
-  if (value === "백메가") return "bg-teal-100 text-teal-700 border-teal-200";
-  if (value === "엑티브") return "bg-purple-100 text-purple-700 border-purple-200";
+  if (value === "3S") return "bg-green-100 text-green-700 border-green-300";
+  if (value === "백메가") return "bg-yellow-100 text-yellow-800 border-yellow-300";
+  if (value === "엑티브") return "bg-red-100 text-red-700 border-red-300";
   return "bg-slate-100 text-slate-700 border-slate-200";
 }
 

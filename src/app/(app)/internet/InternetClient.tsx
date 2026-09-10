@@ -65,11 +65,26 @@ const STATUS_ROW: Record<string, string> = {
   개통완료: "bg-green-100 hover:bg-green-200",
   취소: "bg-slate-100 hover:bg-slate-200",
 };
-// 구분(대행사)별 알약 색 — 우국상 관리의 인터넷 열과 같은 색을 쓴다.
+// 구분(대행사)별 알약 색 — 엑티브 빨강 · 3S 초록 · 백메가 노랑. 우국상 관리의 인터넷 열과 같은 색을 쓴다.
 const CATEGORY_PILL: Record<string, string> = {
-  "3S": "bg-blue-100 text-blue-700 border border-blue-200",
-  백메가: "bg-teal-100 text-teal-700 border border-teal-200",
-  엑티브: "bg-purple-100 text-purple-700 border border-purple-200",
+  "3S": "bg-green-100 text-green-700 border border-green-300",
+  백메가: "bg-yellow-100 text-yellow-800 border border-yellow-300",
+  엑티브: "bg-red-100 text-red-700 border border-red-300",
+};
+// 검색 옆 구분 버튼 — 선택된 것은 진한 단색, 나머지는 연한 색
+const CATEGORY_BUTTON: Record<string, { on: string; off: string }> = {
+  "3S": {
+    on: "bg-green-600 text-white border-green-700",
+    off: "bg-green-50 text-green-700 border-green-200 hover:bg-green-100",
+  },
+  백메가: {
+    on: "bg-yellow-500 text-white border-yellow-600",
+    off: "bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100",
+  },
+  엑티브: {
+    on: "bg-red-600 text-white border-red-700",
+    off: "bg-red-50 text-red-700 border-red-200 hover:bg-red-100",
+  },
 };
 const DEFAULT_PILL = "bg-slate-100 text-slate-700 border border-slate-200";
 
@@ -784,6 +799,31 @@ export default function InternetClient({ rows }: Props) {
             className="pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg w-56 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
+        <div className="flex items-center gap-1" role="group" aria-label="구분 필터">
+          <button
+            type="button"
+            onClick={() => setCategoryFilter("")}
+            className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+              categoryFilter === ""
+                ? "bg-slate-700 text-white border-slate-800"
+                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            전체
+          </button>
+          {CATEGORIES.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCategoryFilter(categoryFilter === c ? "" : c)}
+              className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                categoryFilter === c ? CATEGORY_BUTTON[c].on : CATEGORY_BUTTON[c].off
+              }`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
         <AppSelect
           value={statusFilter}
           onValueChange={setStatusFilter}
@@ -791,15 +831,6 @@ export default function InternetClient({ rows }: Props) {
           options={[
             { value: "", label: "상태 전체" },
             ...STATUSES.map((s) => ({ value: s, label: s })),
-          ]}
-        />
-        <AppSelect
-          value={categoryFilter}
-          onValueChange={setCategoryFilter}
-          aria-label="구분 필터"
-          options={[
-            { value: "", label: "구분 전체" },
-            ...CATEGORIES.map((c) => ({ value: c, label: c })),
           ]}
         />
         <AppSelect
