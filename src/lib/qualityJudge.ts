@@ -17,6 +17,9 @@ import {
 /** 판정 기준이 바뀌면 올린다. 해시에 섞여 있어 저장된 판정이 자동으로 무효가 된다. */
 export const JUDGE_VERSION = 1;
 
+/** 기본 모델. 이 판정은 분류에 가까워 flash로 충분하다. 바꾸려면 DEEPSEEK_MODEL을 넣는다. */
+const DEFAULT_MODEL = "deepseek-v4-flash";
+
 export interface StoredVerdict {
   version: number;
   passed: boolean;
@@ -88,7 +91,7 @@ export async function judgeTicketQuality(input: InspectInput): Promise<StoredVer
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
+        model: process.env.DEEPSEEK_MODEL || DEFAULT_MODEL,
         temperature: 0,
         max_tokens: 300,
         response_format: { type: "json_object" },
