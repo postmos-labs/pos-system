@@ -115,8 +115,11 @@ export async function judgeTicketQuality(input: InspectInput): Promise<StoredVer
       },
       body: JSON.stringify({
         model: process.env.DEEPSEEK_MODEL || DEFAULT_MODEL,
+        // v4 모델은 사고(thinking) 모드가 기본으로 켜져 있어 추론에 토큰을 다 쓰고 본문이 비어 온다.
+        // 판정은 짧은 JSON 하나면 되므로 사고 모드를 끄고 답만 받는다.
+        thinking: { type: "disabled" },
         temperature: 0,
-        max_tokens: 300,
+        max_tokens: 400,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
@@ -132,7 +135,12 @@ export async function judgeTicketQuality(input: InspectInput): Promise<StoredVer
     }
 
     const data = await res.json();
-    const content = data?.choices?.[0]?.message?.content;
+    const content: string = data?.choices?.[0]?.message?.content ?? "";
+    if (!content.trim()) {
+      const finish = data?.choices?.[0]?.finish_reason ?? "unknown";
+      console.warn(`qualityJudge: deepseek 본문 비어 있음 (finish_reason=${finish})`);
+      return verdictFromRules(input);
+    }
     const parsed: DeepseekJudgeResponse = JSON.parse(content);
 
     const kind: ProcedureKind = parsed.kind === "staff" ? "staff" : "owner";
