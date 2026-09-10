@@ -40,14 +40,23 @@ const CATEGORIES = ["명의변경", "승계", "신규"];
 
 const SELECT_OPTIONS: Partial<Record<keyof WooCustomer, string[]>> = {
   category: CATEGORIES,
-  internet_type: ["3S", "백메가"],
+  internet_type: ["3S", "백메가", "엑티브"],
   card_apply_status: ["가맹완료", "가맹미확인"],
   setting: ["PC세팅", "포스세팅"],
 };
 
+// 가맹여부는 표에서 가장 먼저 봐야 하는 값이라 배경·글자·테두리를 모두 진하게 둔다.
 function cardApplyStatusColor(value: string) {
-  if (value === "가맹완료") return "bg-green-50 text-green-600 border-green-200";
-  if (value === "가맹미확인") return "bg-red-50 text-red-600 border-red-200";
+  if (value === "가맹완료") return "bg-green-100 text-green-800 border-green-400 font-semibold";
+  if (value === "가맹미확인") return "bg-red-100 text-red-800 border-red-400 font-semibold";
+  return "bg-slate-100 text-slate-700 border-slate-200";
+}
+
+// 인터넷 대행사 알약 색 — 인터넷 관리 화면의 구분 열과 같은 색
+function internetTypeColor(value: string) {
+  if (value === "3S") return "bg-blue-100 text-blue-700 border-blue-200";
+  if (value === "백메가") return "bg-teal-100 text-teal-700 border-teal-200";
+  if (value === "엑티브") return "bg-purple-100 text-purple-700 border-purple-200";
   return "bg-slate-100 text-slate-700 border-slate-200";
 }
 
@@ -239,7 +248,9 @@ const SelectField = memo(function SelectField({
   const pillColor =
     field === "card_apply_status"
       ? cardApplyStatusColor((row[field] as string) ?? "")
-      : "bg-slate-100 text-slate-700 border-slate-200";
+      : field === "internet_type"
+        ? internetTypeColor((row[field] as string) ?? "")
+        : "bg-slate-100 text-slate-700 border-slate-200";
   return (
     <span onClick={(e) => e.stopPropagation()} className={pill ? "" : "block w-full"}>
       <AppSelect

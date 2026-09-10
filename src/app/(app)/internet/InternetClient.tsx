@@ -49,10 +49,29 @@ const STATUS_NOTIFY_KIND: Partial<Record<string, "internet_apply_done" | "intern
   접수완료: "internet_apply_done",
   개통완료: "internet_done",
 };
-const CATEGORIES = ["백메가", "3S"];
+const CATEGORIES = ["백메가", "3S", "엑티브"];
 const CARRIERS = ["LG", "KT", "SKT"];
 const SPEEDS = ["100M", "500M"];
 const CUSTOM_SPEED = "__custom__";
+
+// 상태별 색 — 알약(진한)과 행 배경(연한)을 같은 계열로 맞춰 접수완료/개통완료가 한눈에 갈리게 한다.
+const STATUS_PILL: Record<string, string> = {
+  접수완료: "bg-orange-100 text-orange-700 border border-orange-300",
+  개통완료: "bg-green-100 text-green-700 border border-green-300",
+  취소: "bg-slate-200 text-slate-600 border border-slate-300",
+};
+const STATUS_ROW: Record<string, string> = {
+  접수완료: "bg-orange-50/60 hover:bg-orange-100/70",
+  개통완료: "bg-green-50/60 hover:bg-green-100/70",
+  취소: "bg-slate-50 hover:bg-slate-100",
+};
+// 구분(대행사)별 알약 색 — 우국상 관리의 인터넷 열과 같은 색을 쓴다.
+const CATEGORY_PILL: Record<string, string> = {
+  "3S": "bg-blue-100 text-blue-700 border border-blue-200",
+  백메가: "bg-teal-100 text-teal-700 border border-teal-200",
+  엑티브: "bg-purple-100 text-purple-700 border border-purple-200",
+};
+const DEFAULT_PILL = "bg-slate-100 text-slate-700 border border-slate-200";
 
 const SELECT_OPTIONS: Partial<Record<keyof InternetManagement, string[]>> = {
   status: STATUSES,
@@ -175,14 +194,10 @@ const SelectField = memo(function SelectField({
 }: SelectFieldProps) {
   const statusColor =
     field === "status"
-      ? row.status === "개통완료"
-        ? "bg-green-100 text-green-700 border border-green-200"
-        : row.status === "취소"
-          ? "bg-red-100 text-red-700 border border-red-200"
-          : row.status === "접수완료"
-            ? "bg-cyan-100 text-cyan-700 border border-cyan-200"
-            : "bg-slate-100 text-slate-700 border border-slate-200"
-      : "bg-slate-100 text-slate-700 border border-slate-200";
+      ? (STATUS_PILL[row.status ?? ""] ?? DEFAULT_PILL)
+      : field === "category"
+        ? (CATEGORY_PILL[row.category ?? ""] ?? DEFAULT_PILL)
+        : DEFAULT_PILL;
   return (
     <span onClick={(e) => e.stopPropagation()} className={pill ? "" : "block w-full"}>
       <AppSelect
@@ -889,7 +904,7 @@ export default function InternetClient({ rows }: Props) {
             {pagedRows.map((row) => (
               <Fragment key={row.id}>
                 <tr
-                  className={`border-b border-slate-100 hover:bg-blue-50 transition-colors cursor-pointer ${rowDragId === row.id ? "opacity-40" : ""}`}
+                  className={`border-b border-slate-100 transition-colors cursor-pointer ${STATUS_ROW[row.status ?? ""] ?? "hover:bg-blue-50"} ${rowDragId === row.id ? "opacity-40" : ""}`}
                   onClick={() => toggleExpand(row.id)}
                   onDragOver={(e) => {
                     if (canReorder && rowDragId) e.preventDefault();
