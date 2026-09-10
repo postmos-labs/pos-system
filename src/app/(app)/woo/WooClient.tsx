@@ -870,9 +870,12 @@ export default function WooClient({
                 <tr
                   id={`woo-row-${row.id}`}
                   className={`border-b border-slate-100 transition-colors cursor-pointer ${
-                    localLinkedInstalls[row.id]?.status === "completed"
-                      ? "bg-green-50 hover:bg-green-100"
-                      : "hover:bg-blue-50"
+                    row.card_apply_status === "가맹미확인"
+                      ? "bg-red-100 hover:bg-red-200"
+                      : row.card_apply_status === "가맹완료" ||
+                          localLinkedInstalls[row.id]?.status === "completed"
+                        ? "bg-green-100 hover:bg-green-200"
+                        : "hover:bg-blue-50"
                   }`}
                   onClick={() => toggleExpand(row.id)}
                 >

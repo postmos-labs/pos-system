@@ -61,9 +61,9 @@ const STATUS_PILL: Record<string, string> = {
   취소: "bg-slate-200 text-slate-600 border border-slate-300",
 };
 const STATUS_ROW: Record<string, string> = {
-  접수완료: "bg-orange-50/60 hover:bg-orange-100/70",
-  개통완료: "bg-green-50/60 hover:bg-green-100/70",
-  취소: "bg-slate-50 hover:bg-slate-100",
+  접수완료: "bg-orange-100 hover:bg-orange-200",
+  개통완료: "bg-green-100 hover:bg-green-200",
+  취소: "bg-slate-100 hover:bg-slate-200",
 };
 // 구분(대행사)별 알약 색 — 우국상 관리의 인터넷 열과 같은 색을 쓴다.
 const CATEGORY_PILL: Record<string, string> = {
