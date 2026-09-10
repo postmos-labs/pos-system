@@ -69,14 +69,9 @@ export default function TicketInfoEdit({ ticket, canEdit, initialQuality }: Prop
   } | null =
     qualityNote ??
     (initialQuality ? { ...initialQuality, resolved: false, hadOpenRequest: false } : null);
-  const kindPrefix = shownQuality?.kind === "staff" ? "고객센터 처리 건 · " : "";
-  // 통과 건도 모델이 봤는지 규칙으로 떨어졌는지 보이게 한다. 키가 없거나 호출이 실패하면 규칙이다.
-  const sourceSuffix =
-    shownQuality?.source === "ai"
-      ? " · 모델 판정"
-      : shownQuality?.source === "rule"
-        ? " · 규칙 판정"
-        : "";
+  // 누가 봤는지를 문구 앞에 둔다. DeepSeek가 본 건지, 키가 없거나 호출이 실패해 규칙으로 떨어진 건지.
+  const judgeName = shownQuality?.source === "rule" ? "규칙 판정" : "DeepSeek 판정";
+  const kindSuffix = shownQuality?.kind === "staff" ? " · 고객센터 처리 건" : "";
   const [form, setForm] = useState({
     title: ticket.title ?? "",
     reception_channel: ticket.reception_channel ?? "",
@@ -300,11 +295,11 @@ export default function TicketInfoEdit({ ticket, canEdit, initialQuality }: Prop
             placeholder="같은 문제가 또 왔을 때 따라 할 순서 (가맹점 정보는 쓰지 마세요)"
           />
           {judging && form.resolution_steps.trim() && (
-            <p className="mt-1 text-[11px] font-medium text-slate-400">품질 점검 중...</p>
+            <p className="mt-1 text-[11px] font-medium text-slate-400">DeepSeek 판정 중...</p>
           )}
           {!judging && judgeFailed && (
             <p className="mt-1 text-[11px] font-medium text-red-500">
-              품질 점검 실패 · 화면을 새로고침한 뒤 다시 저장해 주세요
+              DeepSeek 판정 실패 · 화면을 새로고침한 뒤 다시 저장해 주세요
             </p>
           )}
           {!judging && shownQuality && form.resolution_steps.trim() && (
@@ -314,12 +309,10 @@ export default function TicketInfoEdit({ ticket, canEdit, initialQuality }: Prop
               }`}
             >
               {shownQuality.passed
-                ? shownQuality.resolved
-                  ? `${kindPrefix}품질 점검 통과 · 수정 요청이 완료 처리됐습니다${sourceSuffix}`
-                  : `${kindPrefix}품질 점검 통과${sourceSuffix}`
-                : `아직 미달: ${shownQuality.labels.join(" · ")}${
-                    shownQuality.hadOpenRequest ? " · 수정 요청은 대기로 남습니다" : ""
-                  }${sourceSuffix}`}
+                ? `${judgeName}: 통과${kindSuffix}${
+                    shownQuality.resolved ? " · 수정 요청 완료 처리됨" : ""
+                  }`
+                : `${judgeName}: ${shownQuality.labels.join(" · ")}${kindSuffix}`}
             </p>
           )}
           {!judging && shownQuality && !shownQuality.passed && form.resolution_steps.trim() && (
