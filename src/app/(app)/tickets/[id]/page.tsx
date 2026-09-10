@@ -23,8 +23,7 @@ import TicketLogs from "./TicketLogs";
 import TicketInfoEdit from "./TicketInfoEdit";
 import TicketAsChecklist from "./TicketAsChecklist";
 import RevisionRequestButton from "./RevisionRequestButton";
-import { inspectTicket } from "@/lib/resolutionQuality";
-import { qualityInputHash, verdictFromStored } from "@/lib/qualityJudge";
+import { qualityInputHash, verdictFromStored, verdictFromRules } from "@/lib/qualityJudge";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -108,19 +107,21 @@ export default async function TicketDetailPage({ params }: Props) {
           labels: storedVerdict.issues.map((i) => i.label),
           reason: storedVerdict.reason,
           suggestion: storedVerdict.suggestion,
+          kind: storedVerdict.kind,
         }
       : (() => {
-          const issues = inspectTicket({
+          const v = verdictFromRules({
             title: (ticket.title as string | null) ?? "",
             steps,
             businessName: merchantRow?.business_name ?? null,
             ownerName: merchantRow?.owner_name ?? null,
           });
           return {
-            passed: issues.length === 0,
-            labels: issues.map((i) => i.label),
+            passed: v.passed,
+            labels: v.issues.map((i) => i.label),
             reason: null,
             suggestion: null,
+            kind: v.kind,
           };
         })()
     : null;

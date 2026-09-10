@@ -25,6 +25,7 @@ interface Props {
     labels: string[];
     reason?: string | null;
     suggestion?: string | null;
+    kind?: "owner" | "staff" | null;
   } | null;
 }
 
@@ -60,9 +61,11 @@ export default function TicketInfoEdit({ ticket, canEdit, initialQuality }: Prop
     hadOpenRequest: boolean;
     reason?: string | null;
     suggestion?: string | null;
+    kind?: "owner" | "staff" | null;
   } | null =
     qualityNote ??
     (initialQuality ? { ...initialQuality, resolved: false, hadOpenRequest: false } : null);
+  const kindPrefix = shownQuality?.kind === "staff" ? "고객센터 처리 건 · " : "";
   const [form, setForm] = useState({
     title: ticket.title ?? "",
     reception_channel: ticket.reception_channel ?? "",
@@ -289,8 +292,8 @@ export default function TicketInfoEdit({ ticket, canEdit, initialQuality }: Prop
             >
               {shownQuality.passed
                 ? shownQuality.resolved
-                  ? "품질 점검 통과 · 수정 요청이 완료 처리됐습니다"
-                  : "품질 점검 통과"
+                  ? `${kindPrefix}품질 점검 통과 · 수정 요청이 완료 처리됐습니다`
+                  : `${kindPrefix}품질 점검 통과`
                 : `아직 미달: ${shownQuality.labels.join(" · ")}${
                     shownQuality.hadOpenRequest ? " · 수정 요청은 대기로 남습니다" : ""
                   }`}

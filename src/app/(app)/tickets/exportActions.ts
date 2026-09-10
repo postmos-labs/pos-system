@@ -2,8 +2,13 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { inspectTicket, type QualityIssue } from "@/lib/resolutionQuality";
-import { qualityInputHash, verdictFromStored } from "@/lib/qualityJudge";
+import { type QualityIssue } from "@/lib/resolutionQuality";
+import {
+  qualityInputHash,
+  verdictFromRules,
+  verdictFromStored,
+  type ProcedureKind,
+} from "@/lib/qualityJudge";
 import { fetchAllRows } from "@/lib/fetchAllRows";
 
 // 인입내역 해결 절차를 챗봇용 CSV로 내려주기 위한 조회.
@@ -28,6 +33,8 @@ export interface ExportedTicket {
 export interface TicketQuality {
   id: string;
   issues: QualityIssue[];
+  /** 사장님 직접(owner) / 고객센터 처리(staff) */
+  kind: ProcedureKind;
   /** 담당자(sales/cs/tech)가 한 명이라도 있는지 — 없으면 수정 요청을 보낼 대상이 없다 */
   hasAssignee: boolean;
   /** 이미 처리 대기 중인 수정 요청이 있는지 — 중복 발송을 막는다 */
@@ -234,16 +241,19 @@ export async function fetchExportTargets(includeExported: boolean): Promise<{
     const steps = (row.resolution_steps as string | null) ?? "";
     const stored = verdictFromStored(row.quality_verdict);
     const useStored = !!stored && row.quality_hash === qualityInputHash(title, steps);
-    return {
-      id: row.id as string,
-      issues: useStored
-        ? stored.issues
-        : inspectTicket({
+    const verdict =
+      useStored && stored
+        ? stored
+        : verdictFromRules({
             title,
             steps,
             businessName: merchant?.business_name ?? null,
             ownerName: merchant?.owner_name ?? null,
-          }),
+          });
+    return {
+      id: row.id as string,
+      issues: verdict.issues,
+      kind: verdict.kind,
       hasAssignee: !!(row.sales_id || row.cs_id || row.tech_id),
       hasOpenRequest: false,
     };

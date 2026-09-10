@@ -8,6 +8,14 @@ import { fetchExportTargets } from "./exportActions";
 
 // 인입내역 상단에서 문제상황/해결절차 CSV를 바로 받는다.
 // 챗봇 데이터는 인입내역에서만 관리한다(별도 화면 폐기). 미달 건도 내려주되 품질 열로 표시한다.
+// 종류 열은 챗봇이 "사장님이 직접" 답할지 "고객센터에 요청하세요"라고 답할지 가르는 데 쓴다.
+
+// qualityJudge.ts는 서버 전용(node:crypto)이라 라벨만 여기 복사한다.
+const KIND_LABEL: Record<"owner" | "staff", string> = {
+  owner: "사장님 직접",
+  staff: "고객센터 처리",
+};
+
 export default function ExportCsvButton() {
   const toast = useToast();
   const [loading, setLoading] = useState(false);
@@ -25,6 +33,7 @@ export default function ExportCsvButton() {
     const labelsById = new Map(
       result.quality.map((q) => [q.id, q.issues.map((issue) => issue.label).join(" · ")]),
     );
+    const kindById = new Map(result.quality.map((q) => [q.id, KIND_LABEL[q.kind]]));
     // 같은 문의·같은 절차가 여러 건 쌓이는 경우가 많다(같은 증상을 여러 매장이 문의). 첫 건만 남긴다.
     const seen = new Set<string>();
     const rows = result.rows
@@ -44,8 +53,13 @@ export default function ExportCsvButton() {
     const passedCount = rows.filter((entry) => entry.verdict === "통과").length;
     downloadCsv(
       `인입내역_문제상황_해결절차_${todayStamp()}.csv`,
-      ["문제상황", "해결절차", "품질"],
-      rows.map(({ row, verdict }) => [row.inquiry, row.steps, verdict]),
+      ["문제상황", "해결절차", "종류", "품질"],
+      rows.map(({ row, verdict }) => [
+        row.inquiry,
+        row.steps,
+        kindById.get(row.id) ?? KIND_LABEL.owner,
+        verdict,
+      ]),
     );
     toast.success(
       `${rows.length}건을 받았습니다. 통과 ${passedCount}건, 미달 ${rows.length - passedCount}건${duplicateCount ? `, 중복 ${duplicateCount}건 제외` : ""}.`,
