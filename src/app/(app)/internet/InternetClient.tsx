@@ -496,6 +496,12 @@ export default function InternetClient({ rows }: Props) {
           (r.open_date ?? "").startsWith(monthStr) &&
           r.category === "백메가",
       ).length,
+      openedMonthActive: localRows.filter(
+        (r) =>
+          r.status === "개통완료" &&
+          (r.open_date ?? "").startsWith(monthStr) &&
+          r.category === "엑티브",
+      ).length,
     };
   }, [localRows]);
 
@@ -668,7 +674,7 @@ export default function InternetClient({ rows }: Props) {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirmOpen(false)}
       />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6 mb-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8 mb-3">
         <KpiCard
           label="오늘 접수"
           value={kpis.today}
@@ -745,6 +751,22 @@ export default function InternetClient({ rows }: Props) {
             applyKpiFilter({
               status: "개통완료",
               category: "백메가",
+              dateField: "open_date",
+              dateFrom: from,
+              dateTo: to,
+            });
+          }}
+        />
+        <KpiCard
+          label="이번 달 엑티브 개통"
+          value={kpis.openedMonthActive}
+          icon={CheckCircle2}
+          tone="green"
+          onClick={() => {
+            const { from, to } = getMonthRange();
+            applyKpiFilter({
+              status: "개통완료",
+              category: "엑티브",
               dateField: "open_date",
               dateFrom: from,
               dateTo: to,
