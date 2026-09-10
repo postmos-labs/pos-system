@@ -23,6 +23,7 @@ import TicketLogs from "./TicketLogs";
 import TicketInfoEdit from "./TicketInfoEdit";
 import TicketAsChecklist from "./TicketAsChecklist";
 import RevisionRequestButton from "./RevisionRequestButton";
+import { inspectTicket } from "@/lib/resolutionQuality";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -83,6 +84,25 @@ export default async function TicketDetailPage({ params }: Props) {
 
   const openRevisionMessage = !isMissingRevisionTable(revisionRes.error)
     ? ((revisionRes.data as { message: string } | null)?.message ?? null)
+    : null;
+
+  // 담당자가 화면을 열자마자 지금 판정을 볼 수 있게 서버에서 미리 돌린다.
+  // 절차가 비어 있으면 판정하지 않는다 — 안 적은 것과 잘못 적은 것은 다르다.
+  const steps = (ticket.resolution_steps as string | null) ?? "";
+  const merchantRow = ticket.merchant as {
+    business_name?: string | null;
+    owner_name?: string | null;
+  } | null;
+  const initialQuality = steps.trim()
+    ? (() => {
+        const issues = inspectTicket({
+          title: (ticket.title as string | null) ?? "",
+          steps,
+          businessName: merchantRow?.business_name ?? null,
+          ownerName: merchantRow?.owner_name ?? null,
+        });
+        return { passed: issues.length === 0, labels: issues.map((i) => i.label) };
+      })()
     : null;
 
   return (
@@ -150,6 +170,7 @@ export default async function TicketDetailPage({ params }: Props) {
       <TicketInfoEdit
         ticket={ticket as any}
         canEdit={["admin", "master", "sales", "cs", "tech"].includes((profile as Profile).role)}
+        initialQuality={initialQuality}
       />
 
       {ticket.team === "tech" && (

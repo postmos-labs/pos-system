@@ -442,6 +442,7 @@ export default async function TicketsPage({ searchParams }: Props) {
         isMaster={p.role === "master"}
         openRequestTicketIds={openRequestTicketIds}
         openRequestTotal={openRequestTotal}
+        currentUserId={user.id}
       />
 
       {}

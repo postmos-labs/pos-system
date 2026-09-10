@@ -55,6 +55,9 @@ interface Ticket {
   created_at: string;
   merchant?: { business_name: string; phone: string } | null;
   tech?: { name: string } | null;
+  sales_id?: string | null;
+  cs_id?: string | null;
+  tech_id?: string | null;
 }
 
 export default function TicketsClient({
@@ -64,6 +67,7 @@ export default function TicketsClient({
   isMaster = false,
   openRequestTicketIds = [],
   openRequestTotal = 0,
+  currentUserId = "",
 }: {
   tickets: Ticket[];
   initialSearch?: string;
@@ -71,6 +75,7 @@ export default function TicketsClient({
   isMaster?: boolean;
   openRequestTicketIds?: string[];
   openRequestTotal?: number;
+  currentUserId?: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -120,6 +125,10 @@ export default function TicketsClient({
     });
   }
   const showQuality = isMaster && checkMode;
+  // 담당자는 자기 건의 미달을 항상 본다 — 마스터의 수정 요청을 기다리지 않고 스스로 고치게 하기 위함이다.
+  // 남의 건은 보이지 않는다. 마스터의 품질 점검 토글은 전 건을 보는 용도로 남긴다.
+  const isMine = (t: Ticket) =>
+    !!currentUserId && [t.sales_id, t.cs_id, t.tech_id].some((id) => id === currentUserId);
 
   // 검색은 서버가 전체 범위에서 수행한다(현재 페이지 50건만 걸러지는 문제 방지).
   // 입력 후 400ms 지나면 q 파라미터로 반영하고 1페이지부터 다시 본다.
@@ -161,6 +170,9 @@ export default function TicketsClient({
   // 목록 위에 상시 안내 줄을 둔다.
   const flaggedTickets = filteredTickets.filter((t) => quality[t.id]);
   const sendableFlagged = flaggedTickets.filter((t) => !openRequestSet.has(t.id));
+
+  // 담당자에게 보여줄 내 미달 건. 마스터가 품질 점검을 꺼둔 상태에서도 보인다.
+  const myFlaggedTickets = filteredTickets.filter((t) => quality[t.id] && isMine(t));
 
   // 선택한 건 중 대기 중인 수정 요청이 걸린 것. 품질 점검을 켜지 않아도 마스터는 취소할 수 있어야 한다.
   const cancelTargets = filteredTickets.filter(
@@ -410,6 +422,18 @@ export default function TicketsClient({
         </div>
       )}
 
+      {!showQuality && myFlaggedTickets.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 border-b border-amber-100 bg-amber-50 px-6 py-2.5">
+          <AlertTriangle size={14} className="flex-shrink-0 text-amber-600" />
+          <span className="text-xs font-semibold text-amber-800">
+            내 담당 건 중 품질 미달 {myFlaggedTickets.length}건
+          </span>
+          <span className="text-xs text-amber-700">
+            각 건을 열어 문의 내용과 해결 절차를 고치면 저장할 때 자동으로 통과 처리됩니다.
+          </span>
+        </div>
+      )}
+
       {selected.size > 0 && (
         <BulkDeleteActions
           count={selected.size}
@@ -502,7 +526,7 @@ export default function TicketsClient({
                   {ticket.is_repeat === true && (
                     <Badge colorClass="bg-red-100 text-red-700">또 그럼</Badge>
                   )}
-                  {showQuality && quality[ticket.id] && (
+                  {(showQuality || isMine(ticket)) && quality[ticket.id] && (
                     <span title={quality[ticket.id].issues.map((i) => i.label).join(", ")}>
                       <Badge colorClass="bg-amber-100 text-amber-800">
                         {`품질 미달 ${quality[ticket.id].issues.length}`}
