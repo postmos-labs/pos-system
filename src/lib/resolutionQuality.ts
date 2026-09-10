@@ -207,6 +207,14 @@ const REMOTE_ACCESS = /원격(?!\s*지원\s*(요청|안내|접수|을))/;
 // 밴 전산·KOCES 전산·토스 파트너스는 직원만 들어갈 수 있다. 사장님이 따라 할 수 없는 단계다.
 // "전산 장애"는 증상 서술이고 "쿠팡이츠 파트너스"는 점주가 쓰는 앱이라 잡지 않는다.
 const STAFF_SYSTEM = /전산(?!\s*장애)|토스(플레이스)?\s*파트너스/;
+// "고객센터에 요청하면 직원이 토스 파트너스에서 바꿔 드립니다"처럼 사장님이 요청하는 줄은
+// 사장님이 할 수 있는 단계다. 같은 줄에 요청·문의·고객센터·안내가 있으면 직원 전산으로 보지 않는다.
+const OWNER_REQUESTS = /요청|문의|고객센터|안내/;
+
+/** 줄 단위로 직원 전산을 본다. 사장님이 요청하는 줄은 전산 이름이 있어도 넘긴다. */
+function hasStaffSystemStep(steps: string): boolean {
+  return steps.split(/\r?\n/).some((line) => STAFF_SYSTEM.test(line) && !OWNER_REQUESTS.test(line));
+}
 
 // 데이터가 지워질 수 있는 조작. "메뉴 삭제"처럼 정상적인 사용법은 잡지 않도록
 // 삭제는 데이터·전체·모두 같은 말이 붙을 때만 본다.
@@ -264,7 +272,7 @@ const ISSUES: Record<QualityIssueCode, QualityIssue> = {
     code: "staff_system",
     label: "직원 전산",
     message:
-      "밴 전산·KOCES 전산·토스 파트너스처럼 직원만 들어갈 수 있는 전산에서 처리한 내용이 절차에 있습니다. 사장님이 직접 할 수 있는 확인까지만 적고 '고객센터 문의'로 끝내주세요.",
+      "밴 전산·KOCES 전산·토스 파트너스처럼 직원만 들어갈 수 있는 전산에서 처리한 내용이 절차에 있습니다. 우리가 한 일은 처리 내용에 적고, 절차에는 '고객센터에 요청'처럼 사장님이 할 수 있는 말로 바꿔주세요.",
   },
   dangerous: {
     code: "dangerous",
@@ -356,7 +364,7 @@ export function inspectResolutionSteps(input: InspectInput): QualityIssue[] {
   if (trimmed.length < MIN_STEPS_LENGTH) issues.push(ISSUES.too_short);
   if (splitSteps(steps).length < MIN_STEP_COUNT) issues.push(ISSUES.too_few_steps);
   if (REMOTE_ACCESS.test(steps)) issues.push(ISSUES.remote_access);
-  if (STAFF_SYSTEM.test(steps)) issues.push(ISSUES.staff_system);
+  if (hasStaffSystemStep(steps)) issues.push(ISSUES.staff_system);
   if (hasDangerousStep(steps)) issues.push(ISSUES.dangerous);
   if (OUR_ACTION.test(steps)) issues.push(ISSUES.our_action);
   if (
