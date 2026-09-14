@@ -132,7 +132,15 @@ export function leadFlags(lead: OwnLead, today: string): LeadFlag[] {
 
 /** 상단 KPI 카드 키 — 누르면 같은 이름의 필터가 걸린다 */
 export type LeadKpiKey =
-  "all" | "pending" | "uncontacted" | "doc_requested" | "target" | "hold" | "closed" | "flagged";
+  | "all"
+  | "pending"
+  | "uncontacted"
+  | "doc_requested"
+  | "target"
+  | "hold"
+  | "converted"
+  | "closed"
+  | "flagged";
 
 export function leadKpiCounts(rows: OwnLead[], today: string): Record<LeadKpiKey, number> {
   const open = rows.filter((r) => !isLeadClosed(r));
@@ -143,7 +151,9 @@ export function leadKpiCounts(rows: OwnLead[], today: string): Record<LeadKpiKey
     doc_requested: open.filter((r) => r.doc_status === "요청").length,
     target: open.filter((r) => r.decision === "접수대상").length,
     hold: open.filter((r) => r.decision === "보류").length,
-    closed: rows.length - open.length,
+    // 가맹접수로 넘어간 건은 따로 센다. 종결은 상담 종료·접수아님처럼 접수 없이 닫힌 건만.
+    converted: rows.filter((r) => !!r.converted_franchise_id).length,
+    closed: rows.filter((r) => !!r.closed_at && !r.converted_franchise_id).length,
     flagged: open.filter((r) => leadFlags(r, today).length > 0).length,
   };
 }
@@ -163,8 +173,10 @@ export function matchesLeadKpi(lead: OwnLead, key: LeadKpiKey, today: string): b
       return !closed && lead.decision === "접수대상";
     case "hold":
       return !closed && lead.decision === "보류";
+    case "converted":
+      return !!lead.converted_franchise_id;
     case "closed":
-      return closed;
+      return closed && !lead.converted_franchise_id;
     case "flagged":
       return !closed && leadFlags(lead, today).length > 0;
   }

@@ -14,6 +14,7 @@ import {
   PauseCircle,
   AlertTriangle,
   CheckCircle2,
+  ArrowRightLeft,
 } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import BulkDeleteActions from "@/components/ui/BulkDeleteActions";
@@ -384,7 +385,7 @@ export default function LeadsClient({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8 mb-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-9 mb-3">
         <KpiCard
           label="전체"
           value={kpiCounts.all}
@@ -440,6 +441,14 @@ export default function LeadsClient({
           tone="red"
           active={kpiFilter === "flagged"}
           onClick={() => handleKpiClick("flagged")}
+        />
+        <KpiCard
+          label="가맹접수 전환"
+          value={kpiCounts.converted}
+          icon={ArrowRightLeft}
+          tone="blue"
+          active={kpiFilter === "converted"}
+          onClick={() => handleKpiClick("converted")}
         />
         <KpiCard
           label="종결"
@@ -601,7 +610,19 @@ export default function LeadsClient({
                         )}
                       </td>
                       <td className="px-3 py-3 align-top min-w-[380px] max-w-[640px]">
-                        <div className="font-semibold text-slate-900">{row.business_name}</div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-slate-900">{row.business_name}</span>
+                          {row.converted_franchise_id && (
+                            <Link
+                              href={`/franchise?highlight=${row.converted_franchise_id}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="rounded-full border border-blue-300 bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-200"
+                              title="가맹접수로 넘어간 건. 누르면 그 접수 건으로 이동"
+                            >
+                              가맹접수 전환됨 →
+                            </Link>
+                          )}
+                        </div>
                         <div className="text-xs text-slate-400">
                           {row.owner_name || "-"} · {row.phone || "-"}
                         </div>
