@@ -60,7 +60,7 @@ function formatMD(iso: string) {
 
 type SaveFn = (row: OwnLead, field: LeadEditableField, value: string) => Promise<boolean>;
 
-// 비고는 카톡으로 받은 내용 그대로라 목록에서 가장 크게 보여야 한다. 상호명 아래에 최대 3줄로 펼쳐 보이고,
+// 비고는 카톡으로 받은 내용 그대로라 목록에서 가장 크게 보여야 한다. 상호명 아래에 줄이 얼마든 접지 않고 다 펼치고,
 // 누르면 여러 줄 입력칸으로 바뀌어 바로 고친다. 칸 밖을 누르면 저장, Esc는 취소.
 interface NoteBlockProps {
   row: OwnLead;
@@ -111,7 +111,7 @@ const NoteBlock = memo(function NoteBlock({ row, onSave, disabled }: NoteBlockPr
         }
       }}
       title={disabled ? undefined : "눌러서 수정"}
-      className={`mt-1 whitespace-pre-wrap break-words text-[13px] leading-5 line-clamp-3 rounded-md px-1 -mx-1 ${
+      className={`mt-1.5 whitespace-pre-wrap break-words text-sm leading-5 rounded-md px-1 -mx-1 ${
         original ? "text-slate-700" : "text-slate-400 italic"
       } ${disabled ? "" : "cursor-text hover:bg-blue-50/60"}`}
     >
