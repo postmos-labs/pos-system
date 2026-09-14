@@ -60,37 +60,6 @@ function formatMD(iso: string) {
 
 type SaveFn = (row: OwnLead, field: LeadEditableField, value: string) => Promise<boolean>;
 
-interface EditableTextProps {
-  row: OwnLead;
-  field: LeadEditableField;
-  onSave: SaveFn;
-  disabled?: boolean;
-}
-const EditableText = memo(function EditableText({
-  row,
-  field,
-  onSave,
-  disabled,
-}: EditableTextProps) {
-  const original = (row[field] as string) ?? "";
-  const [value, setValue] = useState(original);
-  const commit = useCallback(async () => {
-    if (value === original) return;
-    const ok = await onSave(row, field, value);
-    if (!ok) setValue(original);
-  }, [value, original, onSave, row, field]);
-  return (
-    <input
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={commit}
-      onClick={(e) => e.stopPropagation()}
-      disabled={disabled}
-      className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1 -mx-1 text-sm disabled:opacity-60"
-    />
-  );
-});
-
 // 비고는 카톡으로 받은 내용 그대로라 목록에서 가장 크게 보여야 한다. 상호명 아래에 최대 3줄로 펼쳐 보이고,
 // 누르면 여러 줄 입력칸으로 바뀌어 바로 고친다. 칸 밖을 누르면 저장, Esc는 취소.
 interface NoteBlockProps {
