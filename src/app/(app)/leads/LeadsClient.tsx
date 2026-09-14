@@ -91,6 +91,66 @@ const EditableText = memo(function EditableText({
   );
 });
 
+// 비고는 카톡으로 받은 내용 그대로라 목록에서 가장 크게 보여야 한다. 상호명 아래에 최대 3줄로 펼쳐 보이고,
+// 누르면 여러 줄 입력칸으로 바뀌어 바로 고친다. 칸 밖을 누르면 저장, Esc는 취소.
+interface NoteBlockProps {
+  row: OwnLead;
+  onSave: SaveFn;
+  disabled?: boolean;
+}
+const NoteBlock = memo(function NoteBlock({ row, onSave, disabled }: NoteBlockProps) {
+  const original = row.note ?? "";
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(original);
+  const commit = useCallback(async () => {
+    setEditing(false);
+    if (value === original) return;
+    const ok = await onSave(row, "note", value);
+    if (!ok) setValue(original);
+  }, [value, original, onSave, row]);
+  if (editing) {
+    return (
+      <textarea
+        autoFocus
+        value={value}
+        rows={Math.min(8, Math.max(3, value.split(String.fromCharCode(10)).length + 1))}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            setValue(original);
+            setEditing(false);
+          }
+        }}
+        onClick={(e) => e.stopPropagation()}
+        className="mt-1 w-full rounded-md border border-blue-300 bg-white px-2 py-1.5 text-[13px] leading-5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+      />
+    );
+  }
+  return (
+    <div
+      role={disabled ? undefined : "button"}
+      tabIndex={disabled ? undefined : 0}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!disabled) setEditing(true);
+      }}
+      onKeyDown={(e) => {
+        if (!disabled && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          setEditing(true);
+        }
+      }}
+      title={disabled ? undefined : "눌러서 수정"}
+      className={`mt-1 whitespace-pre-wrap break-words text-[13px] leading-5 line-clamp-3 rounded-md px-1 -mx-1 ${
+        original ? "text-slate-700" : "text-slate-400 italic"
+      } ${disabled ? "" : "cursor-text hover:bg-blue-50/60"}`}
+    >
+      {original || "비고 없음 · 눌러서 입력"}
+    </div>
+  );
+});
+
 interface SelectFieldProps {
   row: OwnLead;
   field: LeadEditableField;
@@ -498,8 +558,8 @@ export default function LeadsClient({
                       className="w-4 h-4 accent-blue-600 cursor-pointer"
                     />
                   </th>
-                  <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap">
-                    상호명
+                  <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap min-w-[380px]">
+                    상호명 · 비고
                   </th>
                   <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap">
                     등록일
@@ -527,9 +587,6 @@ export default function LeadsClient({
                   </th>
                   <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap">
                     확인 필요
-                  </th>
-                  <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 min-w-[160px]">
-                    비고
                   </th>
                   <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap">
                     조치
@@ -574,11 +631,17 @@ export default function LeadsClient({
                           />
                         )}
                       </td>
-                      <td className="px-3 py-3 whitespace-nowrap">
+                      <td className="px-3 py-3 align-top min-w-[380px] max-w-[640px]">
                         <div className="font-semibold text-slate-900">{row.business_name}</div>
                         <div className="text-xs text-slate-400">
                           {row.owner_name || "-"} · {row.phone || "-"}
                         </div>
+                        <NoteBlock
+                          key={row.note ?? ""}
+                          row={row}
+                          onSave={saveField}
+                          disabled={closed}
+                        />
                       </td>
                       <td className="px-3 py-3 text-slate-500 whitespace-nowrap">
                         {formatMD(row.created_at)}
@@ -656,15 +719,6 @@ export default function LeadsClient({
                             </span>
                           ))}
                         </div>
-                      </td>
-                      <td className="px-3 py-3 min-w-[160px]">
-                        <EditableText
-                          key={row.note ?? ""}
-                          row={row}
-                          field="note"
-                          onSave={saveField}
-                          disabled={closed}
-                        />
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap">
                         {closed ? (
