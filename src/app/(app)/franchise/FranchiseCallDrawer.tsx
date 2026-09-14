@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Ban, PhoneCall, PhoneMissed, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { formatKst } from "@/lib/date";
 import type { FranchiseApplication } from "@/types";
 import { APPLICANT_TYPE_LABEL } from "@/types";
 
@@ -28,8 +29,7 @@ interface Props {
 }
 
 function formatEntryDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("ko-KR");
+  return formatKst(value);
 }
 
 export default function FranchiseCallDrawer({

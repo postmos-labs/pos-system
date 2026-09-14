@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { formatKst } from "@/lib/date";
 
 type NotificationLog = {
   id: string;
@@ -59,8 +60,7 @@ export function NotificationHistory({
               key={log.id}
               className={`text-xs ${log.status === "failed" ? "text-red-500" : "text-blue-500"}`}
             >
-              {new Date(log.created_at).toLocaleString("ko-KR")} ·{" "}
-              {log.user_name ?? log.user?.name ?? "알수없음"} ·{" "}
+              {formatKst(log.created_at)} · {log.user_name ?? log.user?.name ?? "알수없음"} ·{" "}
               {labelMap?.[log.template_key] ?? log.template_key}
               {log.recipient_masked ? ` · ${log.recipient_masked}` : ""}
               {log.provider_message_id ? ` · Solapi ${log.provider_message_id}` : ""}

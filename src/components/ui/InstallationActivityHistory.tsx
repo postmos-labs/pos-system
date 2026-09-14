@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { formatKst } from "@/lib/date";
 
 type ActivityLog = {
   id: string;
@@ -84,8 +85,7 @@ export default function InstallationActivityHistory({
                   : "";
             return (
               <li key={log.id} className="text-xs text-slate-500">
-                {new Date(log.created_at).toLocaleString("ko-KR")} ·{" "}
-                {log.user_name ?? log.user?.name ?? "알수없음"} ·{" "}
+                {formatKst(log.created_at)} · {log.user_name ?? log.user?.name ?? "알수없음"} ·{" "}
                 {ACTION_LABEL[log.action] ?? log.action}
                 {statusChange}
                 {assignmentChange}

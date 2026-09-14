@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { Search } from "lucide-react";
+import { kstWallClock } from "@/lib/date";
 import { deleteMerchants } from "./actions";
 import type {
   Merchant360Application,
@@ -61,7 +62,7 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
 
 function formatDateOnly(value: string | null | undefined) {
   if (!value) return null;
-  const date = new Date(value);
+  const date = kstWallClock(value);
   if (!Number.isFinite(date.getTime())) return null;
   return format(date, "yyyy-MM-dd", { locale: ko });
 }

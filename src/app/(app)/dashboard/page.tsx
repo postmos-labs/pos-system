@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
+import { kstWallClock } from "@/lib/date";
 import {
   FileEdit,
   Clock4,
@@ -280,7 +281,7 @@ export default async function DashboardPage({ searchParams }: Props) {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">안녕하세요, {p.name}님</h1>
           <p className="text-slate-500 mt-1">
-            {format(new Date(), "yyyy년 M월 d일 (EEE)", { locale: ko })}
+            {format(kstWallClock(new Date()), "yyyy년 M월 d일 (EEE)", { locale: ko })}
           </p>
         </div>
         {(p.role === "admin" || p.role === "master" || p.role === "cs") && <ExcelDownloadButton />}
@@ -512,7 +513,7 @@ export default async function DashboardPage({ searchParams }: Props) {
                   </p>
                 </div>
                 <p className="text-xs text-slate-400 whitespace-nowrap">
-                  {format(new Date(app.updated_at), "M/d", { locale: ko })}
+                  {format(kstWallClock(app.updated_at), "M/d", { locale: ko })}
                 </p>
               </Link>
             ))}

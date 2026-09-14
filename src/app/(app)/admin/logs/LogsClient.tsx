@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { ArrowRight, Search, Store, X } from "lucide-react";
 import { DatePickerField } from "@/components/ui/DatePickerField";
+import { kstWallClock } from "@/lib/date";
 import {
   FRANCHISE_STATUS_LABEL,
   STATUS_LABEL,
@@ -452,7 +453,7 @@ export default function LogsClient({
                   </p>
                 )}
                 <p className="mt-1 text-xs text-slate-400">
-                  {format(new Date(log.createdAt), "yyyy-MM-dd HH:mm", { locale: ko })}
+                  {format(kstWallClock(log.createdAt), "yyyy-MM-dd HH:mm", { locale: ko })}
                 </p>
               </div>
             );

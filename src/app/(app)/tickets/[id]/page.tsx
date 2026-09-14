@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
+import { kstWallClock } from "@/lib/date";
 import {
   STATUS_LABEL,
   STATUS_COLOR,
@@ -176,7 +177,7 @@ export default async function TicketDetailPage({ params }: Props) {
           )}
         </div>
         <p className="text-sm text-gray-500 mt-1">
-          등록 {format(new Date(ticket.created_at), "yyyy.M.d HH:mm", { locale: ko })}
+          등록 {format(kstWallClock(ticket.created_at), "yyyy.M.d HH:mm", { locale: ko })}
         </p>
       </div>
 

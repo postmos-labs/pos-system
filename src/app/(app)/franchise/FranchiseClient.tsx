@@ -92,7 +92,7 @@ import {
   applyFranchiseStatusSideEffects,
   notifyAndLogFranchiseStatus,
 } from "@/lib/franchiseStatusEffects";
-import { kstToday } from "@/lib/date";
+import { kstToday, kstDate, formatKst, kstWallClock } from "@/lib/date";
 
 const DOC_CASE_LABEL: Record<DocCase, string> = {
   both: "대표자명+상호명",
@@ -621,7 +621,7 @@ const HistoryPanel = memo(function HistoryPanel({
         >
           <div className="flex items-start justify-between gap-2">
             <div className="text-slate-400">
-              {new Date(entry.at).toLocaleString("ko-KR")} · {entry.user}
+              {formatKst(entry.at)} · {entry.user}
             </div>
             <div className="flex items-center gap-1 shrink-0">
               <button
@@ -657,8 +657,7 @@ const HistoryPanel = memo(function HistoryPanel({
           node: (
             <li key={log.id} className="text-[15pt] text-blue-400">
               <div className="text-slate-400">
-                {new Date(log.created_at).toLocaleString("ko-KR")} ·{" "}
-                {log.user_name ?? log.user?.name ?? "알수없음"}
+                {formatKst(log.created_at)} · {log.user_name ?? log.user?.name ?? "알수없음"}
               </div>
               <div>알림톡 발송 ({ALIMTALK_LOG_LABEL[key] ?? key})</div>
             </li>
@@ -673,8 +672,7 @@ const HistoryPanel = memo(function HistoryPanel({
           node: (
             <li key={log.id} className="text-[15pt] text-purple-400 font-medium">
               <div className="text-slate-400 font-normal">
-                {new Date(log.created_at).toLocaleString("ko-KR")} ·{" "}
-                {log.user_name ?? log.user?.name ?? "알수없음"}
+                {formatKst(log.created_at)} · {log.user_name ?? log.user?.name ?? "알수없음"}
               </div>
               <div>{INSTALL_LOG_LABEL[log.to_status!]}</div>
             </li>
@@ -689,8 +687,7 @@ const HistoryPanel = memo(function HistoryPanel({
           node: (
             <li key={log.id} className="text-[15pt] text-amber-400 font-medium">
               <div className="text-slate-400 font-normal">
-                {new Date(log.created_at).toLocaleString("ko-KR")} ·{" "}
-                {log.user_name ?? log.user?.name ?? "알수없음"}
+                {formatKst(log.created_at)} · {log.user_name ?? log.user?.name ?? "알수없음"}
               </div>
               <div>{TRANSFER_LOG_LABEL[log.to_status!]}</div>
             </li>
@@ -704,8 +701,7 @@ const HistoryPanel = memo(function HistoryPanel({
         node: (
           <li key={log.id} className="text-[15pt] text-slate-300">
             <div className="text-slate-400">
-              {new Date(log.created_at).toLocaleString("ko-KR")} ·{" "}
-              {log.user_name ?? log.user?.name ?? "알수없음"}
+              {formatKst(log.created_at)} · {log.user_name ?? log.user?.name ?? "알수없음"}
             </div>
             <div>
               {log.from_status
@@ -1291,10 +1287,7 @@ export default function FranchiseClient({
   const matchesFilters = useCallback(
     (row: FranchiseApplication, skip: FilterSkip = {}) => {
       if (!skip.skipKpi && activeKpi) {
-        if (
-          activeKpi === "today_received" &&
-          format(new Date(row.created_at), "yyyy-MM-dd") !== todayDate
-        )
+        if (activeKpi === "today_received" && kstDate(new Date(row.created_at)) !== todayDate)
           return false;
         if (activeKpi === "doc_waiting" && row.status !== "doc_waiting") return false;
         if (activeKpi === "doc_incomplete" && row.status !== "doc_incomplete") return false;
@@ -1340,7 +1333,7 @@ export default function FranchiseClient({
       )
         return false;
       if (dateFrom || dateTo) {
-        const createdLocalDate = format(new Date(row.created_at), "yyyy-MM-dd");
+        const createdLocalDate = kstDate(new Date(row.created_at));
         if (dateFrom && createdLocalDate < dateFrom) return false;
         if (dateTo && createdLocalDate > dateTo) return false;
       }
@@ -1659,9 +1652,7 @@ export default function FranchiseClient({
       return haystack.includes(term);
     });
     return {
-      today_received: base.filter(
-        (row) => format(new Date(row.created_at), "yyyy-MM-dd") === todayDate,
-      ).length,
+      today_received: base.filter((row) => kstDate(new Date(row.created_at)) === todayDate).length,
       doc_waiting: base.filter((row) => row.status === "doc_waiting").length,
       doc_incomplete: base.filter((row) => row.status === "doc_incomplete").length,
       reviewing: base.filter(
@@ -1684,10 +1675,10 @@ export default function FranchiseClient({
       return haystack.includes(term);
     });
     const todayReceived = base.filter(
-      (row) => format(new Date(row.created_at), "yyyy-MM-dd") === todayDate,
+      (row) => kstDate(new Date(row.created_at)) === todayDate,
     ).length;
     const yesterdayReceived = base.filter(
-      (row) => format(new Date(row.created_at), "yyyy-MM-dd") === yesterdayDate,
+      (row) => kstDate(new Date(row.created_at)) === yesterdayDate,
     ).length;
     const todayCompleted = base.filter(
       (row) => APPROVED_STATUS_SET.has(row.status) && todayCompletedIdSet.has(row.id),
@@ -2264,7 +2255,7 @@ export default function FranchiseClient({
         담당영업: (r as any).sales?.name ?? "",
         담당CS: (r as any).cs?.name ?? "",
         비고: r.memo ?? "",
-        등록일: format(new Date(r.created_at), "yyyy-MM-dd", { locale: ko }),
+        등록일: format(kstWallClock(r.created_at), "yyyy-MM-dd", { locale: ko }),
       }));
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();

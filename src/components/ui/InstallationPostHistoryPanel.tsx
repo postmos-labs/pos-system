@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { Loader2, MessageSquarePlus, X } from "lucide-react";
+import { kstWallClock } from "@/lib/date";
 import {
   addInstallationPostHistory,
   getInstallationPostHistory,
@@ -105,7 +106,7 @@ export default function InstallationPostHistoryPanel({ installationId, title, on
                   <div className="mb-1 flex items-center justify-between gap-3 text-[11px] text-slate-400">
                     <span>{creatorName(item.creator)}</span>
                     <time dateTime={item.created_at}>
-                      {format(new Date(item.created_at), "yyyy.M.d HH:mm", { locale: ko })}
+                      {format(kstWallClock(item.created_at), "yyyy.M.d HH:mm", { locale: ko })}
                     </time>
                   </div>
                   <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">

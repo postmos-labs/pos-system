@@ -18,6 +18,7 @@ import {
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
+import { kstWallClock } from "@/lib/date";
 import { mergeRowsPreservingIdentity } from "@/lib/mergeRows";
 import { formatPhone, formatBusinessNumber, formatDateText } from "@/lib/format";
 import { deleteChangeRequests } from "./actions";
@@ -481,7 +482,7 @@ export default function ChangesClient({
         담당자: r.cs?.name ?? "",
         상태: CHANGE_STATUS_LABEL[r.status],
         메모: r.memo ?? "",
-        등록일: format(new Date(r.created_at), "yyyy-MM-dd", { locale: ko }),
+        등록일: format(kstWallClock(r.created_at), "yyyy-MM-dd", { locale: ko }),
       }));
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();

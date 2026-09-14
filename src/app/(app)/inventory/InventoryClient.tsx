@@ -12,7 +12,7 @@ import HistoryButton from "@/components/ui/HistoryButton";
 import MemoHistoryPanel from "@/components/ui/MemoHistoryPanel";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField } from "@/components/ui/DatePickerField";
-import { kstDate, kstToday } from "@/lib/date";
+import { kstDate, kstToday, kstWallClock } from "@/lib/date";
 import { INVENTORY_CATEGORY_TREE, INVENTORY_MAJOR_CATEGORIES } from "@/lib/inventoryCatalog";
 import {
   INVENTORY_LOG_TYPES,
@@ -671,7 +671,7 @@ export default function InventoryClient({
                     <div className="text-right">
                       <p className="text-xs text-slate-500">{log.user?.name ?? "알수없음"}</p>
                       <p className="text-xs text-slate-400">
-                        {format(new Date(log.created_at), "M/d HH:mm", { locale: ko })}
+                        {format(kstWallClock(log.created_at), "M/d HH:mm", { locale: ko })}
                       </p>
                       {log.installation_id && (
                         <Link

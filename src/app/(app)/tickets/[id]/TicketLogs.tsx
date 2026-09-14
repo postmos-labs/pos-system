@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
+import { kstWallClock } from "@/lib/date";
 import { STATUS_LABEL, type TicketStatus } from "@/types";
 import { ArrowRight } from "lucide-react";
 
@@ -58,7 +59,8 @@ export default function TicketLogs({ logs }: { logs: Log[] }) {
                 </div>
               )}
               <p className="text-xs text-gray-400 mt-0.5">
-                {log.user?.name} · {format(new Date(log.created_at), "M/d HH:mm", { locale: ko })}
+                {log.user?.name} ·{" "}
+                {format(kstWallClock(log.created_at), "M/d HH:mm", { locale: ko })}
               </p>
             </div>
           </div>

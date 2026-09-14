@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
+import { kstWallClock } from "@/lib/date";
 import MarkAllRead from "./MarkAllRead";
 import NotificationRow from "./NotificationRow";
 
@@ -62,7 +63,7 @@ export default async function NotificationsPage({ searchParams }: Props) {
             }
             title={n.title}
             body={n.body}
-            createdAtLabel={format(new Date(n.created_at), "M월 d일 HH:mm", { locale: ko })}
+            createdAtLabel={format(kstWallClock(n.created_at), "M월 d일 HH:mm", { locale: ko })}
             isRead={n.is_read}
           />
         ))}

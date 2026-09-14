@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
+import { kstWallClock } from "@/lib/date";
 import { AlertTriangle, ChevronRight, Search } from "lucide-react";
 import {
   deleteTickets,
@@ -555,7 +556,7 @@ export default function TicketsClient({
                   </span>
                   {ticket.scheduled_at && (
                     <span>
-                      {format(new Date(ticket.scheduled_at), "M/d HH:mm", { locale: ko })}
+                      {format(kstWallClock(ticket.scheduled_at), "M/d HH:mm", { locale: ko })}
                     </span>
                   )}
                 </div>
@@ -563,7 +564,7 @@ export default function TicketsClient({
               <div className="text-right flex-shrink-0 flex items-center gap-2">
                 <div>
                   <p className="text-xs text-slate-500">
-                    {format(new Date(ticket.created_at), "M/d", { locale: ko })}
+                    {format(kstWallClock(ticket.created_at), "M/d", { locale: ko })}
                   </p>
                   {ticket.tech?.name && (
                     <p className="text-xs text-slate-600 mt-1 font-medium">{ticket.tech.name}</p>

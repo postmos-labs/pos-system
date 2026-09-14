@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { Plus, FileStack, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { kstWallClock } from "@/lib/date";
 import { useToast } from "@/components/ui/Toast";
 import EmptyState from "@/components/ui/EmptyState";
 import type { Profile } from "@/types";
@@ -102,7 +103,7 @@ export default function BlueprintsListClient({
                     </p>
                   )}
                   <p className="text-xs text-slate-400 mt-1">
-                    {format(new Date(bp.updated_at ?? bp.created_at), "yyyy.MM.dd HH:mm", {
+                    {format(kstWallClock(bp.updated_at ?? bp.created_at), "yyyy.MM.dd HH:mm", {
                       locale: ko,
                     })}
                   </p>

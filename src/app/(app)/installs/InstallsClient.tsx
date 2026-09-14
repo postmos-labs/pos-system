@@ -7,6 +7,7 @@ import { formatPhone, thumbUrl } from "@/lib/format";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
+import { kstWallClock } from "@/lib/date";
 import {
   Plus,
   Search,
@@ -1842,7 +1843,7 @@ export default function InstallsClient({
         상태: statusLabel(i.status, i.delivery_type),
         담당자: (i.assignee as any)?.name ?? "",
         비고: i.notes ?? "",
-        등록일: format(new Date(i.created_at), "yyyy-MM-dd HH:mm", { locale: ko }),
+        등록일: format(kstWallClock(i.created_at), "yyyy-MM-dd HH:mm", { locale: ko }),
       }));
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
@@ -2942,7 +2943,7 @@ export default function InstallsClient({
                         </div>
                       )}
                       <p className="mt-2 text-xs text-slate-400">
-                        등록 {format(new Date(inst.created_at), "M/d HH:mm", { locale: ko })}
+                        등록 {format(kstWallClock(inst.created_at), "M/d HH:mm", { locale: ko })}
                       </p>
                       <div className="mt-2">
                         <InstallationActivityHistory
@@ -3390,7 +3391,7 @@ export default function InstallsClient({
                         )}
                       </td>
                       <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap font-mono">
-                        {format(new Date(inst.created_at), "M/d HH:mm", { locale: ko })}
+                        {format(kstWallClock(inst.created_at), "M/d HH:mm", { locale: ko })}
                       </td>
                     </tr>
                   </Fragment>

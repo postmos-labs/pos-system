@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
+import { kstWallClock } from "@/lib/date";
 import { updateMerchantInstallNote } from "./actions";
 import { caseTypeLabel } from "./loadMerchant360";
 import type { Merchant360Merchant, MerchantDerivedSummary } from "./merchant360";
@@ -21,7 +22,7 @@ function DetailField({ label, value }: { label: string; value: string | null | u
 
 function formatDateOnly(value: string | null) {
   if (!value) return null;
-  const date = new Date(value);
+  const date = kstWallClock(value);
   if (!Number.isFinite(date.getTime())) return null;
   return format(date, "yyyy-MM-dd", { locale: ko });
 }

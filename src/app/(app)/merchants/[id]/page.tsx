@@ -4,6 +4,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { ArrowLeft } from "lucide-react";
+import { kstWallClock } from "@/lib/date";
 import { loadMerchant360 } from "../loadMerchant360";
 import MerchantMemoSection from "../MerchantMemoSection";
 import MerchantInventorySection from "../MerchantInventorySection";
@@ -25,7 +26,7 @@ interface Props {
 
 function formatDateOnly(value: string | null | undefined) {
   if (!value) return null;
-  const date = new Date(value);
+  const date = kstWallClock(value);
   if (!Number.isFinite(date.getTime())) return null;
   return format(date, "yyyy-MM-dd", { locale: ko });
 }

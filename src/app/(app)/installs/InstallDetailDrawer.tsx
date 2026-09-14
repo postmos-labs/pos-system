@@ -5,6 +5,7 @@ import * as Popover from "@radix-ui/react-popover";
 import { XIcon, Save, ChevronDown, ChevronUp } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
+import { kstWallClock } from "@/lib/date";
 import { formatPhone, thumbUrl } from "@/lib/format";
 import type { Profile, EquipmentItem } from "@/types";
 import { AppSelect } from "@/components/ui/AppSelect";
@@ -563,7 +564,9 @@ export default function InstallDetailDrawer({
                 </Field>
                 <Field label="등록일">
                   <ReadValue>
-                    {format(new Date(installation.created_at), "yyyy-M-d HH:mm", { locale: ko })}
+                    {format(kstWallClock(installation.created_at), "yyyy-M-d HH:mm", {
+                      locale: ko,
+                    })}
                   </ReadValue>
                 </Field>
               </div>

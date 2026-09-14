@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
+import { kstWallClock } from "@/lib/date";
 import { addMerchantMemo } from "./actions";
 import {
   MEMO_ISSUE_CATEGORIES,
@@ -23,7 +24,7 @@ import {
 } from "@/lib/asChecklist";
 
 function formatMemoDate(value: string) {
-  return format(new Date(value), "yyyy. M. d. a h:mm", { locale: ko });
+  return format(kstWallClock(value), "yyyy. M. d. a h:mm", { locale: ko });
 }
 
 const MEMO_STAGE_LABEL: Record<MerchantMemoStage, string> = {

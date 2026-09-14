@@ -5,6 +5,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { ExternalLink } from "lucide-react";
+import { kstWallClock } from "@/lib/date";
 import type { WorkHistoryCategory, WorkHistoryItem } from "./merchant360";
 
 const HISTORY_TABS: Array<{ key: "all" | WorkHistoryCategory; label: string }> = [
@@ -27,7 +28,7 @@ const HISTORY_CATEGORY_LABEL: Record<WorkHistoryCategory, string> = {
 };
 
 function formatDate(value: string) {
-  return format(new Date(value), "yyyy.M.d HH:mm", { locale: ko });
+  return format(kstWallClock(value), "yyyy.M.d HH:mm", { locale: ko });
 }
 
 export default function MerchantHistorySection({ history }: { history: WorkHistoryItem[] }) {

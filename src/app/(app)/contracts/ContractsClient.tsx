@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
+import { kstWallClock } from "@/lib/date";
 import { Plus, Copy, ExternalLink, Trash2, FileText, PenLine, Search } from "lucide-react";
 import type { Profile } from "@/types";
 import { useToast } from "@/components/ui/Toast";
@@ -287,8 +288,10 @@ export default function ContractsClient({ profile, initialContracts }: Props) {
                   <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
                     <span>{c.signer_name}</span>
                     {c.signer_phone && <span>{c.signer_phone}</span>}
-                    <span>{format(new Date(c.created_at), "M/d", { locale: ko })}</span>
-                    <span>만료 {format(new Date(c.token_expires_at), "M/d", { locale: ko })}</span>
+                    <span>{format(kstWallClock(c.created_at), "M/d", { locale: ko })}</span>
+                    <span>
+                      만료 {format(kstWallClock(c.token_expires_at), "M/d", { locale: ko })}
+                    </span>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">

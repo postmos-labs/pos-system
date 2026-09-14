@@ -4,6 +4,7 @@ import { Download } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
+import { kstWallClock } from "@/lib/date";
 import {
   FRANCHISE_STATUS_LABEL,
   APPLICANT_TYPE_LABEL,
@@ -223,10 +224,10 @@ export default function ExcelDownloadButton() {
         설치발송일: r.install_date ?? "",
         비고: r.memo ?? "",
         등록일: r.created_at
-          ? format(new Date(r.created_at), "yyyy-MM-dd HH:mm", { locale: ko })
+          ? format(kstWallClock(r.created_at), "yyyy-MM-dd HH:mm", { locale: ko })
           : "",
         최종수정일: r.updated_at
-          ? format(new Date(r.updated_at), "yyyy-MM-dd HH:mm", { locale: ko })
+          ? format(kstWallClock(r.updated_at), "yyyy-MM-dd HH:mm", { locale: ko })
           : "",
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(franchiseData), "가맹접수");
@@ -253,7 +254,7 @@ export default function ExcelDownloadButton() {
         VAN사: franchiseVanCompanyById.get(i.franchise_application_id) ?? "",
         비고: i.notes ?? "",
         등록일: i.created_at
-          ? format(new Date(i.created_at), "yyyy-MM-dd HH:mm", { locale: ko })
+          ? format(kstWallClock(i.created_at), "yyyy-MM-dd HH:mm", { locale: ko })
           : "",
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(installData), "설치관리");
@@ -266,10 +267,10 @@ export default function ExcelDownloadButton() {
         가맹점: t.merchant?.business_name ?? "",
         담당기사: t.tech?.name ?? "",
         예약일: t.scheduled_at
-          ? format(new Date(t.scheduled_at), "yyyy-MM-dd HH:mm", { locale: ko })
+          ? format(kstWallClock(t.scheduled_at), "yyyy-MM-dd HH:mm", { locale: ko })
           : "",
         등록일: t.created_at
-          ? format(new Date(t.created_at), "yyyy-MM-dd HH:mm", { locale: ko })
+          ? format(kstWallClock(t.created_at), "yyyy-MM-dd HH:mm", { locale: ko })
           : "",
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ticketData), "AS티켓");
@@ -284,7 +285,7 @@ export default function ExcelDownloadButton() {
         담당영업: m.sales?.name ?? "",
         메모: m.memo ?? "",
         등록일: m.created_at
-          ? format(new Date(m.created_at), "yyyy-MM-dd HH:mm", { locale: ko })
+          ? format(kstWallClock(m.created_at), "yyyy-MM-dd HH:mm", { locale: ko })
           : "",
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(merchantData), "가맹점");
@@ -306,7 +307,7 @@ export default function ExcelDownloadButton() {
         개통완료일: n.open_date ?? "",
         비고: n.memo ?? "",
         등록일: n.created_at
-          ? format(new Date(n.created_at), "yyyy-MM-dd HH:mm", { locale: ko })
+          ? format(kstWallClock(n.created_at), "yyyy-MM-dd HH:mm", { locale: ko })
           : "",
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(internetData), "인터넷관리");
@@ -325,7 +326,7 @@ export default function ExcelDownloadButton() {
         배송메모: p.delivery_note ?? "",
         비고: p.memo ?? "",
         등록일: p.created_at
-          ? format(new Date(p.created_at), "yyyy-MM-dd HH:mm", { locale: ko })
+          ? format(kstWallClock(p.created_at), "yyyy-MM-dd HH:mm", { locale: ko })
           : "",
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(paperOrderData), "용지요청");
@@ -354,7 +355,7 @@ export default function ExcelDownloadButton() {
         주소: w.address ?? "",
         비고: w.memo ?? "",
         등록일: w.created_at
-          ? format(new Date(w.created_at), "yyyy-MM-dd HH:mm", { locale: ko })
+          ? format(kstWallClock(w.created_at), "yyyy-MM-dd HH:mm", { locale: ko })
           : "",
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wooData), "우국상 관리");

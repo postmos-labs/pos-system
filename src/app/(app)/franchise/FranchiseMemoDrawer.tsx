@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Pin, Trash2, X } from "lucide-react";
 import HistoryIcon from "@/components/ui/HistoryIcon";
+import { formatKst } from "@/lib/date";
 import type { FranchiseApplication } from "@/types";
 import { APPLICANT_TYPE_LABEL } from "@/types";
 
@@ -25,8 +26,7 @@ interface Props {
 }
 
 function formatEntryDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("ko-KR");
+  return formatKst(value);
 }
 
 export default function FranchiseMemoDrawer({

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
+import { kstWallClock } from "@/lib/date";
 import FormModal from "@/components/ui/FormModal";
 import { useToast } from "@/components/ui/Toast";
 import { saveDeliveryChecklist } from "./actions";
@@ -106,7 +107,7 @@ export default function DeliveryChecklistModal({ installation, onClose, onSaved 
       {installation.delivery_checklist?.saved_at && (
         <p className="mb-3 text-xs text-slate-500">
           마지막 저장 {installation.delivery_checklist.saved_by_name ?? "-"} ·{" "}
-          {format(new Date(installation.delivery_checklist.saved_at), "yyyy-M-d HH:mm", {
+          {format(kstWallClock(installation.delivery_checklist.saved_at), "yyyy-M-d HH:mm", {
             locale: ko,
           })}
         </p>

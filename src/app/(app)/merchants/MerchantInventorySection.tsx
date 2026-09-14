@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
+import { kstWallClock } from "@/lib/date";
 
 interface InventoryLogRow {
   id: string;
@@ -66,7 +67,7 @@ export default function MerchantInventorySection({ merchantId }: { merchantId: s
         {logs.map((log) => (
           <div key={log.id} className="flex items-center gap-3 px-3.5 py-3">
             <span className="w-10 shrink-0 text-xs text-slate-400">
-              {format(new Date(log.created_at), "M/d", { locale: ko })}
+              {format(kstWallClock(log.created_at), "M/d", { locale: ko })}
             </span>
             <span className="flex-1 truncate text-sm font-medium text-slate-800">
               {log.item_name}

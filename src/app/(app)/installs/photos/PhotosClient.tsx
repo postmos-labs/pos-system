@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
+import { kstWallClock } from "@/lib/date";
 import type { Profile } from "@/types";
 import { createClient } from "@/lib/supabase/client";
 import { thumbUrl } from "@/lib/format";
@@ -227,7 +228,7 @@ export default function PhotosClient({ profile, installs: initialInstalls }: Pro
               </div>
               <p className="text-xs text-slate-400 mb-3">
                 {inst.assignee?.name ?? "미배정"} ·{" "}
-                {format(new Date(inst.created_at), "yyyy.M.d HH:mm", { locale: ko })}
+                {format(kstWallClock(inst.created_at), "yyyy.M.d HH:mm", { locale: ko })}
               </p>
               <div className="grid grid-cols-3 gap-2">
                 {inst.completion_photo_urls.map((url, idx) => (

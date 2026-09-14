@@ -15,6 +15,7 @@ import { Plus, Search, ChevronDown, ChevronUp, GripVertical } from "lucide-react
 import { createClient } from "@/lib/supabase/client";
 import { saveRowOrder } from "@/lib/reorderRows";
 import { formatPhone, formatDateText } from "@/lib/format";
+import { formatKst } from "@/lib/date";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { mergeRowsPreservingIdentity } from "@/lib/mergeRows";
 import { deleteFranchiseRows } from "../franchise/actions";
@@ -878,8 +879,7 @@ export default function TransfersClient({
                           <ul className="space-y-1">
                             {logsByRow[row.id].map((log) => (
                               <li key={log.id} className="text-xs text-slate-500">
-                                {new Date(log.created_at).toLocaleString("ko-KR")} ·{" "}
-                                {log.user?.name ?? "알수없음"} ·{" "}
+                                {formatKst(log.created_at)} · {log.user?.name ?? "알수없음"} ·{" "}
                                 {log.from_status
                                   ? (FRANCHISE_STATUS_LABEL[log.from_status as FranchiseStatus] ??
                                     log.from_status)

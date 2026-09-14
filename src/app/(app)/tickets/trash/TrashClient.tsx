@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
+import { kstWallClock } from "@/lib/date";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { restoreTickets, purgeTickets } from "../actions";
 import { STATUS_LABEL, STATUS_COLOR, type TicketStatus } from "@/types";
@@ -129,7 +130,7 @@ export default function TrashClient({
                   {ticket.merchant?.business_name || <span className="text-slate-400">-</span>}
                 </span>
                 <span>
-                  {format(new Date(ticket.deleted_at), "M/d HH:mm", { locale: ko })} 삭제
+                  {format(kstWallClock(ticket.deleted_at), "M/d HH:mm", { locale: ko })} 삭제
                   {ticket.deleted_by_profile?.name && ` · ${ticket.deleted_by_profile.name}`}
                 </span>
               </div>

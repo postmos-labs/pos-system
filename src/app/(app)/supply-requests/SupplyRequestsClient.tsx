@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import { Plus, Search } from "lucide-react";
+import { formatKst } from "@/lib/date";
 import { useToast } from "@/components/ui/Toast";
 import BulkDeleteActions from "@/components/ui/BulkDeleteActions";
 import { AppSelect } from "@/components/ui/AppSelect";
@@ -25,8 +26,13 @@ import {
 import type { Profile } from "@/types";
 
 function formatDateTime(value: string) {
-  const date = new Date(value);
-  return `${date.toLocaleDateString("ko-KR")} ${date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}`;
+  return formatKst(value, {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 /** 새 요청을 긴급 건들 뒤(비긴급) 또는 맨 앞(긴급)에 끼워 넣는다. */

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { X, Trash2 } from "lucide-react";
 import HistoryIcon from "./HistoryIcon";
 import { createClient } from "@/lib/supabase/client";
+import { formatKst } from "@/lib/date";
 import {
   INSTALLATION_DELIVERY_TYPE_LABEL,
   isInstallationDeliveryType,
@@ -183,7 +184,7 @@ export default function MemoHistoryPanel({
         <li key={`memo-${entry.at}-${entry.text}`} className="text-[15pt] text-slate-200 group">
           <div className="flex items-start justify-between gap-2">
             <div className="text-slate-400">
-              {new Date(entry.at).toLocaleString("ko-KR")}
+              {formatKst(entry.at)}
               {" · "}
               <span className="font-semibold text-blue-300">{entry.user}</span>
             </div>
@@ -206,7 +207,7 @@ export default function MemoHistoryPanel({
       node: (
         <li key={`notif-${log.id}`} className="text-[15pt] text-blue-400">
           <div className="text-slate-400">
-            {new Date(log.created_at).toLocaleString("ko-KR")}
+            {formatKst(log.created_at)}
             {" · "}
             <span className="font-semibold text-blue-300">
               {log.user_name ?? log.user?.name ?? "알수없음"}
@@ -233,7 +234,7 @@ export default function MemoHistoryPanel({
           node: (
             <li key={`franchise-${log.id}`} className="text-[15pt] text-blue-400">
               <div className="text-slate-400">
-                {new Date(log.created_at).toLocaleString("ko-KR")} · {actor}
+                {formatKst(log.created_at)} · {actor}
               </div>
               <div>알림톡 발송 ({FRANCHISE_ALIMTALK_LOG_LABEL[key] ?? key})</div>
             </li>
@@ -251,7 +252,7 @@ export default function MemoHistoryPanel({
               className={`text-[15pt] font-medium ${installLabel ? "text-purple-400" : "text-amber-400"}`}
             >
               <div className="text-slate-400 font-normal">
-                {new Date(log.created_at).toLocaleString("ko-KR")} · {actor}
+                {formatKst(log.created_at)} · {actor}
               </div>
               <div>{installLabel ?? transferLabel}</div>
             </li>
@@ -263,7 +264,7 @@ export default function MemoHistoryPanel({
         node: (
           <li key={`franchise-${log.id}`} className="text-[15pt] text-purple-300">
             <div className="text-slate-400">
-              {new Date(log.created_at).toLocaleString("ko-KR")}
+              {formatKst(log.created_at)}
               {" · "}
               {actor}
               {" · 가맹접수"}

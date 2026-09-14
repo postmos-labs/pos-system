@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { X } from "lucide-react";
+import { formatKst } from "@/lib/date";
 import type { Profile } from "@/types";
 import {
   SUPPLY_STATUS_STYLE,
@@ -11,9 +12,13 @@ import {
 } from "./supplyRequest";
 
 function formatDateTime(value: string | null) {
-  if (!value) return "-";
-  const date = new Date(value);
-  return `${date.toLocaleDateString("ko-KR")} ${date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}`;
+  return formatKst(value, {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
