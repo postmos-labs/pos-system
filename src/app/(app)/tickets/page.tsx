@@ -1,8 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
+import { getSessionUser, getSessionProfile } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { STATUS_LABEL, type TicketStatus, type Profile } from "@/types";
+import { STATUS_LABEL, type TicketStatus } from "@/types";
 import TicketsClient from "./TicketsClient";
 import AuthorStats, { type AuthorStatRange, type AuthorStatRow } from "./AuthorStats";
 import MyRevisionRequests, { type MyRevisionRow } from "./MyRevisionRequests";
@@ -106,14 +107,12 @@ export default async function TicketsPage({ searchParams }: Props) {
   const requestedPage = Math.max(1, Number(params.page) || 1);
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+  const profile = await getSessionProfile();
   if (!profile) redirect("/login");
-  const p = profile as Profile;
+  const p = profile;
 
   // 나에게 온 수정 요청 — 내가 담당자(sales/cs/tech)인 건 중 대기 중인 것.
   // 대기 건은 마스터가 닫을 때마다 줄어 총량이 작으므로 열린 것을 다 받아 여기서 거른다.

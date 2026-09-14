@@ -1,23 +1,51 @@
 import type { InstallationDeliveryType } from "@/lib/installationDeliveryType";
 import type { ApprovalNote } from "@/lib/approvalNotes";
-import type { FranchiseApplication } from "@/types";
+import type { FranchiseApplication, FranchiseStatus } from "@/types";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllRows, fetchByIdChunks } from "@/lib/fetchAllRows";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
-async function fetchAllApplications(supabase: SupabaseServerClient, isLargeFranchise: boolean) {
-  const runQuery = (from: number, to: number) =>
-    supabase
+/** 목록에서 "끝난 건"으로 보는 상태. 이 상태이면서 오래 갱신되지 않은 건은 기본 조회에서 뺀다. */
+export const CLOSED_STATUSES: FranchiseStatus[] = [
+  "card_done",
+  "internet_done",
+  "toss_review_done",
+  "completed",
+  "canceled",
+];
+/** 완료·취소 뒤 며칠까지는 기본 목록에 남겨 두는지. 오늘·어제 완료 KPI와 "방금 끝난 건 다시 보기"가 이 안에 든다. */
+export const ARCHIVE_AFTER_DAYS = 30;
+export type FranchiseListScope = "open" | "archived";
+
+async function fetchAllApplications(
+  supabase: SupabaseServerClient,
+  isLargeFranchise: boolean,
+  scope: FranchiseListScope,
+  cutoffIso: string,
+  includeIds: string[],
+) {
+  const select =
+    "*, sales:profiles!franchise_applications_sales_id_fkey(id,name,role), cs:profiles!franchise_applications_cs_id_fkey(id,name,role), creator:profiles!franchise_applications_created_by_fkey(id,name,role), next_check:franchise_next_check_dates(next_check_date)";
+
+  const runQuery = (from: number, to: number) => {
+    let query = supabase
       .from("franchise_applications")
-      .select(
-        "*, sales:profiles!franchise_applications_sales_id_fkey(id,name,role), cs:profiles!franchise_applications_cs_id_fkey(id,name,role), creator:profiles!franchise_applications_created_by_fkey(id,name,role), next_check:franchise_next_check_dates(next_check_date)",
-      )
-      .eq("is_large_franchise", isLargeFranchise)
-      .order("updated_at", { ascending: false })
-      // 페이지 경계에서 행이 중복·누락되지 않도록 유니크 컬럼으로 순서를 확정한다.
-      .order("id", { ascending: false })
-      .range(from, to);
+      .select(select)
+      .eq("is_large_franchise", isLargeFranchise);
+    if (scope === "open") {
+      query = query.or(`status.not.in.(${CLOSED_STATUSES.join(",")}),updated_at.gte.${cutoffIso}`);
+    } else {
+      query = query.in("status", CLOSED_STATUSES).lt("updated_at", cutoffIso);
+    }
+    return (
+      query
+        .order("updated_at", { ascending: false })
+        // 페이지 경계에서 행이 중복·누락되지 않도록 유니크 컬럼으로 순서를 확정한다.
+        .order("id", { ascending: false })
+        .range(from, to)
+    );
+  };
 
   type Row = NonNullable<Awaited<ReturnType<typeof runQuery>>["data"]>[number];
 
@@ -25,7 +53,24 @@ async function fetchAllApplications(supabase: SupabaseServerClient, isLargeFranc
     label: "fetchAllApplications",
   });
 
-  return { data: rows, error };
+  if (error || scope !== "open" || includeIds.length === 0) {
+    return { data: rows, error };
+  }
+
+  const existingIds = new Set(rows.map((r) => r.id));
+  const missingIds = includeIds.filter((id) => !existingIds.has(id));
+  if (missingIds.length === 0) {
+    return { data: rows, error };
+  }
+
+  const { data: includedRows, error: includeError } = await supabase
+    .from("franchise_applications")
+    .select(select)
+    .in("id", missingIds);
+  if (includeError) {
+    return { data: rows, error: includeError };
+  }
+  return { data: [...rows, ...(includedRows ?? [])] as Row[], error: null };
 }
 
 export type TransferApproval = {
@@ -44,11 +89,38 @@ export type TransferApproval = {
   approval_notes: ApprovalNote[];
 };
 
+async function fetchArchivedSummary(
+  supabase: SupabaseServerClient,
+  isLargeFranchise: boolean,
+  cutoffIso: string,
+) {
+  const runQuery = (from: number, to: number) =>
+    supabase
+      .from("franchise_applications")
+      .select("status")
+      .eq("is_large_franchise", isLargeFranchise)
+      .in("status", CLOSED_STATUSES)
+      .lt("updated_at", cutoffIso)
+      .order("id")
+      .range(from, to);
+
+  type Row = NonNullable<Awaited<ReturnType<typeof runQuery>>["data"]>[number];
+
+  const { data: rows, error } = await fetchAllRows<Row>(runQuery, {
+    label: "fetchArchivedSummary",
+  });
+
+  return { data: rows, error };
+}
+
 export async function fetchFranchiseListData(
   supabase: SupabaseServerClient,
   userId: string,
   isLargeFranchise: boolean,
+  options: { scope?: FranchiseListScope; includeIds?: string[] } = {},
 ) {
+  const scope = options.scope ?? "open";
+  const includeIds = options.includeIds ?? [];
   const kstToday = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const kstDayStart = new Date(`${kstToday}T00:00:00+09:00`);
   const kstNextDayStart = new Date(kstDayStart.getTime() + 24 * 60 * 60 * 1000);
@@ -56,6 +128,9 @@ export async function fetchFranchiseListData(
   const kstYesterday = new Date(kstDayStart.getTime() - 24 * 60 * 60 * 1000)
     .toISOString()
     .slice(0, 10);
+  const cutoffMs = Date.now() - ARCHIVE_AFTER_DAYS * 86_400_000;
+  const cutoffIso = new Date(cutoffMs).toISOString();
+  const archiveCutoffDate = new Date(cutoffMs + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   const [
     { data: rows, error },
@@ -65,8 +140,9 @@ export async function fetchFranchiseListData(
     { data: todayCompletionLogs },
     { data: yesterdayCompletionLogs },
     { data: transferApprovals },
+    { data: archivedSummaryRows },
   ] = await Promise.all([
-    fetchAllApplications(supabase, isLargeFranchise),
+    fetchAllApplications(supabase, isLargeFranchise, scope, cutoffIso, includeIds),
     supabase
       .from("profiles")
       .select("id,name,role")
@@ -91,6 +167,9 @@ export async function fetchFranchiseListData(
       .select(
         "franchise_application_id,status,delivery_type,requested_by,requested_by_name,requested_at,approved_by,approved_by_name,approved_at,cs_approved_by,cs_approved_by_name,cs_approved_at,approval_notes",
       ),
+    scope === "open"
+      ? fetchArchivedSummary(supabase, isLargeFranchise, cutoffIso)
+      : Promise.resolve({ data: [] as { status: FranchiseStatus }[], error: null }),
   ]);
 
   const todayCompletedIds = [
@@ -99,6 +178,18 @@ export async function fetchFranchiseListData(
   const yesterdayCompletedIds = [
     ...new Set((yesterdayCompletionLogs ?? []).map((log) => log.franchise_application_id)),
   ];
+
+  const archivedSummary =
+    scope === "archived"
+      ? { total: 0, byStatus: {} as Partial<Record<FranchiseStatus, number>> }
+      : (() => {
+          const byStatus: Partial<Record<FranchiseStatus, number>> = {};
+          for (const row of archivedSummaryRows ?? []) {
+            const status = row.status as FranchiseStatus;
+            byStatus[status] = (byStatus[status] ?? 0) + 1;
+          }
+          return { total: (archivedSummaryRows ?? []).length, byStatus };
+        })();
 
   const flatRows = (rows ?? []).map((row) => {
     const nextCheck = (
@@ -223,5 +314,8 @@ export async function fetchFranchiseListData(
     linkedInternets,
     todayDate: kstToday,
     yesterdayDate: kstYesterday,
+    archivedSummary,
+    archiveCutoffDate,
+    scope,
   };
 }

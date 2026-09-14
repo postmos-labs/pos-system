@@ -5,11 +5,11 @@ import { fetchFranchiseListData } from "./fetchFranchiseListData";
 import { fetchLeadForConversion } from "../leads/actions";
 
 interface Props {
-  searchParams: Promise<{ status?: string; highlight?: string; lead?: string }>;
+  searchParams: Promise<{ status?: string; highlight?: string; lead?: string; id?: string }>;
 }
 
 export default async function FranchisePage({ searchParams }: Props) {
-  const { status, highlight, lead } = await searchParams;
+  const { status, highlight, lead, id } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -42,7 +42,11 @@ export default async function FranchisePage({ searchParams }: Props) {
     linkedInternets,
     todayDate,
     yesterdayDate,
-  } = await fetchFranchiseListData(supabase, user.id, false);
+    archivedSummary,
+    archiveCutoffDate,
+  } = await fetchFranchiseListData(supabase, user.id, false, {
+    includeIds: [highlight, id].filter((v): v is string => !!v),
+  });
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -58,7 +62,7 @@ export default async function FranchisePage({ searchParams }: Props) {
           currentUserRole={currentProfile?.role ?? ""}
           currentUserApprovalRole={currentProfile?.approval_role ?? ""}
           initialStatusFilter={status ?? ""}
-          initialHighlightId={highlight}
+          initialHighlightId={highlight ?? id}
           linkedInstalls={linkedInstalls}
           linkedInternets={linkedInternets}
           todayDate={todayDate}
@@ -70,6 +74,8 @@ export default async function FranchisePage({ searchParams }: Props) {
           )}
           mode="default"
           conversionLead={conversionLead}
+          archivedSummary={archivedSummary}
+          archiveCutoffDate={archiveCutoffDate}
         />
       )}
     </div>

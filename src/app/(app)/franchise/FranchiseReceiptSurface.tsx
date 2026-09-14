@@ -228,6 +228,7 @@ interface Props {
   onBulkDelete: () => void;
   onBulkTransfer: () => void;
   onExcelDownload: () => void;
+  archivedNotice?: React.ReactNode;
 }
 
 const HIDDEN_STATUSES: FranchiseStatus[] = [
@@ -931,6 +932,7 @@ export default function FranchiseReceiptSurface(props: Props) {
           </button>
         </div>
       </div>
+      {props.archivedNotice}
 
       <div className="border-border bg-card shrink-0 overflow-hidden rounded-xl border">
         <div className="overflow-x-auto rounded-t-xl">

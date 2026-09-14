@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getSessionUser, getSessionProfile } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import InstallsClient from "./InstallsClient";
 import type { Profile, VanGroup } from "@/types";
@@ -30,9 +31,7 @@ export default async function InstallsPage({ searchParams }: Props) {
   const { id, van: vanParam } = await searchParams;
   const van: VanFilter = vanParam === "toss" || vanParam === "kicc" ? vanParam : "";
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSessionUser();
   if (!user) redirect("/login");
 
   const installsSelect = van
@@ -40,7 +39,7 @@ export default async function InstallsPage({ searchParams }: Props) {
     : "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications(van_company, open_date)";
 
   const [
-    { data: profile },
+    profile,
     { data: installs },
     { data: techUsers },
     { data: completionApprovals },
@@ -51,7 +50,7 @@ export default async function InstallsPage({ searchParams }: Props) {
     { count: tossVanCount },
     { count: kiccVanCount },
   ] = await Promise.all([
-    supabase.from("profiles").select("*").eq("id", user.id).single(),
+    getSessionProfile(),
     applyVanFilter(
       supabase
         .from("installations")

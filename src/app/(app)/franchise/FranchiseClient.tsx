@@ -34,7 +34,7 @@ import { saveRowOrder } from "@/lib/reorderRows";
 import { formatPhone, formatBusinessNumber, formatDateText } from "@/lib/format";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { mergeRowsPreservingIdentity } from "@/lib/mergeRows";
-import { deleteFranchiseRows } from "./actions";
+import { deleteFranchiseRows, loadArchivedFranchiseRows } from "./actions";
 import { markLeadConverted } from "../leads/actions";
 import {
   approveCsResponsibleTransfer,
@@ -177,6 +177,10 @@ interface Props {
     assignee_id: string | null;
     note: string | null;
   };
+  /** 기본 조회에서 뺀 오래된 완료·취소 건 요약. 화면 안내와 "불러오기" 버튼에 쓴다 */
+  archivedSummary?: { total: number; byStatus: Partial<Record<FranchiseStatus, number>> };
+  /** 이 날짜(KST) 이전에 갱신된 완료·취소 건은 기본 목록에 없다 */
+  archiveCutoffDate?: string;
 }
 
 type TransferApproval = {
@@ -1073,6 +1077,8 @@ export default function FranchiseClient({
   initialTransferApprovals,
   mode = "default",
   conversionLead,
+  archivedSummary,
+  archiveCutoffDate,
 }: Props) {
   const router = useRouter();
   const toast = useToast();
@@ -1085,6 +1091,9 @@ export default function FranchiseClient({
     conversionLead?.id ?? null,
   );
   const [showExistingForm, setShowExistingForm] = useState(false);
+  const [archivedRows, setArchivedRows] = useState<FranchiseApplication[]>([]);
+  const [archivedLoaded, setArchivedLoaded] = useState(false);
+  const [archivedLoading, setArchivedLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [transferringId, setTransferringId] = useState<string | null>(null);
@@ -1181,14 +1190,35 @@ export default function FranchiseClient({
   const [showShortcuts, setShowShortcuts] = useState(false);
 
   useEffect(() => {
-    setLocalRows((prev) => mergeRowsPreservingIdentity(prev, rows));
+    // 서버가 내려준 진행 중 목록에, 버튼으로 불러온 오래된 완료·취소 건을 뒤에 붙인다. 같은 id는 서버 쪽을 우선한다.
+    const rowIds = new Set(rows.map((r) => r.id));
+    const merged = archivedRows.length
+      ? [...rows, ...archivedRows.filter((r) => !rowIds.has(r.id))]
+      : rows;
+    setLocalRows((prev) => mergeRowsPreservingIdentity(prev, merged));
     setSelected((prev) => {
       // 갱신으로 사라진 행만 선택에서 빼고, 남아 있는 행의 선택은 유지한다.
-      const ids = new Set(rows.map((r) => r.id));
+      const ids = new Set(merged.map((r) => r.id));
       const next = new Set([...prev].filter((id) => ids.has(id)));
       return next.size === prev.size ? prev : next;
     });
-  }, [rows]);
+  }, [rows, archivedRows]);
+
+  const loadArchived = useCallback(async () => {
+    if (archivedLoading || archivedLoaded) return;
+    setArchivedLoading(true);
+    const result = await loadArchivedFranchiseRows(mode === "large_franchise");
+    setArchivedLoading(false);
+    if (result.error) {
+      toast.error("이전 건 불러오기 실패: " + result.error);
+      return;
+    }
+    setArchivedRows(result.rows);
+    setLocalLinkedInstalls((prev) => ({ ...result.linkedInstalls, ...prev }));
+    setLocalLinkedInternets((prev) => ({ ...result.linkedInternets, ...prev }));
+    setArchivedLoaded(true);
+    toast.success(`${result.rows.length}건을 불러왔습니다.`);
+  }, [archivedLoading, archivedLoaded, mode, toast]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -3175,6 +3205,27 @@ export default function FranchiseClient({
       )}
       {}
       <FranchiseReceiptSurface
+        archivedNotice={
+          archivedSummary && archivedSummary.total > 0 && !archivedLoaded ? (
+            <div className="flex flex-wrap items-center gap-2 px-4 py-2 text-xs text-slate-500 bg-slate-50 border-b border-slate-100">
+              <span>
+                {archiveCutoffDate} 이전에 완료·취소된 {archivedSummary.total}건은 목록에서 뺐습니다
+                {archivedSummary.byStatus.canceled
+                  ? ` (취소 ${archivedSummary.byStatus.canceled}건 포함)`
+                  : ""}
+                . 검색·엑셀에도 잡히지 않습니다.
+              </span>
+              <button
+                type="button"
+                onClick={loadArchived}
+                disabled={archivedLoading}
+                className="font-semibold text-blue-600 hover:underline disabled:opacity-50"
+              >
+                {archivedLoading ? "불러오는 중..." : "이전 건 모두 불러오기"}
+              </button>
+            </div>
+          ) : null
+        }
         rows={pagedRows}
         allRows={localRows}
         filteredCount={filteredRows.length}

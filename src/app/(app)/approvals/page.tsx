@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getSessionUser, getSessionProfile } from "@/lib/auth/session";
 import { canApproveFirstBy, canApproveFinalBy } from "@/lib/auth/installApproval";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -8,7 +9,6 @@ import TransferApprovalItem from "./TransferApprovalItem";
 import RejectedTransferItem from "./RejectedTransferItem";
 import ApprovalLogSection from "./ApprovalLogSection";
 import type { ApprovalNote } from "@/lib/approvalNotes";
-import type { Profile } from "@/types";
 
 type CompletionApproval = {
   installation_id: string;
@@ -65,15 +65,13 @@ const APPROVAL_LIST_LIMIT = 50;
 
 export default async function ApprovalsPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+  const profile = await getSessionProfile();
   if (!profile) redirect("/login");
 
-  const p = profile as Profile;
+  const p = profile;
   const userId = user.id;
 
   // 설치 단계 승인은 직급으로 갈린다(팀장 1차 → 실장 최종). 가맹접수 이관 승인은

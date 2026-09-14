@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
+import { getSessionUser, getSessionProfile } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import {
   FRANCHISE_STATUS_LABEL,
   FRANCHISE_STATUS_COLOR,
   type FranchiseStatus,
-  type Profile,
   type VanGroup,
 } from "@/types";
 import Link from "next/link";
@@ -49,16 +49,14 @@ export default async function DashboardPage({ searchParams }: Props) {
   const van: VanFilter = params.van === "toss" || params.van === "kicc" ? params.van : "";
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSessionUser();
   if (!user) redirect("/login");
   const userId = user.id;
 
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", userId).single();
+  const profile = await getSessionProfile();
   if (!profile) redirect("/login");
 
-  const p = profile as Profile;
+  const p = profile;
 
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
 

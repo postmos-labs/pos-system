@@ -4,11 +4,11 @@ import FranchiseClient from "../franchise/FranchiseClient";
 import { fetchFranchiseListData } from "../franchise/fetchFranchiseListData";
 
 interface Props {
-  searchParams: Promise<{ status?: string; highlight?: string }>;
+  searchParams: Promise<{ status?: string; highlight?: string; id?: string }>;
 }
 
 export default async function LargeFranchisesPage({ searchParams }: Props) {
-  const { status, highlight } = await searchParams;
+  const { status, highlight, id } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -28,7 +28,11 @@ export default async function LargeFranchisesPage({ searchParams }: Props) {
     linkedInternets,
     todayDate,
     yesterdayDate,
-  } = await fetchFranchiseListData(supabase, user.id, true);
+    archivedSummary,
+    archiveCutoffDate,
+  } = await fetchFranchiseListData(supabase, user.id, true, {
+    includeIds: [highlight, id].filter((v): v is string => !!v),
+  });
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -44,7 +48,7 @@ export default async function LargeFranchisesPage({ searchParams }: Props) {
           currentUserRole={currentProfile?.role ?? ""}
           currentUserApprovalRole={currentProfile?.approval_role ?? ""}
           initialStatusFilter={status ?? ""}
-          initialHighlightId={highlight}
+          initialHighlightId={highlight ?? id}
           linkedInstalls={linkedInstalls}
           linkedInternets={linkedInternets}
           todayDate={todayDate}
@@ -55,6 +59,8 @@ export default async function LargeFranchisesPage({ searchParams }: Props) {
             transferApprovals.map((approval) => [approval.franchise_application_id, approval]),
           )}
           mode="large_franchise"
+          archivedSummary={archivedSummary}
+          archiveCutoffDate={archiveCutoffDate}
         />
       )}
     </div>
