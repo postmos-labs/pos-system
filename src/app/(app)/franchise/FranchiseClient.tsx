@@ -35,6 +35,7 @@ import { formatPhone, formatBusinessNumber, formatDateText } from "@/lib/format"
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { mergeRowsPreservingIdentity } from "@/lib/mergeRows";
 import { deleteFranchiseRows } from "./actions";
+import { markLeadConverted } from "../leads/actions";
 import {
   approveCsResponsibleTransfer,
   approveFranchiseTransfer,
@@ -167,6 +168,15 @@ interface Props {
   yesterdayCompletedIds: string[];
   initialTransferApprovals: Record<string, TransferApproval>;
   mode?: "default" | "large_franchise";
+  /** 자체리드에서 "가맹접수 전환"으로 들어온 경우. 등록 폼을 이 값으로 미리 채우고, 등록 성공 시 리드를 전환 완료로 표시한다 */
+  conversionLead?: {
+    id: string;
+    business_name: string;
+    owner_name: string | null;
+    phone: string | null;
+    assignee_id: string | null;
+    note: string | null;
+  };
 }
 
 type TransferApproval = {
@@ -1062,6 +1072,7 @@ export default function FranchiseClient({
   yesterdayCompletedIds,
   initialTransferApprovals,
   mode = "default",
+  conversionLead,
 }: Props) {
   const router = useRouter();
   const toast = useToast();
@@ -1069,7 +1080,10 @@ export default function FranchiseClient({
   const [localRows, setLocalRows] = useState(rows);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(!!conversionLead);
+  const [conversionLeadId, setConversionLeadId] = useState<string | null>(
+    conversionLead?.id ?? null,
+  );
   const [showExistingForm, setShowExistingForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -1814,6 +1828,15 @@ export default function FranchiseClient({
       return false;
     }
 
+    const wasConversion = !!conversionLeadId;
+    if (conversionLeadId) {
+      // 자체리드에서 넘어온 건이면 리드를 전환 완료로 닫는다. 실패해도 접수 등록은 이미 끝났으므로 알림만 띄운다.
+      const marked = await markLeadConverted(conversionLeadId, data.id);
+      if (marked.error) toast.warning(`자체리드 전환 표시 실패: ${marked.error}`);
+      else toast.success("자체리드가 가맹접수로 전환됐습니다.");
+      setConversionLeadId(null);
+    }
+
     if (form.sendDocNotify && form.phone) {
       const docCase = docCaseOf(form.owner_name, form.business_name);
       // 발송 실패를 삼키면 직원은 안내가 나간 줄 알고 고객은 서류 안내를 못 받는다.
@@ -1862,6 +1885,8 @@ export default function FranchiseClient({
       },
       ...prev,
     ]);
+    // 자체리드 전환이면 ?lead= 쿼리를 지운다. 목록 반영(setLocalRows)보다 먼저 이동하면 서버 목록과 합쳐지며 같은 행이 두 번 들어간다.
+    if (wasConversion) router.replace("/franchise");
     return true;
   }
 
@@ -3236,8 +3261,27 @@ export default function FranchiseClient({
           mode="new"
           onSubmit={handleCreate}
           submitting={submitting}
-          onClose={() => setShowForm(false)}
+          onClose={() => {
+            setShowForm(false);
+            if (conversionLeadId) {
+              setConversionLeadId(null);
+              router.replace("/franchise");
+            }
+          }}
           csProfiles={csProfiles}
+          initialValues={
+            conversionLead && conversionLeadId
+              ? {
+                  business_name: conversionLead.business_name,
+                  owner_name: conversionLead.owner_name ?? "",
+                  phone: conversionLead.phone ?? "",
+                  cs_id: csProfiles.some((p) => p.id === conversionLead.assignee_id)
+                    ? (conversionLead.assignee_id ?? "")
+                    : "",
+                  memo: conversionLead.note ?? "",
+                }
+              : undefined
+          }
         />
       )}
 

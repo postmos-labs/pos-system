@@ -2,18 +2,32 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import FranchiseClient from "./FranchiseClient";
 import { fetchFranchiseListData } from "./fetchFranchiseListData";
+import { fetchLeadForConversion } from "../leads/actions";
 
 interface Props {
-  searchParams: Promise<{ status?: string; highlight?: string }>;
+  searchParams: Promise<{ status?: string; highlight?: string; lead?: string }>;
 }
 
 export default async function FranchisePage({ searchParams }: Props) {
-  const { status, highlight } = await searchParams;
+  const { status, highlight, lead } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  const conversionLeadResult = lead ? await fetchLeadForConversion(lead) : null;
+  const conversionLead =
+    conversionLeadResult?.lead && !conversionLeadResult.lead.converted_franchise_id
+      ? {
+          id: conversionLeadResult.lead.id,
+          business_name: conversionLeadResult.lead.business_name,
+          owner_name: conversionLeadResult.lead.owner_name,
+          phone: conversionLeadResult.lead.phone,
+          assignee_id: conversionLeadResult.lead.assignee_id,
+          note: conversionLeadResult.lead.note,
+        }
+      : undefined;
 
   const {
     rows,
@@ -55,6 +69,7 @@ export default async function FranchisePage({ searchParams }: Props) {
             transferApprovals.map((approval) => [approval.franchise_application_id, approval]),
           )}
           mode="default"
+          conversionLead={conversionLead}
         />
       )}
     </div>

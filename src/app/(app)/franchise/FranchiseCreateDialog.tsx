@@ -78,6 +78,8 @@ interface Props {
   csProfiles?: Pick<Profile, "id" | "name" | "role">[];
   /** "new"면 바로 빈 폼, "existing"이면 매장 검색부터 거친 뒤 폼으로 진입 (전환/승계/명변) */
   mode?: "new" | "existing";
+  /** 자체리드 전환처럼 다른 화면이 값을 넘겨 줄 때 */
+  initialValues?: Partial<FranchiseCreateInput>;
 }
 
 interface MerchantSearchResult {
@@ -147,8 +149,9 @@ export default function FranchiseCreateDialog({
   onClose,
   csProfiles = [],
   mode = "new",
+  initialValues,
 }: Props) {
-  const [form, setForm] = useState(() => initialForm(mode));
+  const [form, setForm] = useState(() => ({ ...initialForm(mode), ...initialValues }));
   const [step, setStep] = useState<"search" | "form">(mode === "existing" ? "search" : "form");
   const [productSelect, setProductSelect] = useState(EQUIPMENT_CATALOG[0]);
   const [productQty, setProductQty] = useState(1);
