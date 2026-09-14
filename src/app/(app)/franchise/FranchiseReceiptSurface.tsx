@@ -143,7 +143,10 @@ const SORTABLE_HEADERS: { label: string; key: ColumnSortKey }[] = [
 function formatLastCallAt(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
+  // 서버 함수는 시드니(UTC+10)에서 돌고 사용자는 한국이라 시간대를 못 박지 않으면 서버 HTML과 브라우저
+  // 렌더 결과가 달라 하이드레이션이 깨지고 React가 표 전체를 다시 그린다.
   return date.toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
     month: "numeric",
     day: "numeric",
     hour: "2-digit",
