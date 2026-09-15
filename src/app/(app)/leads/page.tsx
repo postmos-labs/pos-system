@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { kstDate } from "@/lib/date";
 import { redirect } from "next/navigation";
 import LeadsClient from "./LeadsClient";
+import type { LinkedFranchiseInfo } from "./lead";
+import { FRANCHISE_STATUS_LABEL, type FranchiseStatus } from "@/types";
 
 // 42P01: relation does not exist / PGRST205: PostgREST 스키마 캐시에 표가 없음.
 // 149번 마이그레이션(own_leads)이 아직 적용되지 않은 환경에서 쓴다.
@@ -10,7 +12,8 @@ function isMissingLeadsTable(error: { code?: string; message?: string } | null) 
   return (
     error.code === "42P01" ||
     error.code === "PGRST205" ||
-    /own_leads|schema cache|relation .* does not exist/i.test(error.message ?? "")
+    error.code === "PGRST204" ||
+    /schema cache|relation .* does not exist|column .* does not exist/i.test(error.message ?? "")
   );
 }
 
@@ -37,6 +40,25 @@ export default async function LeadsPage({
 
   const schemaMissing = isMissingLeadsTable(error);
 
+  const linkedFranchise: Record<string, LinkedFranchiseInfo> = {};
+  const franchiseIds = [
+    ...new Set(
+      (rows ?? []).map((r) => r.converted_franchise_id).filter((id): id is string => !!id),
+    ),
+  ];
+  if (franchiseIds.length > 0) {
+    const { data: linked } = await supabase
+      .from("franchise_applications")
+      .select("id, status")
+      .in("id", franchiseIds);
+    for (const f of linked ?? []) {
+      linkedFranchise[f.id] = {
+        status: f.status,
+        status_label: FRANCHISE_STATUS_LABEL[f.status as FranchiseStatus] ?? f.status,
+      };
+    }
+  }
+
   const { data: csProfiles } = await supabase
     .from("profiles")
     .select("id, name, role")
@@ -50,8 +72,8 @@ export default async function LeadsPage({
       <div>
         <h1 className="text-xl font-bold text-slate-900">자체리드 관리</h1>
         <p className="text-sm text-slate-500 mt-0.5">
-          대표님·자체영업으로 들어온 건을 확인하고 접수 여부를 판단한 뒤, 접수대상만 가맹접수로
-          넘깁니다
+          대표님·자체영업으로 들어온 건을 접수부터 완료까지 관리합니다. 가맹접수로 이관돼도 원본은
+          여기 남습니다
         </p>
       </div>
       {error && !schemaMissing ? (
@@ -64,6 +86,7 @@ export default async function LeadsPage({
           today={today}
           schemaMissing={schemaMissing}
           initialHighlightId={highlight}
+          linkedFranchise={linkedFranchise}
         />
       )}
     </div>

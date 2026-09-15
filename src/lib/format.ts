@@ -1,3 +1,8 @@
+/** 숫자만 남긴다. 하이픈 유무와 관계없이 번호를 비교할 때 쓴다 */
+export function digitsOnly(raw: string): string {
+  return raw.replace(/\D/g, "");
+}
+
 export function formatPhone(raw: string) {
   const digits = raw.replace(/\D/g, "").slice(0, 11);
   const len = digits.length;

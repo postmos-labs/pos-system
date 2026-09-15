@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   ArrowRightLeft,
+  HelpCircle,
 } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import BulkDeleteActions from "@/components/ui/BulkDeleteActions";
@@ -22,28 +23,47 @@ import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField } from "@/components/ui/DatePickerField";
 import KpiCard from "@/components/ui/KpiCard";
 import LeadForm from "./LeadForm";
-import { createLead, updateLeadField, closeLead, reopenLead, deleteLeads } from "./actions";
+import LeadDetailDrawer from "./LeadDetailDrawer";
+import {
+  createLead,
+  updateLeadField,
+  updateLeadEquipment,
+  closeLead,
+  reopenLead,
+  deleteLeads,
+} from "./actions";
 import {
   LEAD_SOURCES,
+  LEAD_TYPES,
+  LEAD_TYPE_STYLE,
   CONTACT_STATUSES,
   CONTACT_STATUS_STYLE,
   DOC_STATUSES,
   DOC_STATUS_STYLE,
+  VAN_STATUSES,
+  VAN_STATUS_STYLE,
+  INTERNET_STATUSES,
+  INTERNET_STATUS_STYLE,
   DECISIONS,
   DECISION_STYLE,
   DECISION_GUIDE,
-  isLeadClosed,
   leadAgeDays,
   LEAD_FLAG_LABELS,
   leadFlags,
   leadKpiCounts,
   matchesLeadKpi,
+  matchesLeadSearch,
+  leadStage,
+  LEAD_STAGE_LABELS,
+  LEAD_STAGE_STYLE,
+  formatLeadNo,
   type OwnLead,
   type OwnLeadInput,
   type LeadEditableField,
   type LeadKpiKey,
+  type LinkedFranchiseInfo,
 } from "./lead";
-import type { Profile } from "@/types";
+import type { EquipmentItem, Profile } from "@/types";
 
 interface Props {
   rows: OwnLead[];
@@ -52,6 +72,7 @@ interface Props {
   today: string;
   schemaMissing?: boolean;
   initialHighlightId?: string;
+  linkedFranchise: Record<string, LinkedFranchiseInfo>;
 }
 
 function formatMD(iso: string) {
@@ -112,7 +133,7 @@ const NoteBlock = memo(function NoteBlock({ row, onSave, disabled }: NoteBlockPr
         }
       }}
       title={disabled ? undefined : "눌러서 수정"}
-      className={`mt-1.5 whitespace-pre-wrap break-words text-sm leading-5 rounded-md px-1 -mx-1 ${
+      className={`whitespace-pre-wrap break-words text-sm leading-5 rounded-md px-1 -mx-1 ${
         original ? "text-slate-700" : "text-slate-400 italic"
       } ${disabled ? "" : "cursor-text hover:bg-blue-50/60"}`}
     >
@@ -130,6 +151,7 @@ interface SelectFieldProps {
   pillStyle?: Record<string, string>;
   title?: string;
   disabled?: boolean;
+  fallback?: string;
 }
 const DEFAULT_PILL = "bg-slate-100 text-slate-600 border-slate-200";
 const SelectField = memo(function SelectField({
@@ -141,8 +163,9 @@ const SelectField = memo(function SelectField({
   pillStyle,
   title,
   disabled,
+  fallback,
 }: SelectFieldProps) {
-  const value = (row[field] as string) ?? "";
+  const value = (row[field] as string) ?? fallback ?? "";
   const pillClass = pillStyle ? (pillStyle[value] ?? DEFAULT_PILL) : DEFAULT_PILL;
   return (
     <span onClick={(e) => e.stopPropagation()} title={title} className={pill ? "" : "block w-full"}>
@@ -195,15 +218,22 @@ interface DateFieldProps {
   row: OwnLead;
   field: LeadEditableField;
   onSave: SaveFn;
+  ariaLabel: string;
   disabled?: boolean;
 }
-const DateField = memo(function DateField({ row, field, onSave, disabled }: DateFieldProps) {
+const DateField = memo(function DateField({
+  row,
+  field,
+  onSave,
+  ariaLabel,
+  disabled,
+}: DateFieldProps) {
   return (
     <span onClick={(e) => e.stopPropagation()}>
       <DatePickerField
         value={(row[field] as string) ?? ""}
         onChange={(v) => onSave(row, field, v)}
-        ariaLabel="다음 조치일"
+        ariaLabel={ariaLabel}
         disabled={disabled}
         className="h-auto border-0 bg-transparent px-1"
       />
@@ -218,6 +248,7 @@ export default function LeadsClient({
   today,
   schemaMissing,
   initialHighlightId,
+  linkedFranchise,
 }: Props) {
   const router = useRouter();
   const toast = useToast();
@@ -230,7 +261,8 @@ export default function LeadsClient({
   const [search, setSearch] = useState("");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [flaggedOnly, setFlaggedOnly] = useState(false);
-  const [kpiFilter, setKpiFilter] = useState<LeadKpiKey>("all");
+  const [kpiFilter, setKpiFilter] = useState<LeadKpiKey>("open");
+  const [detailId, setDetailId] = useState<string | null>(initialHighlightId ?? null);
   const highlightRef = useRef<HTMLTableRowElement | null>(null);
 
   useEffect(() => {
@@ -253,21 +285,30 @@ export default function LeadsClient({
     [toast],
   );
 
+  const saveEquipment = useCallback(
+    async (row: OwnLead, items: EquipmentItem[]) => {
+      const { row: updated, error } = await updateLeadEquipment(row.id, items);
+      if (error || !updated) {
+        toast.error(error ?? "상품 수정 실패");
+        return false;
+      }
+      setLocalRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      return true;
+    },
+    [toast],
+  );
+
   const handleClose = useCallback(
     async (row: OwnLead) => {
-      const reason = prompt("종결 사유를 입력하세요");
+      const reason = prompt("완료 사유를 입력하세요 (비워도 됩니다)");
       if (reason === null) return;
-      if (!reason.trim()) {
-        toast.error("종결 사유를 입력하세요.");
-        return;
-      }
       const { row: updated, error } = await closeLead(row.id, reason.trim());
       if (error || !updated) {
-        toast.error(error ?? "종결 실패");
+        toast.error(error ?? "완료 처리 실패");
         return;
       }
       setLocalRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
-      toast.success("종결했습니다.");
+      toast.success("완료 처리했습니다.");
     },
     [toast],
   );
@@ -326,11 +367,10 @@ export default function LeadsClient({
   const kpiCounts = useMemo(() => leadKpiCounts(localRows, today), [localRows, today]);
 
   const handleKpiClick = useCallback((key: LeadKpiKey) => {
-    setKpiFilter((prev) => (prev === key ? "all" : key));
+    setKpiFilter((prev) => (prev === key ? "open" : key));
   }, []);
 
   const filteredRows = useMemo(() => {
-    const term = search.trim().toLowerCase();
     return localRows
       .filter((r) => matchesLeadKpi(r, kpiFilter, today))
       .filter((r) => {
@@ -339,12 +379,7 @@ export default function LeadsClient({
         return r.assignee_id === assigneeFilter;
       })
       .filter((r) => (flaggedOnly ? leadFlags(r, today).length > 0 : true))
-      .filter((r) => {
-        if (!term) return true;
-        const haystack =
-          `${r.business_name} ${r.owner_name ?? ""} ${r.phone ?? ""} ${r.assignee_name ?? ""}`.toLowerCase();
-        return haystack.includes(term);
-      });
+      .filter((r) => matchesLeadSearch(r, search));
   }, [localRows, kpiFilter, today, assigneeFilter, profile.id, flaggedOnly, search]);
 
   const sortedRows = useMemo(() => {
@@ -385,7 +420,7 @@ export default function LeadsClient({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-9 mb-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5 xl:grid-cols-10 mb-3">
         <KpiCard
           label="전체"
           value={kpiCounts.all}
@@ -395,9 +430,33 @@ export default function LeadsClient({
           onClick={() => handleKpiClick("all")}
         />
         <KpiCard
+          label="진행중"
+          value={kpiCounts.open}
+          icon={ClipboardList}
+          tone="blue"
+          active={kpiFilter === "open"}
+          onClick={() => handleKpiClick("open")}
+        />
+        <KpiCard
+          label="이관됨"
+          value={kpiCounts.converted}
+          icon={ArrowRightLeft}
+          tone="blue"
+          active={kpiFilter === "converted"}
+          onClick={() => handleKpiClick("converted")}
+        />
+        <KpiCard
+          label="완료"
+          value={kpiCounts.closed}
+          icon={CheckCircle2}
+          tone="green"
+          active={kpiFilter === "closed"}
+          onClick={() => handleKpiClick("closed")}
+        />
+        <KpiCard
           label="확인 전"
           value={kpiCounts.pending}
-          icon={ClipboardList}
+          icon={HelpCircle}
           tone="amber"
           active={kpiFilter === "pending"}
           onClick={() => handleKpiClick("pending")}
@@ -442,28 +501,12 @@ export default function LeadsClient({
           active={kpiFilter === "flagged"}
           onClick={() => handleKpiClick("flagged")}
         />
-        <KpiCard
-          label="가맹접수 전환"
-          value={kpiCounts.converted}
-          icon={ArrowRightLeft}
-          tone="blue"
-          active={kpiFilter === "converted"}
-          onClick={() => handleKpiClick("converted")}
-        />
-        <KpiCard
-          label="종결"
-          value={kpiCounts.closed}
-          icon={CheckCircle2}
-          tone="green"
-          active={kpiFilter === "closed"}
-          onClick={() => handleKpiClick("closed")}
-        />
       </div>
       <p className="mb-3 text-xs text-slate-500">
-        가장 먼저 볼 숫자는 <strong className="font-semibold text-slate-700">확인 전</strong>
-        입니다. 고객 확인이 안 돼 접수건인지 판단되지 않은 건이 쌓이지 않게 관리합니다.{" "}
-        <strong className="font-semibold text-slate-700">접수대상</strong>은 가맹접수로 전환되지
-        않고 남으면 누락이므로 따로 표시됩니다.
+        기본은 <strong className="font-semibold text-slate-700">진행중</strong> 건만 보입니다.{" "}
+        <strong className="font-semibold text-slate-700">이관됨·완료</strong> 카드를 누르면
+        가맹접수로 넘어간 건과 완료된 건도 볼 수 있습니다. 가장 먼저 볼 숫자는{" "}
+        <strong className="font-semibold text-slate-700">확인 전</strong>입니다.
       </p>
 
       <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -472,7 +515,7 @@ export default function LeadsClient({
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="상호명, 대표자, 연락처, 담당자..."
+            placeholder="번호, 상호명, 대표자, 연락처·사업자번호(- 없이도), 담당자…"
             className="pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg w-56 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -511,7 +554,8 @@ export default function LeadsClient({
 
       {schemaMissing ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-          자체리드 표가 아직 없습니다. supabase/149_own_leads.sql을 실행하면 이 화면이 열립니다.
+          자체리드 표가 아직 없습니다. supabase/149 · 152 · 153 마이그레이션을 실행하면 이 화면이
+          열립니다.
         </div>
       ) : (
         <>
@@ -536,11 +580,20 @@ export default function LeadsClient({
                       className="w-4 h-4 accent-blue-600 cursor-pointer"
                     />
                   </th>
-                  <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap min-w-[380px]">
-                    상호명 · 비고
+                  <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap">
+                    번호
+                  </th>
+                  <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap min-w-[200px]">
+                    상호명
+                  </th>
+                  <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap min-w-[260px]">
+                    비고
                   </th>
                   <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap">
-                    등록일
+                    리드구분
+                  </th>
+                  <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap">
+                    접수일
                   </th>
                   <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap">
                     유입경로
@@ -555,10 +608,19 @@ export default function LeadsClient({
                     서류상태
                   </th>
                   <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap">
+                    VAN
+                  </th>
+                  <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap">
+                    인터넷
+                  </th>
+                  <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap">
                     접수판단
                   </th>
                   <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap">
                     다음 조치일
+                  </th>
+                  <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap">
+                    오픈예정
                   </th>
                   <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap">
                     경과일
@@ -567,27 +629,36 @@ export default function LeadsClient({
                     확인 필요
                   </th>
                   <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap">
+                    처리상태
+                  </th>
+                  <th className="text-left px-3 py-3 font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap">
                     조치
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {sortedRows.map((row) => {
-                  const closed = isLeadClosed(row);
+                  const stage = leadStage(row);
                   const flags = leadFlags(row, today);
-                  const rowBg = closed
-                    ? "opacity-60 bg-slate-50"
-                    : flags.length > 0
-                      ? "bg-red-50 hover:bg-red-100"
-                      : row.decision === "접수대상" && !row.converted_franchise_id
-                        ? "bg-blue-50 hover:bg-blue-100"
-                        : "hover:bg-slate-50";
+                  const rowBg =
+                    stage === "closed"
+                      ? "bg-slate-50 text-slate-500"
+                      : stage === "converted"
+                        ? "bg-violet-50/40 hover:bg-violet-50"
+                        : flags.length > 0
+                          ? "bg-red-50 hover:bg-red-100"
+                          : row.decision === "접수대상" && !row.converted_franchise_id
+                            ? "bg-blue-50 hover:bg-blue-100"
+                            : "hover:bg-slate-50";
                   const highlighted = initialHighlightId === row.id;
                   const sourceOptions = LEAD_SOURCES.includes(
                     row.source as (typeof LEAD_SOURCES)[number],
                   )
                     ? [...LEAD_SOURCES]
                     : [...LEAD_SOURCES, row.source];
+                  const linked = row.converted_franchise_id
+                    ? linkedFranchise[row.converted_franchise_id]
+                    : undefined;
                   return (
                     <tr
                       key={row.id}
@@ -595,9 +666,6 @@ export default function LeadsClient({
                       className={`border-b border-slate-100 transition-colors ${rowBg} ${
                         highlighted ? "ring-2 ring-blue-400" : ""
                       }`}
-                      title={
-                        closed && row.close_reason ? `종결 사유: ${row.close_reason}` : undefined
-                      }
                     >
                       <td className="px-3 py-3">
                         {isSelectable(row) && (
@@ -609,32 +677,40 @@ export default function LeadsClient({
                           />
                         )}
                       </td>
-                      <td className="px-3 py-3 align-top min-w-[380px] max-w-[640px]">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-slate-900">{row.business_name}</span>
-                          {row.converted_franchise_id && (
-                            <Link
-                              href={`/franchise?highlight=${row.converted_franchise_id}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="rounded-full border border-blue-300 bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-200"
-                              title="가맹접수로 넘어간 건. 누르면 그 접수 건으로 이동"
-                            >
-                              가맹접수 전환됨 →
-                            </Link>
-                          )}
-                        </div>
+                      <td className="px-3 py-3 whitespace-nowrap font-mono text-xs text-slate-500">
+                        {formatLeadNo(row.lead_no)}
+                      </td>
+                      <td className="px-3 py-3 align-top min-w-[200px]">
+                        <button
+                          type="button"
+                          onClick={() => setDetailId(row.id)}
+                          className="font-semibold text-slate-900 hover:text-blue-700 hover:underline text-left"
+                        >
+                          {row.business_name}
+                        </button>
                         <div className="text-xs text-slate-400">
                           {row.owner_name || "-"} · {row.phone || "-"}
+                          {row.business_number ? ` · ${row.business_number}` : ""}
                         </div>
-                        <NoteBlock
-                          key={row.note ?? ""}
+                      </td>
+                      <td className="px-3 py-3 align-top min-w-[260px] max-w-[420px]">
+                        <NoteBlock key={row.note ?? ""} row={row} onSave={saveField} />
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        <SelectField
                           row={row}
+                          field="lead_type"
+                          options={[...LEAD_TYPES]}
                           onSave={saveField}
-                          disabled={closed}
+                          pill
+                          pillStyle={LEAD_TYPE_STYLE as Record<string, string>}
+                          fallback="기타"
                         />
                       </td>
                       <td className="px-3 py-3 text-slate-500 whitespace-nowrap">
-                        {formatMD(row.created_at)}
+                        {row.reception_date
+                          ? formatMD(row.reception_date)
+                          : formatMD(row.created_at)}
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap min-w-[110px]">
                         <SelectField
@@ -642,16 +718,10 @@ export default function LeadsClient({
                           field="source"
                           options={sourceOptions}
                           onSave={saveField}
-                          disabled={closed}
                         />
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap min-w-[110px]">
-                        <AssigneeField
-                          row={row}
-                          onSave={saveField}
-                          csProfiles={csProfiles}
-                          disabled={closed}
-                        />
+                        <AssigneeField row={row} onSave={saveField} csProfiles={csProfiles} />
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap">
                         <SelectField
@@ -661,7 +731,6 @@ export default function LeadsClient({
                           onSave={saveField}
                           pill
                           pillStyle={CONTACT_STATUS_STYLE as Record<string, string>}
-                          disabled={closed}
                         />
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap">
@@ -672,7 +741,28 @@ export default function LeadsClient({
                           onSave={saveField}
                           pill
                           pillStyle={DOC_STATUS_STYLE as Record<string, string>}
-                          disabled={closed}
+                        />
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        <SelectField
+                          row={row}
+                          field="van_status"
+                          options={[...VAN_STATUSES]}
+                          onSave={saveField}
+                          pill
+                          pillStyle={VAN_STATUS_STYLE as Record<string, string>}
+                          fallback="미접수"
+                        />
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        <SelectField
+                          row={row}
+                          field="internet_status"
+                          options={[...INTERNET_STATUSES]}
+                          onSave={saveField}
+                          pill
+                          pillStyle={INTERNET_STATUS_STYLE as Record<string, string>}
+                          fallback="해당없음"
                         />
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap">
@@ -684,7 +774,6 @@ export default function LeadsClient({
                           pill
                           pillStyle={DECISION_STYLE as Record<string, string>}
                           title={DECISION_GUIDE[row.decision]}
-                          disabled={closed}
                         />
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap">
@@ -692,7 +781,15 @@ export default function LeadsClient({
                           row={row}
                           field="next_action_date"
                           onSave={saveField}
-                          disabled={closed}
+                          ariaLabel="다음 조치일"
+                        />
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        <DateField
+                          row={row}
+                          field="open_date"
+                          onSave={saveField}
+                          ariaLabel="오픈 예정일"
                         />
                       </td>
                       <td className="px-3 py-3 text-slate-500 whitespace-nowrap">
@@ -711,33 +808,39 @@ export default function LeadsClient({
                         </div>
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap">
-                        {closed ? (
-                          row.converted_franchise_id ? (
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${LEAD_STAGE_STYLE[stage]}`}
+                        >
+                          {LEAD_STAGE_LABELS[stage]}
+                        </span>
+                        {stage === "converted" && row.converted_franchise_id && (
+                          <div className="mt-1 flex items-center gap-1 text-[11px] text-slate-500">
+                            <span>{linked?.status_label ?? "가맹접수 확인 불가"}</span>
                             <Link
                               href={`/franchise?highlight=${row.converted_franchise_id}`}
-                              className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                              className="font-semibold text-blue-600 hover:text-blue-800 hover:underline"
                             >
-                              가맹접수 보기
+                              보기 →
                             </Link>
-                          ) : (
-                            <div className="flex items-center">
-                              {row.close_reason && (
-                                <span
-                                  className="text-[11px] text-slate-400 mr-1.5 truncate max-w-32"
-                                  title={row.close_reason}
-                                >
-                                  {row.close_reason}
-                                </span>
-                              )}
-                              <button
-                                onClick={() => handleReopen(row)}
-                                className="text-xs font-semibold text-slate-600 hover:text-slate-800 hover:underline"
+                          </div>
+                        )}
+                        {stage === "closed" && (
+                          <div className="mt-1 text-[11px] text-slate-500">
+                            {row.close_reason && (
+                              <span
+                                className="truncate max-w-32 inline-block align-bottom"
+                                title={row.close_reason}
                               >
-                                다시 열기
-                              </button>
-                            </div>
-                          )
-                        ) : (
+                                {row.close_reason}
+                              </span>
+                            )}
+                            {row.completed_by_name && <span> · {row.completed_by_name}</span>}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        {stage === "open" && (
                           <div className="flex items-center gap-1.5">
                             {row.decision === "접수대상" && (
                               <button
@@ -751,9 +854,25 @@ export default function LeadsClient({
                               onClick={() => handleClose(row)}
                               className="text-xs font-medium text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md transition-colors"
                             >
-                              종결
+                              완료
                             </button>
                           </div>
+                        )}
+                        {stage === "converted" && (
+                          <button
+                            onClick={() => handleClose(row)}
+                            className="text-xs font-medium text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md transition-colors"
+                          >
+                            완료
+                          </button>
+                        )}
+                        {stage === "closed" && (
+                          <button
+                            onClick={() => handleReopen(row)}
+                            className="text-xs font-semibold text-slate-600 hover:text-slate-800 hover:underline"
+                          >
+                            다시 열기
+                          </button>
                         )}
                       </td>
                     </tr>
@@ -761,7 +880,7 @@ export default function LeadsClient({
                 })}
                 {sortedRows.length === 0 && (
                   <tr>
-                    <td colSpan={13} className="text-center text-slate-400 py-10">
+                    <td colSpan={19} className="text-center text-slate-400 py-10">
                       데이터가 없습니다.
                     </td>
                   </tr>
@@ -781,6 +900,29 @@ export default function LeadsClient({
           onClose={() => setShowForm(false)}
         />
       )}
+
+      {detailId &&
+        (() => {
+          const row = localRows.find((r) => r.id === detailId);
+          if (!row) return null;
+          return (
+            <LeadDetailDrawer
+              key={row.id}
+              row={row}
+              csProfiles={csProfiles}
+              today={today}
+              linked={
+                row.converted_franchise_id ? linkedFranchise[row.converted_franchise_id] : undefined
+              }
+              onClose={() => setDetailId(null)}
+              onSave={(field, value) => saveField(row, field, value)}
+              onEquipmentChange={(items) => saveEquipment(row, items)}
+              onConvert={() => router.push(`/franchise?lead=${row.id}`)}
+              onComplete={() => handleClose(row)}
+              onReopen={() => handleReopen(row)}
+            />
+          );
+        })()}
     </div>
   );
 }

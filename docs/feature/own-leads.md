@@ -1,5 +1,69 @@
 # 자체리드 관리 (2026-09-14)
 
+## v2 (2026-09-15) — 가맹접수와 같은 구조, 이관·완료 후 원본 보존
+
+**배경**: 149 구조에서는 가맹접수 전환 = 종결이라 전환된 건을 아무것도 못 고쳤다. 노희찬 요청과
+기획안(`POSMOS_자체리드건_이관_완료이력보존_기획안.pptx`)에 따라 리드를 원본 대장으로 바꿨다.
+
+**결정 사항** (사용자와 합의):
+
+- 급한 수정과 재설계를 한 번에 진행한다.
+- 기존 연락상태·서류상태·접수판단 3축은 유지하고 기획안 항목을 추가한다.
+- 이관처는 기획안의 택배배송·설치관리 직접 이관이 아니라 **지금처럼 가맹접수 전환**이다 (가맹접수를
+  거쳐야 심사·알림톡·설치 흐름이 붙는다).
+- 리드 구분(인터넷·지시건·패키지·기타)은 유입경로(대표님·자체영업…)와 다른 축이라 **별도 칸으로
+  추가**한다.
+
+**처리 단계 3개**
+
+- 진행중(open) = `closed_at` 없고 이관 안 됨
+- 이관됨(converted) = `converted_franchise_id` 있고 `closed_at` 없음
+- 완료(closed) = `closed_at` 있음(완료 처리·상담 종료·접수아님)
+
+`isLeadClosed`는 이제 `closed_at`만 본다. 확인 필요 플래그는 open 단계에만 붙는다.
+
+**추가 열** (`supabase/152_own_leads_v2.sql`): `lead_no`(원본번호, `L-0001` 표기), `lead_type`,
+`van_status`(미접수/접수/완료), `internet_status`(해당없음/미진행/진행중/완료), `open_date`,
+`converted_at`(이관일), `completed_by`/`completed_by_name`(완료 처리자). 기존 전환 건은 152가
+`closed_at`을 비우고 `converted_at`으로 옮겨 "이관됨"으로 되돌린다.
+
+**처리 히스토리**: `own_lead_logs`(create/update/close/reopen/convert). 모든 서버 액션이 남기고
+상세 드로어에서 본다. 표가 없으면 빈 목록.
+
+**화면**: 상호명 클릭 → 우측 상세 드로어(`LeadDetailDrawer.tsx`, 가맹접수 드로어와 같은 골격). 어느
+단계든 모든 칸 수정 가능(잠금 없음). 기본 목록은 진행중, KPI 카드로 이관됨·완료 전환. 목록에 가맹접수
+진행상태 라벨 표시(`page.tsx`가 `franchise_applications` status를 같이 읽음).
+
+**번호 검색**: 자체리드(`matchesLeadSearch`)와 가맹접수(`matchesSearchTerm`) 모두 검색어 숫자가
+3자리 이상이면 연락처를 하이픈 없이 비교한다.
+
+**이관 흐름 변경**: `markLeadConverted`는 `converted_franchise_id`·`converted_at`·`decision`만
+채우고 `closed_at`은 건드리지 않는다. 완료는 "완료 처리" 버튼(`closeLead`)으로 따로 한다.
+
+### 등록 폼·항목을 가맹접수와 동일하게 (2026-09-15, 153)
+
+사용자가 "등록이 다르다"고 지적해 자체리드 등록 항목을 가맹접수 등록 폼과 완전히 맞추기로 결정했다.
+
+**추가 열** (`supabase/153_own_leads_franchise_fields.sql`): `applicant_type`(개인/법인,
+`ApplicantType`), `business_number`(사업자번호), `channel`(유입 채널, `FranchiseChannel`),
+`is_rental`(렌탈), `is_installment`(할부), `reception_date`(접수날짜), `card_apply_date`(카드가맹접수일),
+`internet`(인터넷 업체, `LEAD_INTERNET_PROVIDERS`), `program`(사용 프로그램), `equipment_items`(상품,
+`EquipmentItem[]`), `address`/`address_detail`(주소), `install_date`(설치 및 발송일),
+`van_company`(VAN사). 선택지는 가맹접수 쪽 상수를 그대로 옮겨 `lead.ts`에 다시 적었다
+(`LEAD_INTERNET_PROVIDERS`, `LEAD_EQUIPMENT_CATALOG`).
+
+등록 폼 `LeadForm.tsx`는 `FranchiseCreateDialog`와 같은 820px 다이얼로그·섹션 구성(기본 정보·접수
+정보·상품·주소·오픈예정일/설치발송일·VAN사·비고)을 쓴다. 다만 가맹접수 전용인 매장 검색(승계/명변),
+케이스 구분, 알림톡 발송 체크는 자체리드 단계에는 없다 — 아직 접수 확정 전이라 필요 없다. 상세
+드로어(`LeadDetailDrawer.tsx`)에서도 같은 항목을 편집할 수 있고, 상품만 `updateLeadEquipment`로 따로
+고친다.
+
+**전환 시 프리필**: `fetchLeadForConversion`이 리드 전체 행(`OwnLead`)을 돌려주고,
+`franchise/page.tsx`가 위 14개 항목 전부(값 없으면 빈 문자열/`false`/`[]`)를 담아
+`FranchiseClient`의 `conversionLead`로 넘긴다. `FranchiseCreateDialog`의 `initialValues`에도 전부
+꽂아 등록 폼이 완전히 채워진 채 열린다. `reception_date`만 비어 있으면 키 자체를 넣지 않아 폼 기본값(오늘)이
+살아남게 한다.
+
 대표님·자체영업으로 들어온 매장 건을 가맹접수 **전에** 담아 두는 "접수 전 대기실". CS가 담당자를 정하고
 고객에게 연락해 접수 여부를 판단한 뒤, 접수대상만 가맹접수로 넘긴다. 출발점은 사내 도입안 PPT
 (`POSMOS_자체리드_관리_도입안.pptx`)이고, 그 내용을 그대로 화면으로 옮겼다.
@@ -18,8 +82,14 @@
   권한은 코드에서 검사한다.
 - `src/app/(app)/leads/LeadsClient.tsx`, `LeadForm.tsx` — 목록 한 화면. 인터넷 관리처럼 셀을 바로 고친다.
 - `supabase/149_own_leads.sql` — `own_leads` 표.
-- 가맹접수 쪽: `/franchise?lead=<id>`로 들어오면 등록 폼이 상호명·대표자·연락처·담당자·비고로 미리 채워진
-  채 열리고, 등록이 끝나면 `markLeadConverted`가 리드를 전환 완료로 닫는다.
+- `supabase/152_own_leads_v2.sql` — 원본번호·리드구분·VAN·인터넷·오픈예정일·이관일·완료처리자 열,
+  `own_lead_logs` 표.
+- `supabase/153_own_leads_franchise_fields.sql` — 가맹접수 등록 폼과 같은 항목(사업자유형·사업자번호·
+  채널·렌탈·할부·접수날짜·카드가맹접수일·인터넷·프로그램·상품·주소·설치발송일·VAN사) 열 추가.
+- `src/app/(app)/leads/LeadDetailDrawer.tsx` — 우측 상세 드로어·처리 히스토리.
+- 가맹접수 쪽: `/franchise?lead=<id>`로 들어오면 등록 폼이 리드의 모든 항목(상호명·대표자·연락처·담당자·
+  비고 + 153에서 추가한 항목 전부)으로 미리 채워진 채 열리고, 등록이 끝나면 `markLeadConverted`가
+  리드에 `converted_franchise_id`·`converted_at`을 기록한다(닫지 않는다).
 
 ## 상태 모델
 
@@ -31,9 +101,10 @@
 | 서류상태 | 미확인 · 요청 · 완료                     | 미확인 |
 | 접수판단 | 미정 · 접수대상 · 상담 · 보류 · 접수아님 | 미정   |
 
-**종결**은 별도 축이 아니라 `closed_at`(상담 종료·접수아님·수동 종결) 또는 `converted_franchise_id`
-(가맹접수 전환)가 채워진 상태다. 접수아님을 고르면 자동으로 닫히고, 다른 값으로 되돌리면 다시 열린다.
-전환된 건은 다시 열 수 없다 — 가맹접수 쪽이 원본이 됐기 때문이다.
+**종결**은 별도 축이 아니라 `closed_at`(상담 종료·접수아님·수동 종결)이 채워진 상태다. 접수아님을
+고르면 자동으로 닫히고, 다른 값으로 되돌리면 다시 열린다. `converted_franchise_id`(가맹접수 전환)는
+"이관됨" 단계를 나타낼 뿐 종결이 아니다 — 이관 후에도 완료 처리 전까지는 모든 칸을 계속 고칠 수 있다
+(v2, 위 참고).
 
 접수판단 기준 문구(`DECISION_GUIDE`)는 화면에 고정해 직원마다 다르게 판단하지 않게 한다.
 
@@ -51,15 +122,16 @@
 
 ## 상단 KPI
 
-전체(진행 중) · 확인 전(미정) · 미연락 · 서류 확인중(요청) · 접수대상 · 보류 · 확인 필요 · 종결.
+전체 · 진행중 · 이관됨 · 완료 · 확인 전 · 미연락 · 서류 확인중 · 접수대상 · 보류 · 확인 필요.
 누르면 같은 조건이 필터로 걸린다. 기본 목록은 진행 중 건만 보여 주고, 종결은 카드를 눌러야 보인다.
 가장 먼저 볼 숫자는 **확인 전**이다.
 
 ## 전환 흐름
 
 목록에서 접수판단이 접수대상이면 "가맹접수 전환" 버튼이 뜬다 → `/franchise?lead=<id>` → 등록 폼이 리드 값으로
-채워져 열림 → 등록 성공 시 리드에 `converted_franchise_id`가 박히고 종결 → 리드 목록에서 "가맹접수 보기"로
-이어진다. 등록을 취소하면 아무것도 바뀌지 않는다(쿼리만 지운다).
+채워져 열림 → 등록 성공 시 리드에 `converted_franchise_id`·`converted_at`이 박히고 단계가 이관됨으로
+바뀐다. 완료는 "완료 처리" 버튼으로 따로 한다 → 리드 목록에서 "가맹접수 보기"로 이어진다. 등록을 취소하면
+아무것도 바뀌지 않는다(쿼리만 지운다).
 
 가맹접수 폼을 재사용한 이유: 접수 등록에 붙어 있는 중복 확인·서류 안내 알림톡·필수 서류 흐름을 다시 만들지
 않기 위해서다. 서버에서 최소 필드로 바로 만들면 그 흐름이 전부 빠진다.

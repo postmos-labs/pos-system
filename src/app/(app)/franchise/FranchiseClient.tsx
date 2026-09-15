@@ -31,7 +31,7 @@ import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
 import { saveRowOrder } from "@/lib/reorderRows";
-import { formatPhone, formatBusinessNumber, formatDateText } from "@/lib/format";
+import { formatPhone, formatBusinessNumber, formatDateText, digitsOnly } from "@/lib/format";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { mergeRowsPreservingIdentity } from "@/lib/mergeRows";
 import { deleteFranchiseRows, loadArchivedFranchiseRows } from "./actions";
@@ -150,6 +150,20 @@ const AUTO_FORMAT: Partial<Record<keyof FranchiseApplication, (raw: string) => s
   business_number: formatBusinessNumber,
 };
 
+// 검색어에서 숫자만 남긴 게 3자리 이상이면 연락처·사업자번호를 하이픈 없이도 맞춰 본다.
+function matchesSearchTerm(row: FranchiseApplication, term: string): boolean {
+  if (!term) return true;
+  const haystack =
+    `${row.business_name ?? ""} ${row.owner_name ?? ""} ${row.phone ?? ""} ${row.business_number ?? ""}`.toLowerCase();
+  if (haystack.includes(term)) return true;
+  const digits = digitsOnly(term);
+  if (digits.length < 3) return false;
+  return (
+    digitsOnly(row.phone ?? "").includes(digits) ||
+    digitsOnly(row.business_number ?? "").includes(digits)
+  );
+}
+
 interface Props {
   rows: FranchiseApplication[];
   salesProfiles: Pick<Profile, "id" | "name" | "role">[];
@@ -176,6 +190,21 @@ interface Props {
     phone: string | null;
     assignee_id: string | null;
     note: string | null;
+    applicant_type: ApplicantType;
+    business_number: string;
+    channel: FranchiseChannel | "";
+    is_rental: boolean;
+    is_installment: boolean;
+    reception_date: string;
+    card_apply_date: string;
+    internet: string;
+    program: string;
+    equipment_items: EquipmentItem[];
+    address: string;
+    address_detail: string;
+    open_date: string;
+    install_date: string;
+    van_company: string;
   };
   /** 기본 조회에서 뺀 오래된 완료·취소 건 요약. 화면 안내와 "불러오기" 버튼에 쓴다 */
   archivedSummary?: { total: number; byStatus: Partial<Record<FranchiseStatus, number>> };
@@ -1362,11 +1391,7 @@ export default function FranchiseClient({
     const term = search.trim().toLowerCase();
     const filtered = localRows.filter((row) => {
       if (!matchesFilters(row)) return false;
-      if (term) {
-        const haystack =
-          `${row.business_name ?? ""} ${row.owner_name ?? ""} ${row.phone ?? ""} ${row.business_number ?? ""}`.toLowerCase();
-        if (!haystack.includes(term)) return false;
-      }
+      if (!matchesSearchTerm(row, term)) return false;
       return true;
     });
     return [...filtered].sort((a, b) => {
@@ -1621,10 +1646,7 @@ export default function FranchiseClient({
     const term = search.trim().toLowerCase();
     const base = localRows.filter((row) => {
       if (!matchesFilters(row, { skipView: true, skipKpi: true })) return false;
-      if (!term) return true;
-      const haystack =
-        `${row.business_name ?? ""} ${row.owner_name ?? ""} ${row.phone ?? ""} ${row.business_number ?? ""}`.toLowerCase();
-      return haystack.includes(term);
+      return matchesSearchTerm(row, term);
     });
     return {
       all: base.length,
@@ -1646,10 +1668,7 @@ export default function FranchiseClient({
     const term = search.trim().toLowerCase();
     const base = localRows.filter((row) => {
       if (!matchesFilters(row, { skipView: true, skipKpi: true, skipStatus: true })) return false;
-      if (!term) return true;
-      const haystack =
-        `${row.business_name ?? ""} ${row.owner_name ?? ""} ${row.phone ?? ""} ${row.business_number ?? ""}`.toLowerCase();
-      return haystack.includes(term);
+      return matchesSearchTerm(row, term);
     });
     return {
       today_received: base.filter((row) => kstDate(new Date(row.created_at)) === todayDate).length,
@@ -1669,10 +1688,7 @@ export default function FranchiseClient({
     const term = search.trim().toLowerCase();
     const base = localRows.filter((row) => {
       if (!matchesFilters(row, { skipView: true, skipKpi: true, skipStatus: true })) return false;
-      if (!term) return true;
-      const haystack =
-        `${row.business_name ?? ""} ${row.owner_name ?? ""} ${row.phone ?? ""} ${row.business_number ?? ""}`.toLowerCase();
-      return haystack.includes(term);
+      return matchesSearchTerm(row, term);
     });
     const todayReceived = base.filter(
       (row) => kstDate(new Date(row.created_at)) === todayDate,
@@ -1725,10 +1741,7 @@ export default function FranchiseClient({
     const term = search.trim().toLowerCase();
     const base = localRows.filter((row) => {
       if (!matchesFilters(row, { skipView: true, skipKpi: true, skipStatus: true })) return false;
-      if (!term) return true;
-      const haystack =
-        `${row.business_name ?? ""} ${row.owner_name ?? ""} ${row.phone ?? ""} ${row.business_number ?? ""}`.toLowerCase();
-      return haystack.includes(term);
+      return matchesSearchTerm(row, term);
     });
     const rangeFrom =
       successRateFrom && successRateFrom <= successRateTo ? successRateFrom : successRateTo;
@@ -3321,6 +3334,23 @@ export default function FranchiseClient({
                     ? (conversionLead.assignee_id ?? "")
                     : "",
                   memo: conversionLead.note ?? "",
+                  applicant_type: conversionLead.applicant_type,
+                  business_number: conversionLead.business_number,
+                  channel: conversionLead.channel,
+                  is_rental: conversionLead.is_rental,
+                  is_installment: conversionLead.is_installment,
+                  ...(conversionLead.reception_date
+                    ? { reception_date: conversionLead.reception_date }
+                    : {}),
+                  card_apply_date: conversionLead.card_apply_date,
+                  internet: conversionLead.internet,
+                  program: conversionLead.program,
+                  equipmentItems: conversionLead.equipment_items,
+                  address: conversionLead.address,
+                  address_detail: conversionLead.address_detail,
+                  open_date: conversionLead.open_date,
+                  install_date: conversionLead.install_date,
+                  van_company: conversionLead.van_company,
                 }
               : undefined
           }
