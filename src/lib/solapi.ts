@@ -55,10 +55,7 @@ async function solapiSend(params: {
 }
 
 const origin = () =>
-  (process.env.NEXT_PUBLIC_APP_URL || "https://pos-system-beta-eight.vercel.app").replace(
-    /\/$/,
-    "",
-  );
+  (process.env.NEXT_PUBLIC_APP_URL || "https://pos-system-ten-phi.vercel.app").replace(/\/$/, "");
 
 export async function sendSignRequest({
   signerPhone,
