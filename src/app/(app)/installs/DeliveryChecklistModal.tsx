@@ -7,6 +7,7 @@ import { ko } from "date-fns/locale";
 import { kstWallClock } from "@/lib/date";
 import FormModal from "@/components/ui/FormModal";
 import { useToast } from "@/components/ui/Toast";
+import { parseMemoEntries } from "@/components/ui/MemoHistoryPanel";
 import { saveDeliveryChecklist } from "./actions";
 import type { DeliveryChecklist, DeliveryChecklistItem } from "./deliveryChecklist";
 import type { Installation } from "./InstallsClient";
@@ -25,6 +26,18 @@ interface Props {
 // 품목명은 재고 실사 등록 폼과 같은 카탈로그에서 고른다. 완료 시 차감이 이름 일치로 되기 때문이다.
 // 포스기는 자주 나가므로 버튼으로, 나머지는 목록에서 고른다. 직접 입력도 되지만 그때는 차감이 안 될 수 있다.
 
+// 비고는 가맹접수 때 적은 메모가 이관되면서 설치 건 notes로 넘어온 것이다. 제품을 준비하는 사람이
+// "무상지원", "테블릿 연동" 같은 요청을 체크리스트 창에서 바로 보게 한다. 스탬프의 PIN 마커(가맹접수
+// 화면의 상단 고정 표시)는 여기선 의미가 없으니 이름만 남긴다.
+const PIN_PREFIX_RE = /^PIN:\d*:/;
+
+function memoEntries(installation: Installation) {
+  return parseMemoEntries(installation.notes, installation.created_at).map((entry) => ({
+    ...entry,
+    user: entry.user.replace(PIN_PREFIX_RE, ""),
+  }));
+}
+
 function initialRows(installation: Installation): DeliveryChecklistItem[] {
   if (installation.delivery_checklist?.items?.length) {
     return installation.delivery_checklist.items;
@@ -38,6 +51,7 @@ function initialRows(installation: Installation): DeliveryChecklistItem[] {
 export default function DeliveryChecklistModal({ installation, onClose, onSaved }: Props) {
   const toast = useToast();
   const [rows, setRows] = useState<DeliveryChecklistItem[]>(() => initialRows(installation));
+  const entries = memoEntries(installation);
   const [note, setNote] = useState(installation.delivery_checklist?.note ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,6 +125,23 @@ export default function DeliveryChecklistModal({ installation, onClose, onSaved 
             locale: ko,
           })}
         </p>
+      )}
+      {entries.length > 0 && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+          <div className="mb-1.5 text-xs font-semibold text-amber-800">
+            비고 (접수 때 적은 내용)
+          </div>
+          <ul className="flex max-h-40 flex-col gap-2 overflow-y-auto">
+            {entries.map((entry, index) => (
+              <li key={`${entry.at}-${index}`} className="text-sm text-slate-800">
+                <div className="text-[11px] text-slate-500">
+                  {entry.user} · {format(kstWallClock(entry.at), "yyyy-M-d HH:mm", { locale: ko })}
+                </div>
+                <div className="whitespace-pre-wrap break-words">{entry.text}</div>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
         <span className="text-xs text-slate-500">포스 기종</span>
