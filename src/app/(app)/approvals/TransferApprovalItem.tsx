@@ -2,13 +2,14 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowRight, X } from "lucide-react";
+import { ArrowRight, Star, X } from "lucide-react";
 import ApprovalButton from "./ApprovalButton";
 import { rejectFranchiseTransfer } from "./actions";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
 import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
 import type { ApprovalNote } from "@/lib/approvalNotes";
+import type { ChannelTone } from "@/lib/franchiseChannel";
 
 type Props = {
   id: string;
@@ -16,10 +17,13 @@ type Props = {
   ownerName: string | null;
   address: string | null;
   phone: string | null;
+  receptionChannel: string | null;
+  receptionDate: string | null;
   requesterName: string;
   csApproverName: string | null;
   approvalRole: "cs_responsible" | "team_lead";
   notes: ApprovalNote[];
+  tone: ChannelTone;
 };
 
 export default function TransferApprovalItem({
@@ -28,10 +32,13 @@ export default function TransferApprovalItem({
   ownerName,
   address,
   phone,
+  receptionChannel,
+  receptionDate,
   requesterName,
   csApproverName,
   approvalRole,
   notes,
+  tone,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [showReject, setShowReject] = useState(false);
@@ -70,11 +77,21 @@ export default function TransferApprovalItem({
         onClick={() => setOpen(true)}
         className="flex min-w-0 flex-1 items-center gap-4 text-left"
       >
-        <span className="w-2 h-2 rounded-full bg-amber-500" />
+        <span
+          className={`inline-flex w-[104px] shrink-0 items-center justify-center gap-1 rounded-lg py-1.5 text-xs font-extrabold ${tone.chip}`}
+        >
+          {tone.star && <Star size={13} className="fill-current" />}
+          {tone.short}
+        </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-slate-900 truncate">{title}</p>
+          <p
+            className={`truncate text-[15px] font-semibold text-slate-900 ${tone.star ? "font-bold text-violet-950" : ""}`}
+          >
+            {title}
+          </p>
           <p className="text-xs text-slate-500 mt-0.5">
             {approvalName} · {approvalText}
+            {tone.inferred && receptionChannel && ` · 접수채널 "${receptionChannel}"`}
           </p>
         </div>
         <ArrowRight size={16} className="text-slate-400" />
@@ -86,34 +103,57 @@ export default function TransferApprovalItem({
           onClick={() => setOpen(false)}
         >
           <section
-            className="w-full max-w-lg rounded-2xl bg-white shadow-xl"
+            className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
-              <div>
-                <p className="text-xs font-semibold text-blue-600">승인 대기 상세</p>
-                <h2 className="mt-1 text-lg font-bold text-slate-900">{title}</h2>
+            <header
+              className={`flex items-start justify-between px-6 pt-5 pb-[22px] ${tone.header}`}
+            >
+              <div className="flex flex-col">
+                <span className="inline-flex items-center gap-1.5 self-start rounded-full bg-white/20 px-2.5 py-1 text-xs font-bold">
+                  {tone.star && <Star size={13} className="fill-current" />}
+                  {tone.label}
+                  {tone.inferred ? " (추정)" : ""}
+                </span>
+                <h2 className="mt-2 text-[22px] font-extrabold">{title}</h2>
+                <p className="mt-1 text-[13px] text-white/90">
+                  접수채널 {receptionChannel || "-"} · 접수일 {receptionDate || "-"} · 요청자{" "}
+                  {requesterName}
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                className="rounded-lg p-1 text-white/80 hover:bg-white/10 hover:text-white"
                 aria-label="닫기"
               >
                 <X size={20} />
               </button>
             </header>
+            <div className="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100">
+              <div className="flex flex-col gap-0.5 px-5 py-3.5">
+                <p className="text-[11px] text-slate-500">인입경로</p>
+                <p className={`text-sm font-extrabold ${tone.accentText}`}>{tone.label}</p>
+              </div>
+              <div className="flex flex-col gap-0.5 px-5 py-3.5">
+                <p className="text-[11px] text-slate-500">승인 단계</p>
+                <p className="text-sm font-semibold text-slate-900">{approvalText}</p>
+              </div>
+              <div className="flex flex-col gap-0.5 px-5 py-3.5">
+                {isTeamLead ? (
+                  <>
+                    <p className="text-[11px] text-slate-500">이관 구분</p>
+                    <p className="text-sm font-semibold text-blue-600">최종 승인 시 선택</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[11px] text-slate-500">요청자</p>
+                    <p className="text-sm font-semibold text-slate-900">{requesterName}</p>
+                  </>
+                )}
+              </div>
+            </div>
             <dl className="grid grid-cols-[96px_1fr] gap-x-4 gap-y-3 px-6 py-5 text-sm">
-              <dt className="text-slate-500">승인 단계</dt>
-              <dd className="font-medium text-slate-900">{approvalText}</dd>
-              <dt className="text-slate-500">요청자</dt>
-              <dd className="text-slate-900">{requesterName}</dd>
-              {isTeamLead && (
-                <>
-                  <dt className="text-slate-500">이관 구분</dt>
-                  <dd className="font-semibold text-blue-700">최종 승인 시 선택</dd>
-                </>
-              )}
               {isTeamLead && (
                 <>
                   <dt className="text-slate-500">CS책임 승인자</dt>
@@ -175,7 +215,13 @@ export default function TransferApprovalItem({
                 >
                   반려
                 </button>
-                <ApprovalButton type={approvalType} id={id} notes={notes} />
+                <ApprovalButton
+                  type={approvalType}
+                  id={id}
+                  notes={notes}
+                  approveLabel={tone.star ? "프리미엄 리드 승인" : "승인"}
+                  approveClassName={tone.button}
+                />
               </div>
             </footer>
           </section>

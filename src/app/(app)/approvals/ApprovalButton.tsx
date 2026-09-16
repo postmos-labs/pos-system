@@ -26,10 +26,14 @@ export default function ApprovalButton({
   type,
   id,
   notes = [],
+  approveLabel = "승인",
+  approveClassName = "bg-emerald-600 hover:bg-emerald-700",
 }: {
   type: "completion" | "tech_final" | "cs_transfer" | "transfer";
   id: string;
   notes?: ApprovalNote[];
+  approveLabel?: string;
+  approveClassName?: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [isRejecting, startRejectTransition] = useTransition();
@@ -127,9 +131,9 @@ export default function ApprovalButton({
           setShowApproval(true);
         }}
         disabled={isPending}
-        className="flex shrink-0 items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+        className={`flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-50 ${approveClassName}`}
       >
-        <Check size={14} /> {isPending ? "처리 중" : "승인"}
+        <Check size={14} /> {isPending ? "처리 중" : approveLabel}
       </button>
       {showReject && (
         <div
@@ -234,7 +238,7 @@ export default function ApprovalButton({
                 type="button"
                 onClick={approve}
                 disabled={(type === "transfer" && !deliveryType) || isPending}
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                className={`rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 ${approveClassName}`}
               >
                 {isPending ? "승인 중..." : "비고 남기고 승인"}
               </button>

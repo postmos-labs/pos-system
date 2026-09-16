@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { XIcon } from "lucide-react";
+import { Star, XIcon } from "lucide-react";
 import type {
   ApplicantType,
   EquipmentItem,
@@ -23,6 +23,7 @@ import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
 import type { ApprovalNote } from "@/lib/approvalNotes";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField } from "@/components/ui/DatePickerField";
+import { resolveChannel } from "@/lib/franchiseChannel";
 
 const EQUIPMENT_CATALOG = [
   "토스프론트",
@@ -98,6 +99,9 @@ const secondaryButton =
   "focus-visible:ring-primary/30 border-border bg-card text-foreground hover:bg-muted inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold transition-colors outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50";
 const primaryButton =
   "focus-visible:ring-primary/30 border-primary bg-primary text-primary-foreground hover:bg-primary-hover inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold transition-colors outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50";
+// 채널 색을 입힐 승인 버튼. primaryButton에서 배경·테두리 토큰만 뺀 것 — 같은 자리에 bg-*가 두 개면 어느 쪽이 이길지 정해지지 않는다.
+const channelButtonBase =
+  "focus-visible:ring-primary/30 border-transparent text-white inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold transition-colors outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50";
 
 function tone(status: FranchiseStatus) {
   if (status === "doc_waiting")
@@ -280,6 +284,7 @@ export default function FranchiseDetailDrawer({
         .filter(Boolean)
     : [];
   const colors = tone(row.status);
+  const channelTone = resolveChannel(row.channel, row.reception_channel);
 
   function addProduct() {
     onEquipmentChange([...products, { name: productSelect, quantity: productQty }]);
@@ -338,6 +343,16 @@ export default function FranchiseDetailDrawer({
                 label: FRANCHISE_STATUS_LABEL[status],
               }))}
             />
+            <span
+              className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold ${channelTone.soft}`}
+              title={
+                channelTone.inferred ? `접수채널 "${row.reception_channel}"에서 추정` : undefined
+              }
+            >
+              {channelTone.star && <Star size={12} className="fill-current" />}
+              {channelTone.label}
+              {channelTone.inferred ? " (추정)" : ""}
+            </span>
             <span className="text-muted-foreground text-sm">
               접수일 {row.reception_date || "-"}
             </span>
@@ -699,8 +714,19 @@ export default function FranchiseDetailDrawer({
               </div>
             </div>
             {transferApproval && (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-foreground mb-3 text-[13px] font-bold">이관 승인 비고</div>
+              <div
+                className={`rounded-xl border p-4 ${channelTone.star ? "border-violet-200 bg-violet-50" : "border-slate-200 bg-slate-50"}`}
+              >
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="text-foreground text-[13px] font-bold">이관 승인 비고</div>
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold ${channelTone.soft}`}
+                  >
+                    {channelTone.star && <Star size={12} className="fill-current" />}
+                    {channelTone.label}
+                    {channelTone.inferred ? " (추정)" : ""}
+                  </span>
+                </div>
                 <ApprovalNoteTimeline notes={transferApproval.approval_notes} />
               </div>
             )}
@@ -726,6 +752,13 @@ export default function FranchiseDetailDrawer({
             </button>
           ) : transferApproval?.status === "requested" ? (
             <>
+              <span
+                className={`inline-flex items-center gap-1 self-center rounded-md px-2 py-1 text-[11px] font-extrabold ${channelTone.chip}`}
+              >
+                {channelTone.star && <Star size={12} className="fill-current" />}
+                {channelTone.label}
+                {channelTone.inferred ? " (추정)" : ""}
+              </span>
               <span className="self-center text-xs font-medium text-amber-600">
                 {transferApproval.requested_by_name} 승인요청
               </span>
@@ -734,9 +767,17 @@ export default function FranchiseDetailDrawer({
                   type="button"
                   onClick={onApproveTransfer}
                   disabled={transferring}
-                  className={primaryButton}
+                  className={
+                    channelTone.key === "none"
+                      ? primaryButton
+                      : `${channelButtonBase} ${channelTone.button}`
+                  }
                 >
-                  {transferring ? "이관 중..." : "승인 후 자동 이관"}
+                  {transferring
+                    ? "이관 중..."
+                    : channelTone.star
+                      ? "프리미엄 리드 승인 후 자동 이관"
+                      : "승인 후 자동 이관"}
                 </button>
               )}
             </>

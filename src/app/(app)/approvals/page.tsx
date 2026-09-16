@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, ClipboardCheck } from "lucide-react";
 import ApprovalButton from "./ApprovalButton";
-import TransferApprovalItem from "./TransferApprovalItem";
+import TransferApprovalList from "./TransferApprovalList";
 import RejectedTransferItem from "./RejectedTransferItem";
 import ApprovalLogSection from "./ApprovalLogSection";
 import type { ApprovalNote } from "@/lib/approvalNotes";
@@ -34,6 +34,9 @@ type TransferApproval = {
     owner_name: string | null;
     address: string | null;
     phone: string | null;
+    channel: string | null;
+    reception_channel: string | null;
+    reception_date: string | null;
   } | null;
 };
 
@@ -112,7 +115,7 @@ export default async function ApprovalsPage() {
       ? supabase
           .from("franchise_transfer_approvals")
           .select(
-            "franchise_application_id, requested_by, requested_by_name, requested_at, cs_approved_by_name, approval_notes, franchise:franchise_applications(id, business_name, owner_name, address, phone)",
+            "franchise_application_id, requested_by, requested_by_name, requested_at, cs_approved_by_name, approval_notes, franchise:franchise_applications(id, business_name, owner_name, address, phone, channel, reception_channel, reception_date)",
           )
           .eq(
             "status",
@@ -196,31 +199,22 @@ export default async function ApprovalsPage() {
                 </div>
               )}
               {transferApprovals.length > 0 && (
-                <div className="divide-y divide-slate-100">
-                  {transferApprovals.map((approval) => (
-                    <div
-                      key={approval.franchise_application_id}
-                      className="flex items-center gap-4 px-6 py-3.5 transition-colors hover:bg-slate-50"
-                    >
-                      <TransferApprovalItem
-                        id={approval.franchise_application_id}
-                        businessName={approval.franchise?.business_name ?? null}
-                        ownerName={approval.franchise?.owner_name ?? null}
-                        address={approval.franchise?.address ?? null}
-                        phone={approval.franchise?.phone ?? null}
-                        requesterName={approval.requested_by_name}
-                        csApproverName={approval.cs_approved_by_name}
-                        approvalRole={p.approval_role as "cs_responsible" | "team_lead"}
-                        notes={approval.approval_notes}
-                      />
-                      <ApprovalButton
-                        type={p.approval_role === "cs_responsible" ? "cs_transfer" : "transfer"}
-                        id={approval.franchise_application_id}
-                        notes={approval.approval_notes}
-                      />
-                    </div>
-                  ))}
-                </div>
+                <TransferApprovalList
+                  items={transferApprovals.map((approval) => ({
+                    id: approval.franchise_application_id,
+                    businessName: approval.franchise?.business_name ?? null,
+                    ownerName: approval.franchise?.owner_name ?? null,
+                    address: approval.franchise?.address ?? null,
+                    phone: approval.franchise?.phone ?? null,
+                    channel: approval.franchise?.channel ?? null,
+                    receptionChannel: approval.franchise?.reception_channel ?? null,
+                    receptionDate: approval.franchise?.reception_date ?? null,
+                    requesterName: approval.requested_by_name,
+                    csApproverName: approval.cs_approved_by_name,
+                    notes: approval.approval_notes,
+                  }))}
+                  approvalRole={p.approval_role as "cs_responsible" | "team_lead"}
+                />
               )}
             </>
           ) : (
