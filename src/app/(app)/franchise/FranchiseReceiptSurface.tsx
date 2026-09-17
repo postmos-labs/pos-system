@@ -174,6 +174,7 @@ interface Props {
   tableView: TableView;
   tableViewCounts: Record<TableView, number>;
   search: string;
+  memoSearch: string;
   statusFilter: string;
   applicantTypeFilter: string;
   channelFilter: string;
@@ -195,6 +196,7 @@ interface Props {
   onKpiChange: (key: KpiKey) => void;
   onTableViewChange: (view: TableView, kpi?: KpiKey | null) => void;
   onSearchChange: (value: string) => void;
+  onMemoSearchChange: (value: string) => void;
   onStatusFilterChange: (value: string) => void;
   onApplicantTypeFilterChange: (value: string) => void;
   onChannelFilterChange: (value: string) => void;
@@ -695,6 +697,16 @@ export default function FranchiseReceiptSurface(props: Props) {
               placeholder="상호명, 대표자, 연락처, 사업자번호 통합 검색"
               value={props.search}
               onChange={(event) => props.onSearchChange(event.target.value)}
+              className="border-border bg-card text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/30 h-9 w-full rounded-lg border pr-3 pl-8 text-sm outline-none focus-visible:ring-2"
+            />
+          </div>
+          <div className="relative w-full max-w-64">
+            <StickyNoteIcon className="text-muted-foreground absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
+            <input
+              aria-label="비고 내용 검색"
+              placeholder="비고 내용 검색"
+              value={props.memoSearch}
+              onChange={(event) => props.onMemoSearchChange(event.target.value)}
               className="border-border bg-card text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/30 h-9 w-full rounded-lg border pr-3 pl-8 text-sm outline-none focus-visible:ring-2"
             />
           </div>

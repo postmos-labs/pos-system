@@ -1149,6 +1149,7 @@ export default function FranchiseClient({
   const [callOpenId, setCallOpenId] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
+  const [memoSearch, setMemoSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
   const [applicantTypeFilter, setApplicantTypeFilter] = useState("");
   const [salesFilter, setSalesFilter] = useState("");
@@ -1369,6 +1370,9 @@ export default function FranchiseClient({
           .includes(vanFilter)
       )
         return false;
+      // 비고 검색 — 통합 검색과 별개로 비고 본문에서만 찾는다. 다른 필터와 같이 KPI·탭 건수에도 반영된다.
+      const memoTerm = memoSearch.trim().toLowerCase();
+      if (memoTerm && !(row.memo ?? "").toLowerCase().includes(memoTerm)) return false;
       if (dateFrom || dateTo) {
         const createdLocalDate = kstDate(new Date(row.created_at));
         if (dateFrom && createdLocalDate < dateFrom) return false;
@@ -1390,6 +1394,7 @@ export default function FranchiseClient({
       missedCallFilter,
       vanFilter,
       vanGroupFilter,
+      memoSearch,
       dateFrom,
       dateTo,
     ],
@@ -1437,6 +1442,7 @@ export default function FranchiseClient({
 
   const filterKey = [
     search,
+    memoSearch,
     statusFilter,
     applicantTypeFilter,
     channelFilter,
@@ -1465,6 +1471,7 @@ export default function FranchiseClient({
     if (!target) return;
     highlightAppliedRef.current = true;
     setSearch("");
+    setMemoSearch("");
     setStatusFilter("");
     setApplicantTypeFilter("");
     setChannelFilter("");
@@ -1502,6 +1509,7 @@ export default function FranchiseClient({
   const canReorder =
     sortBy === "manual" &&
     !search.trim() &&
+    !memoSearch.trim() &&
     !statusFilter &&
     !applicantTypeFilter &&
     !channelFilter &&
@@ -3257,6 +3265,7 @@ export default function FranchiseClient({
         tableView={tableView}
         tableViewCounts={tableViewCounts}
         search={search}
+        memoSearch={memoSearch}
         statusFilter={statusFilter}
         applicantTypeFilter={applicantTypeFilter}
         channelFilter={channelFilter}
@@ -3286,6 +3295,7 @@ export default function FranchiseClient({
           setStatusFilter("");
         }}
         onSearchChange={setSearch}
+        onMemoSearchChange={setMemoSearch}
         onStatusFilterChange={setStatusFilter}
         onApplicantTypeFilterChange={setApplicantTypeFilter}
         onChannelFilterChange={setChannelFilter}
