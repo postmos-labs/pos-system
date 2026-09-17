@@ -1371,8 +1371,12 @@ export default function FranchiseClient({
       )
         return false;
       // 비고 검색 — 통합 검색과 별개로 비고 본문에서만 찾는다. 다른 필터와 같이 KPI·탭 건수에도 반영된다.
+      // 스탬프([작성자 날짜 시각], 상단 고정 PIN 마커 포함)는 떼고 본문만 본다 — 작성자 이름으로 걸리면 안 된다.
       const memoTerm = memoSearch.trim().toLowerCase();
-      if (memoTerm && !(row.memo ?? "").toLowerCase().includes(memoTerm)) return false;
+      if (memoTerm) {
+        const memoBody = (row.memo ?? "").replace(MEMO_STAMP_RE, " ").toLowerCase();
+        if (!memoBody.includes(memoTerm)) return false;
+      }
       if (dateFrom || dateTo) {
         const createdLocalDate = kstDate(new Date(row.created_at));
         if (dateFrom && createdLocalDate < dateFrom) return false;
