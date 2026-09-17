@@ -49,7 +49,9 @@ export default async function CalendarPage() {
       .select(
         "id, customer_name, status, scheduled_date, assigned_to, delivery_type, assignee:profiles!installations_assigned_to_fkey(name)",
       )
-      .not("scheduled_date", "is", null),
+      .not("scheduled_date", "is", null)
+      // 기술지원에서 반려한 건은 예정일이 남아 있어도 일정이 아니다. 설치 관리 목록이 반려 건을 기본으로 숨기는 것과 맞춘다.
+      .neq("status", "rejected"),
     supabase.from("profiles").select("id, name").eq("role", "tech"),
   ]);
 
