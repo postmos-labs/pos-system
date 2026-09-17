@@ -21,6 +21,7 @@ import {
   CalendarClock,
   ArrowRight,
   Star,
+  Route,
 } from "lucide-react";
 import ExcelDownloadButton from "./ExcelDownloadButton";
 import Badge from "@/components/ui/Badge";
@@ -324,25 +325,50 @@ export default async function DashboardPage({ searchParams }: Props) {
       />
 
       {}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold text-slate-500">채널별 진행 중</span>
-        {CHANNEL_KEYS.map((key) => {
-          const tone = resolveChannel(key === "none" ? null : key);
-          const count = channelCounts[key];
-          return (
-            <Link
-              key={key}
-              href={`/franchise?channel=${key}`}
-              className={`flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors hover:brightness-95 ${tone.soft} ${count === 0 ? "opacity-50" : ""}`}
-            >
-              {tone.star && <Star size={14} className="fill-current" />}
-              {tone.label}
-              <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-bold">
-                {count}
-              </span>
-            </Link>
-          );
-        })}
+      <div className="space-y-2.5">
+        <p className="text-[13px] font-bold text-slate-600">채널별 진행 중</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {CHANNEL_KEYS.map((key) => {
+            const tone = resolveChannel(key === "none" ? null : key);
+            const count = channelCounts[key];
+            // 프리미엄 리드만 카드 전체를 채널 색으로 채워 가장 먼저 눈에 들어오게 한다. 나머지는 상태 카드와 같은 흰 카드.
+            const filled = tone.star;
+            return (
+              <Link
+                key={key}
+                href={`/franchise?channel=${key}`}
+                className={`rounded-2xl border p-5 transition-all hover:shadow-md ${
+                  filled
+                    ? "border-violet-700 bg-violet-700 text-white"
+                    : key === "none"
+                      ? "border-dashed border-slate-300 bg-white"
+                      : `bg-white ${tone.soft.split(" ")[0]}`
+                } ${count === 0 ? "opacity-60" : ""}`}
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <div
+                    className={`flex h-10 w-10 items-center justify-center rounded-xl ${
+                      filled ? "bg-white/20" : tone.soft
+                    }`}
+                  >
+                    {tone.star ? <Star size={20} className="fill-current" /> : <Route size={20} />}
+                  </div>
+                  <ArrowRight size={16} className={filled ? "text-white/70" : "text-slate-400"} />
+                </div>
+                <p
+                  className={`text-3xl font-extrabold ${filled ? "text-white" : key === "none" ? "text-slate-600" : "text-slate-900"}`}
+                >
+                  {count}
+                </p>
+                <p
+                  className={`mt-1 text-sm font-semibold ${filled ? "text-white/90" : tone.accentText}`}
+                >
+                  {tone.label}
+                </p>
+              </Link>
+            );
+          })}
+        </div>
       </div>
 
       {}
