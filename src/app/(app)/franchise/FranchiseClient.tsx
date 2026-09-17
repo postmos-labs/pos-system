@@ -34,6 +34,7 @@ import { saveRowOrder } from "@/lib/reorderRows";
 import { formatPhone, formatBusinessNumber, formatDateText, digitsOnly } from "@/lib/format";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { mergeRowsPreservingIdentity } from "@/lib/mergeRows";
+import { resolveChannel } from "@/lib/franchiseChannel";
 import { deleteFranchiseRows, loadArchivedFranchiseRows } from "./actions";
 import { markLeadConverted } from "../leads/actions";
 import {
@@ -173,6 +174,7 @@ interface Props {
   currentUserRole: string;
   currentUserApprovalRole: string;
   initialStatusFilter?: string;
+  initialChannelFilter?: string;
   initialHighlightId?: string;
   linkedInstalls?: Record<string, { id: string; status: string }>;
   linkedInternets?: Record<string, { id: string; status: string | null; category: string | null }>;
@@ -1092,6 +1094,7 @@ export default function FranchiseClient({
   currentUserRole,
   currentUserApprovalRole,
   initialStatusFilter = "",
+  initialChannelFilter = "",
   initialHighlightId,
   linkedInstalls = {},
   linkedInternets = {},
@@ -1169,7 +1172,7 @@ export default function FranchiseClient({
   const { colWidths, startResize } = useColumnWidths(COL_WIDTHS_STORAGE_KEY, DEFAULT_WIDTHS);
   const [vanFilter, setVanFilter] = useState("");
   const [vanGroupFilter, setVanGroupFilter] = useState<VanGroup | "">("");
-  const [channelFilter, setChannelFilter] = useState("");
+  const [channelFilter, setChannelFilter] = useState(initialChannelFilter);
   const [caseTypeFilter, setCaseTypeFilter] = useState("");
   const [missedCallFilter, setMissedCallFilter] = useState("");
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(true);
@@ -1348,7 +1351,12 @@ export default function FranchiseClient({
       }
       if (!skip.skipStatus && statusFilter && row.status !== statusFilter) return false;
       if (applicantTypeFilter && row.applicant_type !== applicantTypeFilter) return false;
-      if (!skip.skipChannel && channelFilter && row.channel !== channelFilter) return false;
+      if (
+        !skip.skipChannel &&
+        channelFilter &&
+        resolveChannel(row.channel, row.reception_channel).key !== channelFilter
+      )
+        return false;
       if (caseTypeFilter && row.case_type !== caseTypeFilter) return false;
       if (missedCallFilter && (row.missed_call_count ?? 0) !== Number(missedCallFilter))
         return false;

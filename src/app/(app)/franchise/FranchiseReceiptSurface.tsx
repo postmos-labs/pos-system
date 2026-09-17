@@ -805,6 +805,7 @@ export default function FranchiseReceiptSurface(props: Props) {
                     value: c,
                     label: FRANCHISE_CHANNEL_LABEL[c],
                   })),
+                  { value: "none", label: "경로 미지정" },
                 ]}
               />
             </div>

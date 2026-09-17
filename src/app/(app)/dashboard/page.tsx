@@ -20,11 +20,14 @@ import {
   UserX,
   CalendarClock,
   ArrowRight,
+  Star,
 } from "lucide-react";
 import ExcelDownloadButton from "./ExcelDownloadButton";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import VanGroupTabs from "./VanGroupTabs";
+import { resolveChannel, CHANNEL_KEYS, type ChannelKey } from "@/lib/franchiseChannel";
+import { CLOSED_STATUSES } from "../franchise/fetchFranchiseListData";
 
 type VanFilter = VanGroup | "";
 
@@ -274,6 +277,29 @@ export default async function DashboardPage({ searchParams }: Props) {
   const todayInstalls = (todayInstallsResult.data ?? []) as any[];
   const todayFranchise = (todayFranchiseResult.data ?? []) as any[];
 
+  const channelCounts: Record<ChannelKey, number> = {
+    toss_premium_lead: 0,
+    toss_lead: 0,
+    direct_sales: 0,
+    none: 0,
+  };
+  // 위 applications는 최근 8건만 읽은 목록이라 건수 집계에 못 쓴다. 진행 중 건 전체를 채널 두 칸만 가볍게 읽어 센다.
+  // 대형 가맹점은 배지를 눌러 가는 가맹접수 목록에 안 나오므로 여기서도 뺀다.
+  let channelQuery = applyVanFilter(
+    supabase
+      .from("franchise_applications")
+      .select("channel, reception_channel")
+      .eq("is_large_franchise", false)
+      .not("status", "in", `(${CLOSED_STATUSES.join(",")})`),
+    van,
+  );
+  if (p.role === "sales") channelQuery = channelQuery.eq("sales_id", userId);
+  if (p.role === "cs") channelQuery = channelQuery.eq("cs_id", userId);
+  const { data: channelRows } = await channelQuery;
+  for (const row of channelRows ?? []) {
+    channelCounts[resolveChannel(row.channel, row.reception_channel).key] += 1;
+  }
+
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       {}
@@ -296,6 +322,28 @@ export default async function DashboardPage({ searchParams }: Props) {
           kicc: vanKiccCount ?? 0,
         }}
       />
+
+      {}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold text-slate-500">채널별 진행 중</span>
+        {CHANNEL_KEYS.map((key) => {
+          const tone = resolveChannel(key === "none" ? null : key);
+          const count = channelCounts[key];
+          return (
+            <Link
+              key={key}
+              href={`/franchise?channel=${key}`}
+              className={`flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors hover:brightness-95 ${tone.soft} ${count === 0 ? "opacity-50" : ""}`}
+            >
+              {tone.star && <Star size={14} className="fill-current" />}
+              {tone.label}
+              <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-bold">
+                {count}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
 
       {}
       {(p.role === "admin" || p.role === "master") &&

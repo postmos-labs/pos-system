@@ -4,13 +4,21 @@ import FranchiseClient from "./FranchiseClient";
 import { fetchFranchiseListData } from "./fetchFranchiseListData";
 import { fetchLeadForConversion } from "../leads/actions";
 import type { ApplicantType, FranchiseChannel } from "@/types";
+import { CHANNEL_KEYS, type ChannelKey } from "@/lib/franchiseChannel";
 
 interface Props {
-  searchParams: Promise<{ status?: string; highlight?: string; lead?: string; id?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    highlight?: string;
+    lead?: string;
+    id?: string;
+    channel?: string;
+  }>;
 }
 
 export default async function FranchisePage({ searchParams }: Props) {
-  const { status, highlight, lead, id } = await searchParams;
+  const { status, highlight, lead, id, channel } = await searchParams;
+  const initialChannelFilter = CHANNEL_KEYS.includes(channel as ChannelKey) ? channel! : "";
   const supabase = await createClient();
   const {
     data: { user },
@@ -81,6 +89,7 @@ export default async function FranchisePage({ searchParams }: Props) {
           currentUserRole={currentProfile?.role ?? ""}
           currentUserApprovalRole={currentProfile?.approval_role ?? ""}
           initialStatusFilter={status ?? ""}
+          initialChannelFilter={initialChannelFilter}
           initialHighlightId={highlight ?? id}
           linkedInstalls={linkedInstalls}
           linkedInternets={linkedInternets}
