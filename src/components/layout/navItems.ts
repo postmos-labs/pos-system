@@ -19,7 +19,6 @@ import {
   Store,
   Ticket,
   Truck,
-  UserPlus,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -59,7 +58,6 @@ export const ROLE_FOLDERS: NavGroup[] = [
     icon: LayoutDashboard,
     items: [
       { href: "/dashboard", label: "CS 대시보드", icon: LayoutDashboard },
-      { href: "/leads", label: "자체리드", icon: UserPlus },
       { href: "/franchise", label: "가맹 접수", icon: ClipboardList },
       { href: "/woo", label: "우국상 관리", icon: Users },
       { href: "/changes", label: "변경 관리", icon: RefreshCw },

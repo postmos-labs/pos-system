@@ -22,7 +22,7 @@ function actionLabelFor(type: string | null, href?: string) {
   if (type === "ticket_revision_resolved") return "인입내역 보기";
   if (type === "ticket_revision_canceled") return "인입내역 보기";
   if (type === "supply_request") return "물품요청 보기";
-  if (type === "own_lead") return "자체리드 보기";
+  if (type === "own_lead") return "가맹접수 보기";
   return "알림 보기";
 }
 
@@ -70,7 +70,7 @@ export default function RealtimeNotification({ userId }: Props) {
             : type === "supply_request"
               ? "/supply-requests"
               : type === "own_lead"
-                ? "/leads"
+                ? "/franchise?channel=direct_sales"
                 : row.installation_id
                   ? `/installs?id=${row.installation_id}`
                   : row.franchise_application_id

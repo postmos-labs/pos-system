@@ -52,7 +52,7 @@ export default async function NotificationsPage({ searchParams }: Props) {
               n.type === "supply_request"
                 ? "/supply-requests"
                 : n.type === "own_lead"
-                  ? "/leads"
+                  ? "/franchise?channel=direct_sales"
                   : n.ticket_id
                     ? `/tickets/${n.ticket_id}`
                     : n.installation_id

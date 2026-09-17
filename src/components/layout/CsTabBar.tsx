@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 
 const CS_TABS = [
   { href: "/dashboard", label: "CS 대시보드" },
-  { href: "/leads", label: "자체리드" },
   { href: "/franchise", label: "가맹 접수" },
   { href: "/woo", label: "우국상 관리" },
   { href: "/changes", label: "변경 관리" },
