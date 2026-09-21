@@ -59,3 +59,10 @@ export function appendApprovalNote(
     },
   ];
 }
+
+export const APPROVAL_NOTE_STAGE_LABEL: Record<ApprovalNoteStage, string> = {
+  request: "승인 요청",
+  first_approval: "1차 승인",
+  final_approval: "최종 승인",
+  rejection: "반려",
+};

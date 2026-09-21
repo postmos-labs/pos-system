@@ -5,6 +5,8 @@ import { X, Trash2 } from "lucide-react";
 import HistoryIcon from "./HistoryIcon";
 import { createClient } from "@/lib/supabase/client";
 import { formatKst } from "@/lib/date";
+import { useApprovalNoteHistory } from "@/lib/useApprovalNoteHistory";
+import { APPROVAL_NOTE_STAGE_LABEL } from "@/lib/approvalNotes";
 import {
   INSTALLATION_DELIVERY_TYPE_LABEL,
   isInstallationDeliveryType,
@@ -135,6 +137,7 @@ export default function MemoHistoryPanel({
   const [value, setValue] = useState("");
   const [notifLogs, setNotifLogs] = useState<NotificationLog[]>([]);
   const [franchiseLogs, setFranchiseLogs] = useState<FranchiseLog[]>([]);
+  const approvalNotes = useApprovalNoteHistory(franchiseApplicationId);
 
   useEffect(() => {
     if (!entityType || !entityId) return;
@@ -199,6 +202,21 @@ export default function MemoHistoryPanel({
             )}
           </div>
           <div>{entry.text}</div>
+        </li>
+      ),
+    })),
+    ...approvalNotes.map((note) => ({
+      at: note.created_at,
+      node: (
+        <li key={`approval-note-${note.id}`} className="text-[15pt] text-amber-300">
+          <div className="text-slate-400">
+            {formatKst(note.created_at)}
+            {" · "}
+            <span className="font-semibold text-blue-300">{note.author_name}</span>
+            {" · 이관승인 "}
+            {APPROVAL_NOTE_STAGE_LABEL[note.stage]}
+          </div>
+          <div className="whitespace-pre-wrap break-words">{note.content}</div>
         </li>
       ),
     })),

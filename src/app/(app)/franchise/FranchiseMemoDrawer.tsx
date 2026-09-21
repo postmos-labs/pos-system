@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Pin, Trash2, X } from "lucide-react";
 import HistoryIcon from "@/components/ui/HistoryIcon";
 import { formatKst } from "@/lib/date";
+import { useApprovalNoteHistory } from "@/lib/useApprovalNoteHistory";
+import { APPROVAL_NOTE_STAGE_LABEL, type ApprovalNote } from "@/lib/approvalNotes";
 import type { FranchiseApplication } from "@/types";
 import { APPLICANT_TYPE_LABEL } from "@/types";
 
@@ -29,6 +31,16 @@ function formatEntryDate(value: string) {
   return formatKst(value);
 }
 
+type TimelineItem =
+  | {
+      kind: "memo";
+      at: string;
+      pinned: boolean;
+      pinnedAt: string | null;
+      entry: FranchiseMemoEntry;
+    }
+  | { kind: "approval"; at: string; pinned: false; pinnedAt: null; note: ApprovalNote };
+
 export default function FranchiseMemoDrawer({
   row,
   entries,
@@ -38,7 +50,24 @@ export default function FranchiseMemoDrawer({
   onDelete,
 }: Props) {
   const [draft, setDraft] = useState("");
-  const sortedEntries = [...entries].sort((a, b) => {
+  const approvalNotes = useApprovalNoteHistory(row.id);
+  const timelineItems: TimelineItem[] = [
+    ...entries.map((entry): TimelineItem => ({
+      kind: "memo",
+      at: entry.at,
+      pinned: entry.pinned,
+      pinnedAt: entry.pinnedAt,
+      entry,
+    })),
+    ...approvalNotes.map((note): TimelineItem => ({
+      kind: "approval",
+      at: note.created_at,
+      pinned: false,
+      pinnedAt: null,
+      note,
+    })),
+  ];
+  const sortedEntries = timelineItems.sort((a, b) => {
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
     if (a.pinned && b.pinned) {
       return new Date(b.pinnedAt ?? b.at).getTime() - new Date(a.pinnedAt ?? a.at).getTime();
@@ -96,41 +125,58 @@ export default function FranchiseMemoDrawer({
           <p className="text-[15pt] text-slate-400">이력이 없습니다.</p>
         ) : (
           <ul className="space-y-2.5">
-            {sortedEntries.map((entry) => (
-              <li
-                key={`${entry.index}-${entry.at}`}
-                className={`text-[15pt] group ${entry.pinned ? "text-amber-200" : "text-slate-200"}`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-slate-400">
-                    {formatEntryDate(entry.at)}
-                    {" · "}
-                    <span className="font-semibold text-blue-300">{entry.user || "-"}</span>
+            {sortedEntries.map((item) => {
+              if (item.kind === "approval") {
+                return (
+                  <li key={`approval-note-${item.note.id}`} className="text-[15pt] text-amber-300">
+                    <div className="text-slate-400">
+                      {formatEntryDate(item.note.created_at)}
+                      {" · "}
+                      <span className="font-semibold text-blue-300">{item.note.author_name}</span>
+                      {" · 이관승인 "}
+                      {APPROVAL_NOTE_STAGE_LABEL[item.note.stage]}
+                    </div>
+                    <div className="whitespace-pre-wrap break-words">{item.note.content}</div>
+                  </li>
+                );
+              }
+              const entry = item.entry;
+              return (
+                <li
+                  key={`${entry.index}-${entry.at}`}
+                  className={`text-[15pt] group ${entry.pinned ? "text-amber-200" : "text-slate-200"}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-slate-400">
+                      {formatEntryDate(entry.at)}
+                      {" · "}
+                      <span className="font-semibold text-blue-300">{entry.user || "-"}</span>
+                    </div>
+                    <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => onTogglePin(entry.index)}
+                        aria-label={entry.pinned ? "고정 해제" : "상단 고정"}
+                        className={
+                          entry.pinned
+                            ? "text-amber-300 hover:text-amber-200"
+                            : "text-slate-500 hover:text-amber-300"
+                        }
+                      >
+                        <Pin size={14} className={entry.pinned ? "fill-current" : ""} />
+                      </button>
+                      <button
+                        onClick={() => onDelete(entry.index)}
+                        aria-label="히스토리 삭제"
+                        className="text-slate-500 hover:text-red-400"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => onTogglePin(entry.index)}
-                      aria-label={entry.pinned ? "고정 해제" : "상단 고정"}
-                      className={
-                        entry.pinned
-                          ? "text-amber-300 hover:text-amber-200"
-                          : "text-slate-500 hover:text-amber-300"
-                      }
-                    >
-                      <Pin size={14} className={entry.pinned ? "fill-current" : ""} />
-                    </button>
-                    <button
-                      onClick={() => onDelete(entry.index)}
-                      aria-label="히스토리 삭제"
-                      className="text-slate-500 hover:text-red-400"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-                <div className="whitespace-pre-wrap break-words">{entry.text}</div>
-              </li>
-            ))}
+                  <div className="whitespace-pre-wrap break-words">{entry.text}</div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
