@@ -38,16 +38,45 @@ interface Props {
   previewImageDataUrl: string | null;
 }
 
+const DEFAULT_PAD_ASPECT = 460 / 200;
+
+function loadImageFromDataUrl(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+type PadTab = "draw" | "photo" | "text";
+
 function SignaturePadModal({
+  aspect,
   onComplete,
   onClose,
 }: {
+  aspect: number;
   onComplete: (dataUrl: string) => void;
   onClose: () => void;
 }) {
+  const safeAspect = Number.isFinite(aspect) && aspect > 0 ? aspect : DEFAULT_PAD_ASPECT;
+  const [activeTab, setActiveTab] = useState<PadTab>("draw");
+
+  // 그리기 탭
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [drawing, setDrawing] = useState(false);
   const [hasStroke, setHasStroke] = useState(false);
+
+  // 사진 탭
+  const [photoImage, setPhotoImage] = useState<HTMLImageElement | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [removeWhiteBg, setRemoveWhiteBg] = useState(true);
+
+  // 텍스트 탭
+  const [textValue, setTextValue] = useState("");
+  const [fontFamily, setFontFamily] = useState<"gothic" | "myeongjo">("gothic");
+  const fontStack = fontFamily === "gothic" ? `"Malgun Gothic", sans-serif` : `"Batang", serif`;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -96,16 +125,116 @@ function SignaturePadModal({
     setDrawing(false);
   }
 
-  function clear() {
+  function clearDraw() {
     const canvas = canvasRef.current!;
     canvas.getContext("2d")!.clearRect(0, 0, canvas.width, canvas.height);
     setHasStroke(false);
   }
 
-  function complete() {
+  function completeDraw() {
     if (!hasStroke) return;
     onComplete(canvasRef.current!.toDataURL("image/png"));
   }
+
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const original = await loadImageFromDataUrl(reader.result as string);
+      const maxSide = 1600;
+      let width = original.width;
+      let height = original.height;
+      if (width > maxSide || height > maxSide) {
+        const scale = maxSide / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const tmp = document.createElement("canvas");
+      tmp.width = width;
+      tmp.height = height;
+      const tctx = tmp.getContext("2d")!;
+      tctx.drawImage(original, 0, 0, width, height);
+      const resizedDataUrl = tmp.toDataURL("image/png");
+      const resizedImg = await loadImageFromDataUrl(resizedDataUrl);
+      setPhotoImage(resizedImg);
+      setPhotoPreviewUrl(resizedDataUrl);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearPhoto() {
+    setPhotoImage(null);
+    setPhotoPreviewUrl(null);
+  }
+
+  function completePhoto() {
+    if (!photoImage) return;
+    const width = 800;
+    const height = Math.round(width / safeAspect);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d")!;
+    const scale = Math.min(width / photoImage.width, height / photoImage.height);
+    const drawWidth = photoImage.width * scale;
+    const drawHeight = photoImage.height * scale;
+    const dx = (width - drawWidth) / 2;
+    const dy = (height - drawHeight) / 2;
+    ctx.drawImage(photoImage, dx, dy, drawWidth, drawHeight);
+    if (removeWhiteBg) {
+      const imageData = ctx.getImageData(0, 0, width, height);
+      const data = imageData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] > 235 && data[i + 1] > 235 && data[i + 2] > 235) {
+          data[i + 3] = 0;
+        }
+      }
+      ctx.putImageData(imageData, 0, 0);
+    }
+    onComplete(canvas.toDataURL("image/png"));
+  }
+
+  function clearText() {
+    setTextValue("");
+  }
+
+  function completeText() {
+    if (!textValue.trim()) return;
+    const width = 800;
+    const height = Math.round(width / safeAspect);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#1e293b";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    let fontSize = Math.floor(height * 0.55);
+    const maxWidth = width * 0.9;
+    ctx.font = `${fontSize}px ${fontStack}`;
+    while (fontSize > 1 && ctx.measureText(textValue).width > maxWidth) {
+      fontSize -= 1;
+      ctx.font = `${fontSize}px ${fontStack}`;
+    }
+    ctx.fillText(textValue, width / 2, height / 2);
+    onComplete(canvas.toDataURL("image/png"));
+  }
+
+  function handleClear() {
+    if (activeTab === "draw") clearDraw();
+    else if (activeTab === "photo") clearPhoto();
+    else clearText();
+  }
+
+  function handleComplete() {
+    if (activeTab === "draw") completeDraw();
+    else if (activeTab === "photo") completePhoto();
+    else completeText();
+  }
+
+  const completeDisabled =
+    activeTab === "draw" ? !hasStroke : activeTab === "photo" ? !photoImage : !textValue.trim();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -116,30 +245,116 @@ function SignaturePadModal({
             ✕
           </button>
         </div>
+        <div className="px-4 pt-3 flex gap-2">
+          {(["draw", "photo", "text"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 min-h-[44px] rounded-xl text-sm font-medium transition-colors ${
+                activeTab === tab ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-500"
+              }`}
+            >
+              {tab === "draw" ? "그리기" : tab === "photo" ? "사진" : "텍스트"}
+            </button>
+          ))}
+        </div>
         <div className="p-4">
-          <canvas
-            ref={canvasRef}
-            width={460}
-            height={200}
-            className="w-full border-2 border-dashed border-gray-300 rounded-xl bg-gray-50 touch-none"
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-          />
-          <p className="text-xs text-gray-400 text-center mt-2">위 공간에 서명을 그려주세요</p>
+          {activeTab === "draw" && (
+            <>
+              <canvas
+                ref={canvasRef}
+                width={460}
+                height={200}
+                className="w-full border-2 border-dashed border-gray-300 rounded-xl bg-gray-50 touch-none"
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+              />
+              <p className="text-xs text-gray-400 text-center mt-2">위 공간에 서명을 그려주세요</p>
+            </>
+          )}
+
+          {activeTab === "photo" && (
+            <>
+              <label className="flex items-center justify-center min-h-[44px] w-full border border-gray-200 rounded-xl text-sm text-gray-600 cursor-pointer">
+                {photoPreviewUrl ? "사진 다시 선택" : "사진 선택"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoChange}
+                />
+              </label>
+              <div
+                className="mt-3 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-xl bg-gray-50 overflow-hidden"
+                style={{ aspectRatio: safeAspect }}
+              >
+                {photoPreviewUrl ? (
+                  <img
+                    src={photoPreviewUrl}
+                    alt="도장 미리보기"
+                    style={{ maxWidth: "100%", maxHeight: "100%" }}
+                  />
+                ) : (
+                  <span className="text-xs text-gray-400">사진을 선택해주세요</span>
+                )}
+              </div>
+              <label className="flex items-center gap-2 min-h-[44px] mt-2 text-xs text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={removeWhiteBg}
+                  onChange={(e) => setRemoveWhiteBg(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                흰 배경 지우기
+              </label>
+            </>
+          )}
+
+          {activeTab === "text" && (
+            <>
+              <input
+                type="text"
+                value={textValue}
+                onChange={(e) => setTextValue(e.target.value)}
+                placeholder="이름을 입력하세요"
+                className="w-full min-h-[44px] px-3 border border-gray-200 rounded-xl text-sm"
+              />
+              <div className="flex gap-2 mt-3">
+                {(["gothic", "myeongjo"] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setFontFamily(f)}
+                    className={`flex-1 min-h-[44px] rounded-xl text-sm border ${
+                      fontFamily === f
+                        ? "bg-gray-900 text-white border-gray-900"
+                        : "bg-white text-gray-600 border-gray-200"
+                    }`}
+                  >
+                    {f === "gothic" ? "고딕" : "명조"}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-xl bg-gray-50 py-6">
+                <span style={{ fontFamily: fontStack, color: "#1e293b", fontSize: 28 }}>
+                  {textValue || "미리보기"}
+                </span>
+              </div>
+            </>
+          )}
         </div>
         <div className="px-4 pb-4 flex gap-2">
           <button
-            onClick={clear}
-            className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600"
+            onClick={handleClear}
+            className="flex-1 min-h-[44px] border border-gray-200 rounded-xl text-sm text-gray-600"
           >
             지우기
           </button>
           <button
-            onClick={complete}
-            disabled={!hasStroke}
-            className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
+            onClick={handleComplete}
+            disabled={completeDisabled}
+            className="flex-1 min-h-[44px] bg-gray-900 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
           >
             완료
           </button>
@@ -345,6 +560,16 @@ export default function SignClient({ contract, previewImageDataUrl }: Props) {
   const currentZonePx = zoomActive
     ? ratioToPixel(currentZone, renderedWidth!, renderedHeight!)
     : null;
+
+  const activeZone = zones.find((z) => z.id === activeZoneId) ?? null;
+  const activeZonePx =
+    activeZone && renderedWidth && renderedHeight
+      ? ratioToPixel(activeZone, renderedWidth, renderedHeight)
+      : null;
+  const modalAspect =
+    activeZonePx && activeZonePx.width > 0 && activeZonePx.height > 0
+      ? activeZonePx.width / activeZonePx.height
+      : DEFAULT_PAD_ASPECT;
 
   return (
     <div className="h-screen overflow-hidden bg-white flex flex-col lg:h-auto lg:min-h-screen lg:overflow-visible lg:flex-row">
@@ -624,7 +849,11 @@ export default function SignClient({ contract, previewImageDataUrl }: Props) {
       </div>
 
       {showPad && (
-        <SignaturePadModal onComplete={handleSignatureComplete} onClose={() => setShowPad(false)} />
+        <SignaturePadModal
+          aspect={modalAspect}
+          onComplete={handleSignatureComplete}
+          onClose={() => setShowPad(false)}
+        />
       )}
     </div>
   );
