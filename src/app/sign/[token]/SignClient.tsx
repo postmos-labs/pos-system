@@ -8,6 +8,13 @@ import { ratioToPixel, isRatioRect, type RatioRect } from "@/lib/pdf/zoneCoords"
 // 모바일 서명 단계에서 서명란으로 확대해서 이동할 때 사용하는 배율.
 const MOBILE_ZONE_ZOOM = 1.8;
 
+type ZoneKind = "signature" | "stamp" | "text";
+const ZONE_KIND_LABEL: Record<ZoneKind, string> = {
+  signature: "서명",
+  stamp: "인감",
+  text: "텍스트",
+};
+
 interface SignedItem extends RatioRect {
   id: string;
   type: "signature";
@@ -19,6 +26,7 @@ interface Zone extends RatioRect {
   id: string;
   label: string;
   required: boolean;
+  kind?: ZoneKind;
 }
 
 interface Contract {
@@ -53,15 +61,17 @@ type PadTab = "draw" | "photo" | "text";
 
 function SignaturePadModal({
   aspect,
+  initialTab,
   onComplete,
   onClose,
 }: {
   aspect: number;
+  initialTab: PadTab;
   onComplete: (dataUrl: string) => void;
   onClose: () => void;
 }) {
   const safeAspect = Number.isFinite(aspect) && aspect > 0 ? aspect : DEFAULT_PAD_ASPECT;
-  const [activeTab, setActiveTab] = useState<PadTab>("draw");
+  const [activeTab, setActiveTab] = useState<PadTab>(initialTab);
 
   // 그리기 탭
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -570,6 +580,8 @@ export default function SignClient({ contract, previewImageDataUrl }: Props) {
     activeZonePx && activeZonePx.width > 0 && activeZonePx.height > 0
       ? activeZonePx.width / activeZonePx.height
       : DEFAULT_PAD_ASPECT;
+  const modalInitialTab: PadTab =
+    activeZone?.kind === "stamp" ? "photo" : activeZone?.kind === "text" ? "text" : "draw";
 
   return (
     <div className="h-screen overflow-hidden bg-white flex flex-col lg:h-auto lg:min-h-screen lg:overflow-visible lg:flex-row">
@@ -603,6 +615,9 @@ export default function SignClient({ contract, previewImageDataUrl }: Props) {
                       {i + 1}
                     </span>
                     <span className="truncate">{zone.label}</span>
+                    <span className="flex-shrink-0 text-[9px] text-gray-400">
+                      {ZONE_KIND_LABEL[zone.kind ?? "signature"]}
+                    </span>
                     <span
                       className={`flex-shrink-0 text-[9px] px-1 py-0.5 rounded ${zone.required ? "bg-red-50 text-red-500" : "bg-gray-100 text-gray-400"}`}
                     >
@@ -665,7 +680,8 @@ export default function SignClient({ contract, previewImageDataUrl }: Props) {
         )}
         {mobileStep === "sign" && currentZone && (
           <p className="text-xs text-gray-500 text-center mt-0.5">
-            {currentZoneIndex + 1} / {zones.length} · {currentZone.label}
+            {currentZoneIndex + 1} / {zones.length} · {currentZone.label} (
+            {ZONE_KIND_LABEL[currentZone.kind ?? "signature"]})
           </p>
         )}
         {mobileStep === "complete" && (
@@ -851,6 +867,7 @@ export default function SignClient({ contract, previewImageDataUrl }: Props) {
       {showPad && (
         <SignaturePadModal
           aspect={modalAspect}
+          initialTab={modalInitialTab}
           onComplete={handleSignatureComplete}
           onClose={() => setShowPad(false)}
         />

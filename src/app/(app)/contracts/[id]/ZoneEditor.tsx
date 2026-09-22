@@ -14,10 +14,23 @@ const MIN_ZONE_WIDTH = 20;
 const MIN_ZONE_HEIGHT = 10;
 const EDITOR_WIDTH = 800;
 
+type ZoneKind = "signature" | "stamp" | "text";
+const ZONE_KIND_LABEL: Record<ZoneKind, string> = {
+  signature: "서명",
+  stamp: "인감",
+  text: "텍스트",
+};
+const ZONE_KIND_BADGE_CLASS: Record<ZoneKind, string> = {
+  signature: "bg-blue-50 text-blue-600",
+  stamp: "bg-rose-50 text-rose-600",
+  text: "bg-emerald-50 text-emerald-600",
+};
+
 interface Zone extends RatioRect {
   id: string;
   label: string;
   required: boolean;
+  kind: ZoneKind;
 }
 
 interface Contract {
@@ -38,9 +51,11 @@ interface Props {
 export default function ZoneEditor({ contract }: Props) {
   const initialZones = useMemo(
     () =>
-      (contract.signature_zones ?? [])
-        .filter(isRatioRect)
-        .map((z) => ({ ...z, required: (z as Partial<Zone>).required ?? true })) as Zone[],
+      (contract.signature_zones ?? []).filter(isRatioRect).map((z) => ({
+        ...z,
+        required: (z as Partial<Zone>).required ?? true,
+        kind: (z as Partial<Zone>).kind ?? "signature",
+      })) as Zone[],
     [contract.signature_zones],
   );
   const [zones, setZones] = useState<Zone[]>(initialZones);
@@ -54,10 +69,12 @@ export default function ZoneEditor({ contract }: Props) {
   } | null>(null);
   const [label, setLabel] = useState("");
   const [requiredInput, setRequiredInput] = useState(false);
+  const [kindInput, setKindInput] = useState<ZoneKind>("signature");
   const [showLabelInput, setShowLabelInput] = useState(false);
   const [editingZone, setEditingZone] = useState<Zone | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [editRequired, setEditRequired] = useState(false);
+  const [editKind, setEditKind] = useState<ZoneKind>("signature");
   const [pendingZone, setPendingZone] = useState<{
     x: number;
     y: number;
@@ -156,11 +173,13 @@ export default function ZoneEditor({ contract }: Props) {
         id: `zone-${Date.now()}`,
         label: label || `서명 ${zones.length + 1}`,
         required: requiredInput,
+        kind: kindInput,
         ...ratio,
       },
     ]);
     setLabel("");
     setRequiredInput(false);
+    setKindInput("signature");
     setShowLabelInput(false);
     setPendingZone(null);
     setCurrentRect(null);
@@ -172,19 +191,23 @@ export default function ZoneEditor({ contract }: Props) {
     setCurrentRect(null);
     setLabel("");
     setRequiredInput(false);
+    setKindInput("signature");
   }
 
   function openEditZone(zone: Zone) {
     setEditingZone(zone);
     setEditLabel(zone.label);
     setEditRequired(zone.required);
+    setEditKind(zone.kind ?? "signature");
   }
 
   function confirmEditZone() {
     if (!editingZone) return;
     setZones((prev) =>
       prev.map((z) =>
-        z.id === editingZone.id ? { ...z, label: editLabel || z.label, required: editRequired } : z,
+        z.id === editingZone.id
+          ? { ...z, label: editLabel || z.label, required: editRequired, kind: editKind }
+          : z,
       ),
     );
     setEditingZone(null);
@@ -317,6 +340,11 @@ export default function ZoneEditor({ contract }: Props) {
                     >
                       {z.required ? "필수" : "선택"}
                     </span>
+                    <span
+                      className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded ${ZONE_KIND_BADGE_CLASS[z.kind ?? "signature"]}`}
+                    >
+                      {ZONE_KIND_LABEL[z.kind ?? "signature"]}
+                    </span>
                   </span>
                   <span className="flex items-center gap-1 flex-shrink-0">
                     <button
@@ -425,6 +453,23 @@ export default function ZoneEditor({ contract }: Props) {
               placeholder={`서명 ${zones.length + 1}`}
               className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
             />
+            <p className="text-xs text-slate-400 mb-1.5">고객이 이 칸을 채울 방식</p>
+            <div className="flex gap-2 mb-4">
+              {(["signature", "stamp", "text"] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setKindInput(k)}
+                  className={`flex-1 py-2 rounded-xl text-sm ${
+                    kindInput === k
+                      ? "bg-blue-600 text-white"
+                      : "border border-slate-200 text-slate-600"
+                  }`}
+                >
+                  {ZONE_KIND_LABEL[k]}
+                </button>
+              ))}
+            </div>
             <label className="flex items-center gap-2 text-sm text-slate-600 mb-4">
               <input
                 type="checkbox"
@@ -466,6 +511,23 @@ export default function ZoneEditor({ contract }: Props) {
               }}
               className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
             />
+            <p className="text-xs text-slate-400 mb-1.5">고객이 이 칸을 채울 방식</p>
+            <div className="flex gap-2 mb-4">
+              {(["signature", "stamp", "text"] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setEditKind(k)}
+                  className={`flex-1 py-2 rounded-xl text-sm ${
+                    editKind === k
+                      ? "bg-blue-600 text-white"
+                      : "border border-slate-200 text-slate-600"
+                  }`}
+                >
+                  {ZONE_KIND_LABEL[k]}
+                </button>
+              ))}
+            </div>
             <label className="flex items-center gap-2 text-sm text-slate-600 mb-4">
               <input
                 type="checkbox"
