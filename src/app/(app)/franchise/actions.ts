@@ -25,7 +25,7 @@ export async function deleteFranchiseRows(ids: string[]) {
   return { error: null };
 }
 
-export async function loadArchivedFranchiseRows(isLargeFranchise: boolean): Promise<{
+export async function loadArchivedFranchiseRows(isLargeFranchise: boolean | "all"): Promise<{
   rows: FranchiseApplication[];
   linkedInstalls: Record<string, { id: string; status: string }>;
   linkedInternets: Record<string, { id: string; status: string | null; category: string | null }>;

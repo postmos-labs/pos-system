@@ -285,12 +285,10 @@ export default async function DashboardPage({ searchParams }: Props) {
     none: 0,
   };
   // 위 applications는 최근 8건만 읽은 목록이라 건수 집계에 못 쓴다. 진행 중 건 전체를 채널 두 칸만 가볍게 읽어 센다.
-  // 대형 가맹점은 배지를 눌러 가는 가맹접수 목록에 안 나오므로 여기서도 뺀다.
   let channelQuery = applyVanFilter(
     supabase
       .from("franchise_applications")
       .select("channel, reception_channel")
-      .eq("is_large_franchise", false)
       .not("status", "in", `(${CLOSED_STATUSES.join(",")})`),
     van,
   );

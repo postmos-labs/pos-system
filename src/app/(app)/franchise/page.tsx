@@ -71,7 +71,7 @@ export default async function FranchisePage({ searchParams }: Props) {
     yesterdayDate,
     archivedSummary,
     archiveCutoffDate,
-  } = await fetchFranchiseListData(supabase, user.id, false, {
+  } = await fetchFranchiseListData(supabase, user.id, "all", {
     includeIds: [highlight, id].filter((v): v is string => !!v),
   });
 

@@ -177,6 +177,7 @@ interface Props {
   memoSearch: string;
   statusFilter: string;
   applicantTypeFilter: string;
+  largeFilter: string;
   channelFilter: string;
   caseTypeFilter: string;
   missedCallFilter: string;
@@ -199,6 +200,7 @@ interface Props {
   onMemoSearchChange: (value: string) => void;
   onStatusFilterChange: (value: string) => void;
   onApplicantTypeFilterChange: (value: string) => void;
+  onLargeFilterChange: (value: string) => void;
   onChannelFilterChange: (value: string) => void;
   onCaseTypeFilterChange: (value: string) => void;
   onMissedCallFilterChange: (value: string) => void;
@@ -792,6 +794,20 @@ export default function FranchiseReceiptSurface(props: Props) {
                 ]}
               />
             </div>
+            {props.mode !== "large_franchise" && (
+              <div className="w-32">
+                <AppSelect
+                  aria-label="대형 여부"
+                  value={props.largeFilter}
+                  onValueChange={props.onLargeFilterChange}
+                  options={[
+                    { value: "", label: "대형 전체" },
+                    { value: "normal", label: "일반" },
+                    { value: "large", label: "대형" },
+                  ]}
+                />
+              </div>
+            )}
             <div className="w-40">
               <AppSelect
                 aria-label="사업자 유형"
@@ -1095,9 +1111,14 @@ export default function FranchiseReceiptSurface(props: Props) {
                       <button
                         type="button"
                         onClick={() => props.onOpenDetail(row)}
-                        className="text-foreground hover:text-primary block w-full truncate text-left"
+                        className="text-foreground hover:text-primary flex w-full items-center text-left"
                       >
-                        {row.business_name || "-"}
+                        <span className="min-w-0 truncate">{row.business_name || "-"}</span>
+                        {props.mode !== "large_franchise" && row.is_large_franchise && (
+                          <span className="ml-1.5 shrink-0 rounded-md border border-violet-300 bg-violet-100 px-1.5 py-0.5 text-[11px] font-bold text-violet-700">
+                            대형
+                          </span>
+                        )}
                       </button>
                       <VanBadge value={row.van_company} className="mt-0.5 max-w-full truncate" />
                     </td>

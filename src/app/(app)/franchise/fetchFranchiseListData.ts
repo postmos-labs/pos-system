@@ -20,7 +20,7 @@ export type FranchiseListScope = "open" | "archived";
 
 async function fetchAllApplications(
   supabase: SupabaseServerClient,
-  isLargeFranchise: boolean,
+  isLargeFranchise: boolean | "all",
   scope: FranchiseListScope,
   cutoffIso: string,
   includeIds: string[],
@@ -29,10 +29,8 @@ async function fetchAllApplications(
     "*, sales:profiles!franchise_applications_sales_id_fkey(id,name,role), cs:profiles!franchise_applications_cs_id_fkey(id,name,role), creator:profiles!franchise_applications_created_by_fkey(id,name,role), next_check:franchise_next_check_dates(next_check_date)";
 
   const runQuery = (from: number, to: number) => {
-    let query = supabase
-      .from("franchise_applications")
-      .select(select)
-      .eq("is_large_franchise", isLargeFranchise);
+    let query = supabase.from("franchise_applications").select(select);
+    if (isLargeFranchise !== "all") query = query.eq("is_large_franchise", isLargeFranchise);
     if (scope === "open") {
       query = query.or(`status.not.in.(${CLOSED_STATUSES.join(",")}),updated_at.gte.${cutoffIso}`);
     } else {
@@ -91,18 +89,18 @@ export type TransferApproval = {
 
 async function fetchArchivedSummary(
   supabase: SupabaseServerClient,
-  isLargeFranchise: boolean,
+  isLargeFranchise: boolean | "all",
   cutoffIso: string,
 ) {
-  const runQuery = (from: number, to: number) =>
-    supabase
-      .from("franchise_applications")
-      .select("status")
-      .eq("is_large_franchise", isLargeFranchise)
+  const runQuery = (from: number, to: number) => {
+    let query = supabase.from("franchise_applications").select("status");
+    if (isLargeFranchise !== "all") query = query.eq("is_large_franchise", isLargeFranchise);
+    return query
       .in("status", CLOSED_STATUSES)
       .lt("updated_at", cutoffIso)
       .order("id")
       .range(from, to);
+  };
 
   type Row = NonNullable<Awaited<ReturnType<typeof runQuery>>["data"]>[number];
 
@@ -116,7 +114,7 @@ async function fetchArchivedSummary(
 export async function fetchFranchiseListData(
   supabase: SupabaseServerClient,
   userId: string,
-  isLargeFranchise: boolean,
+  isLargeFranchise: boolean | "all",
   options: { scope?: FranchiseListScope; includeIds?: string[] } = {},
 ) {
   const scope = options.scope ?? "open";

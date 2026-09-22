@@ -1154,6 +1154,7 @@ export default function FranchiseClient({
   const [applicantTypeFilter, setApplicantTypeFilter] = useState("");
   const [salesFilter, setSalesFilter] = useState("");
   const [csFilter, setCsFilter] = useState("");
+  const [largeFilter, setLargeFilter] = useState("");
 
   const [sortBy, setSortBy] = useState<
     "updated_at" | "created_at" | "open_date" | "install_date" | "status" | "manual"
@@ -1236,7 +1237,8 @@ export default function FranchiseClient({
   const loadArchived = useCallback(async () => {
     if (archivedLoading || archivedLoaded) return;
     setArchivedLoading(true);
-    const result = await loadArchivedFranchiseRows(mode === "large_franchise");
+    // 가맹접수 목록은 대형도 함께 보여 주므로, 보관된 건을 불러올 때도 대형을 빼지 않는다.
+    const result = await loadArchivedFranchiseRows(mode === "large_franchise" ? true : "all");
     setArchivedLoading(false);
     if (result.error) {
       toast.error("이전 건 불러오기 실패: " + result.error);
@@ -1352,6 +1354,9 @@ export default function FranchiseClient({
       }
       if (!skip.skipStatus && statusFilter && row.status !== statusFilter) return false;
       if (applicantTypeFilter && row.applicant_type !== applicantTypeFilter) return false;
+      // 대형 가맹점도 가맹접수 목록에 함께 보인다. 대형만/일반만 보고 싶을 때 이 필터로 가린다.
+      if (largeFilter === "normal" && row.is_large_franchise) return false;
+      if (largeFilter === "large" && !row.is_large_franchise) return false;
       if (
         !skip.skipChannel &&
         channelFilter &&
@@ -1393,6 +1398,7 @@ export default function FranchiseClient({
       currentUserId,
       statusFilter,
       applicantTypeFilter,
+      largeFilter,
       channelFilter,
       caseTypeFilter,
       missedCallFilter,
@@ -1449,6 +1455,7 @@ export default function FranchiseClient({
     memoSearch,
     statusFilter,
     applicantTypeFilter,
+    largeFilter,
     channelFilter,
     caseTypeFilter,
     missedCallFilter,
@@ -1478,6 +1485,7 @@ export default function FranchiseClient({
     setMemoSearch("");
     setStatusFilter("");
     setApplicantTypeFilter("");
+    setLargeFilter("");
     setChannelFilter("");
     setCaseTypeFilter("");
     setVanFilter("");
@@ -1516,6 +1524,7 @@ export default function FranchiseClient({
     !memoSearch.trim() &&
     !statusFilter &&
     !applicantTypeFilter &&
+    !largeFilter &&
     !channelFilter &&
     !caseTypeFilter &&
     !missedCallFilter &&
@@ -3272,6 +3281,7 @@ export default function FranchiseClient({
         memoSearch={memoSearch}
         statusFilter={statusFilter}
         applicantTypeFilter={applicantTypeFilter}
+        largeFilter={largeFilter}
         channelFilter={channelFilter}
         caseTypeFilter={caseTypeFilter}
         missedCallFilter={missedCallFilter}
@@ -3302,6 +3312,7 @@ export default function FranchiseClient({
         onMemoSearchChange={setMemoSearch}
         onStatusFilterChange={setStatusFilter}
         onApplicantTypeFilterChange={setApplicantTypeFilter}
+        onLargeFilterChange={setLargeFilter}
         onChannelFilterChange={setChannelFilter}
         onCaseTypeFilterChange={setCaseTypeFilter}
         onMissedCallFilterChange={setMissedCallFilter}
