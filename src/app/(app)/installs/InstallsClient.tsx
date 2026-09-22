@@ -594,6 +594,8 @@ export default function InstallsClient({
   const completingRef = useRef(false);
   const [rejectModal, setRejectModal] = useState<{ id: string; reason: string } | null>(null);
   const [rejecting, setRejecting] = useState(false);
+  const [cancelModal, setCancelModal] = useState<{ id: string; reason: string } | null>(null);
+  const [canceling, setCanceling] = useState(false);
   const [transitModal, setTransitModal] = useState<{ id: string; eta: string } | null>(null);
   const [checklistModal, setChecklistModal] = useState<{
     id: string;
@@ -710,6 +712,7 @@ export default function InstallsClient({
   const [installSoonOnly, setInstallSoonOnly] = useState(false);
   const [techFilter, setTechFilter] = useState("");
   const [showRejected, setShowRejected] = useState(false);
+  const [showCanceled, setShowCanceled] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
   const [franchiseDetail, setFranchiseDetail] = useState<InstallFranchiseDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -925,6 +928,10 @@ export default function InstallsClient({
   }
 
   async function handleStatusChange(id: string, status: string) {
+    if (status === "canceled") {
+      setCancelModal({ id, reason: "" });
+      return;
+    }
     if (status === "completed") {
       const inst = installs.find((i) => i.id === id);
       setChecklistItems(
@@ -1030,7 +1037,7 @@ export default function InstallsClient({
   const approvalOnlyStatuses = new Set([...APPROVAL_TARGETS, "completed"]);
   // currentStatus는 항상 옵션에 남긴다 — 현재 값이 목록에 없으면 select가 빈 칸으로 표시된다.
   function statusOptionsFor(deliveryType?: string, currentStatus?: string) {
-    return statusOrderFor(deliveryType)
+    const options = statusOrderFor(deliveryType)
       .filter((s) => {
         if (s === currentStatus) return true;
         if (!approvalOnlyStatuses.has(s)) return true;
@@ -1038,6 +1045,9 @@ export default function InstallsClient({
         return canRequestApproval;
       })
       .map((s) => ({ value: s, label: statusLabel(s, deliveryType) }));
+    // 취소는 진행 단계가 아니라 별도 선택지다. 이미 취소된 건도 드롭다운에 그대로 보이게 둔다.
+    if (currentStatus !== "completed") options.push({ value: "canceled", label: "취소" });
+    return options;
   }
 
   async function requestStepApproval(id: string, targetStatus: string) {
@@ -1273,6 +1283,31 @@ export default function InstallsClient({
         if (notifyError) console.error("반려 알림 발송 실패:", notifyError.message);
       }
     }
+  }
+
+  async function submitCancel() {
+    if (!cancelModal) return;
+    setCanceling(true);
+    const { id, reason } = cancelModal;
+    const result = await changeInstallationStatus({
+      installationId: id,
+      status: "canceled",
+      notes: reason,
+      skipNotify: true,
+    });
+    if (result.error) {
+      setCanceling(false);
+      toast.error("취소 처리 실패: " + result.error);
+      return;
+    }
+    setInstalls((prev) =>
+      prev.map((i) =>
+        i.id === id ? { ...i, status: "canceled", notes: result.notes ?? i.notes } : i,
+      ),
+    );
+    setCancelModal(null);
+    setCanceling(false);
+    toast.success("취소 처리했습니다.");
   }
 
   async function submitCompletion(skipCompleteSend?: boolean, skipApproval?: boolean) {
@@ -1872,7 +1907,12 @@ export default function InstallsClient({
   const assignCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const inst of installs) {
-      if (inst.assigned_to && inst.status !== "completed" && inst.status !== "rejected") {
+      if (
+        inst.assigned_to &&
+        inst.status !== "completed" &&
+        inst.status !== "rejected" &&
+        inst.status !== "canceled"
+      ) {
         counts[inst.assigned_to] = (counts[inst.assigned_to] ?? 0) + 1;
       }
     }
@@ -1949,6 +1989,7 @@ export default function InstallsClient({
       )
         return false;
       if (!showRejected && i.status === "rejected" && statusFilter !== "rejected") return false;
+      if (!showCanceled && i.status === "canceled" && statusFilter !== "canceled") return false;
       if (!showCompleted && i.status === "completed" && statusFilter !== "completed") return false;
       if (statusFilter && i.status !== statusFilter) return false;
       if (pendingOnly && !completionApprovals[i.id]) return false;
@@ -1977,6 +2018,7 @@ export default function InstallsClient({
     completionApprovals,
     techFilter,
     showRejected,
+    showCanceled,
     showCompleted,
     deliveryTab,
     dateFrom,
@@ -1993,6 +2035,7 @@ export default function InstallsClient({
     !dateTo &&
     deliveryTab === "all" &&
     !showRejected &&
+    !showCanceled &&
     !showCompleted;
 
   const columns = MAIN_COLUMNS;
@@ -2241,6 +2284,37 @@ export default function InstallsClient({
                 className="w-full py-2 rounded-lg text-slate-400 text-sm hover:text-slate-600"
               >
                 취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {cancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 w-80 flex flex-col gap-4">
+            <p className="text-sm font-bold text-slate-800">설치건 취소</p>
+            <textarea
+              value={cancelModal.reason}
+              onChange={(e) =>
+                setCancelModal((prev) => (prev ? { ...prev, reason: e.target.value } : prev))
+              }
+              placeholder="취소 사유를 입력해주세요. 히스토리에 남습니다."
+              rows={3}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-slate-400"
+            />
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={submitCancel}
+                disabled={canceling || !cancelModal.reason.trim()}
+                className="w-full py-2 rounded-lg bg-slate-600 text-white text-sm font-medium hover:bg-slate-700 disabled:opacity-50"
+              >
+                {canceling ? "처리 중..." : "취소 처리"}
+              </button>
+              <button
+                onClick={() => setCancelModal(null)}
+                className="w-full py-2 rounded-lg text-slate-400 text-sm hover:text-slate-600"
+              >
+                닫기
               </button>
             </div>
           </div>
@@ -2646,6 +2720,12 @@ export default function InstallsClient({
           {showRejected ? "반려건 포함" : "반려건 숨김"}
         </button>
         <button
+          onClick={() => setShowCanceled((v) => !v)}
+          className={`text-xs font-medium px-3 py-1 rounded-full border transition-all ${showCanceled ? "bg-slate-200 text-slate-700 border-slate-300" : "bg-white border-slate-200 text-slate-400"}`}
+        >
+          {showCanceled ? "취소건 포함" : "취소건 숨김"}
+        </button>
+        <button
           onClick={() => setShowCompleted((v) => !v)}
           className={`text-xs font-medium px-3 py-1 rounded-full border transition-all ${showCompleted ? "bg-green-100 text-green-700 border-green-200" : "bg-white border-slate-200 text-slate-400"}`}
         >
@@ -3015,7 +3095,8 @@ export default function InstallsClient({
                           )}
                           {canReschedule &&
                             inst.status !== "completed" &&
-                            inst.status !== "rejected" && (
+                            inst.status !== "rejected" &&
+                            inst.status !== "canceled" && (
                               <button
                                 onClick={() => handleStatusChange(inst.id, "reschedule")}
                                 disabled={blocksApprovalRequest(

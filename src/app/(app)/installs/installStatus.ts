@@ -10,6 +10,7 @@ export const STATUS_LABELS: Record<string, string> = {
   delivery_sent: "택배발송",
   completed: "설치완료",
   rejected: "반려",
+  canceled: "취소",
 };
 export const STATUS_ORDER_INSTALL = [
   "received",
@@ -71,4 +72,5 @@ export const STATUS_COLORS: Record<string, string> = {
   delivery_sent: "bg-amber-50 text-amber-600 border-amber-200",
   completed: "bg-green-50 text-green-600 border-green-200",
   rejected: "bg-red-50 text-red-600 border-red-200",
+  canceled: "bg-slate-200 text-slate-600 border-slate-300",
 };

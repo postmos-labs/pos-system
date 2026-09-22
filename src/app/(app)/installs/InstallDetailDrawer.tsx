@@ -300,6 +300,8 @@ export default function InstallDetailDrawer({
       value: s,
       label: statusLabel(s, installation.delivery_type),
     }));
+  // 취소는 진행 단계가 아니라 별도 선택지다. 이미 취소된 건도 드롭다운에 그대로 보이게 둔다.
+  if (installation.status !== "completed") statusOptions.push({ value: "canceled", label: "취소" });
 
   return (
     <div className="fixed inset-0 z-40 bg-slate-900/35" onMouseDown={onClose}>

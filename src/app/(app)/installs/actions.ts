@@ -27,6 +27,7 @@ const INSTALL_STATUSES = new Set([
   "delivery_sent",
   "completed",
   "rejected",
+  "canceled",
 ]);
 const APPROVAL_STATUSES = new Set(["preparing", "scheduled", "delivery_sent", "completed"]);
 const APPROVAL_STATUS_LABEL: Record<string, string> = {
@@ -330,6 +331,26 @@ export async function createInstallation(input: {
   return { error: null, installation };
 }
 
+// 취소 사유를 히스토리 창이 읽는 메모 스탬프 형식([이름 YYYY. MM. DD. HH:mm])으로 비고 끝에 덧붙인다.
+// 덮어쓰지 않는 이유: 이관 때 넘어온 가맹접수 비고가 지워지면 왜 설치를 잡았는지 근거가 사라진다.
+function appendCancelReason(current: string | null, userName: string | null, reason: string) {
+  const stamp = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date());
+  const line = `[${userName?.trim() || "사용자"} ${stamp}] 취소 사유: ${reason.trim()}`;
+  const base = (current ?? "").trim();
+  return base
+    ? `${base}
+${line}`
+    : line;
+}
+
 export async function changeInstallationStatus(input: {
   installationId: string;
   status: string;
@@ -346,6 +367,9 @@ export async function changeInstallationStatus(input: {
   }
   if (APPROVAL_STATUSES.has(input.status)) {
     return { error: "이 단계는 승인요청 후 실장 최종 승인이 필요합니다.", notificationError: null };
+  }
+  if (input.status === "canceled" && !(input.notes ?? "").trim()) {
+    return { error: "취소 사유를 입력해주세요.", notificationError: null };
   }
   if (input.status === "scheduled" && !input.scheduledDate) {
     return { error: "일정 날짜가 필요합니다.", notificationError: null };
@@ -369,6 +393,9 @@ export async function changeInstallationStatus(input: {
     values.scheduled_time = input.scheduledTime || null;
   }
   if (input.status === "rejected") values.notes = input.notes ?? "";
+  if (input.status === "canceled") {
+    values.notes = appendCancelReason(installation.notes, editor.profile.name, input.notes ?? "");
+  }
 
   const { data: updated, error: updateError } = await admin
     .from("installations")
@@ -394,7 +421,9 @@ export async function changeInstallationStatus(input: {
       ...(input.status === "scheduled"
         ? { scheduled_date: input.scheduledDate, scheduled_time: input.scheduledTime }
         : {}),
-      ...(input.status === "rejected" ? { reason: input.notes ?? "" } : {}),
+      ...(input.status === "rejected" || input.status === "canceled"
+        ? { reason: input.notes ?? "" }
+        : {}),
     },
   });
   if (logError) {
@@ -426,7 +455,8 @@ export async function changeInstallationStatus(input: {
   revalidatePath("/installs");
   revalidatePath("/installs/mine");
   revalidatePath("/calendar");
-  return { error: null, notificationError: notification.error };
+  // 취소는 비고에 사유 줄을 덧붙이므로, 화면이 저장된 값을 그대로 반영하도록 돌려준다.
+  return { error: null, notificationError: notification.error, notes: values.notes ?? null };
 }
 
 export async function sendInstallTransitNotice(installationId: string, eta?: string) {
