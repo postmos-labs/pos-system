@@ -17,9 +17,11 @@ import {
   Trash2,
   ChevronDown,
   Percent,
+  Star,
 } from "lucide-react";
 import type { Profile, FranchiseApplication, VanGroup } from "@/types";
 import { FRANCHISE_STATUS_LABEL, VAN_GROUP_LABEL } from "@/types";
+import { resolveChannel } from "@/lib/franchiseChannel";
 import { useToast } from "@/components/ui/Toast";
 import BulkConfirmDialog from "@/components/ui/BulkConfirmDialog";
 import { NotificationHistory } from "@/components/ui/NotificationHistory";
@@ -140,7 +142,12 @@ export interface Installation {
   assignee?: { name: string } | null;
   creator?: { name: string } | null;
   // page.tsx / fetchInstalls에서 franchise_applications를 조인해 가져온다.
-  franchise?: { van_company: string | null; open_date?: string | null } | null;
+  franchise?: {
+    van_company: string | null;
+    open_date?: string | null;
+    channel?: string | null;
+    reception_channel?: string | null;
+  } | null;
   franchise_application_id?: string;
   woo_customer_id?: string;
   address?: string;
@@ -197,7 +204,6 @@ const MAIN_COLUMNS = [
   { key: "scheduled_date", label: "설치예정일" },
   { key: "open_date", label: "오픈일" },
   { key: "phone", label: "전화번호" },
-  { key: "tracking_number", label: "송장번호" },
   { key: "items", label: "제품" },
   { key: "status", label: "상태" },
   { key: "tech", label: "담당기사" },
@@ -565,6 +571,7 @@ export default function InstallsClient({
     scheduled_date: string;
     scheduled_time: string;
     open_date: string;
+    tracking_number: string;
     items: { name: string; quantity: number }[];
     notes: string;
   } | null>(null);
@@ -623,7 +630,7 @@ export default function InstallsClient({
         const { data } = await supabase
           .from("installations")
           .select(
-            "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications(van_company, open_date)",
+            "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications(van_company, open_date, channel, reception_channel)",
           )
           .eq("id", highlightId)
           .maybeSingle();
@@ -764,6 +771,7 @@ export default function InstallsClient({
       scheduled_date: inst.scheduled_date ?? "",
       scheduled_time: inst.scheduled_time ?? "",
       open_date: inst.open_date ?? "",
+      tracking_number: inst.tracking_number ?? "",
       items: inst.items ?? [],
       notes: inst.notes ?? "",
     };
@@ -772,8 +780,8 @@ export default function InstallsClient({
   async function fetchInstalls() {
     setLoading(true);
     const installsSelect = van
-      ? "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications!inner(van_company, open_date)"
-      : "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications(van_company, open_date)";
+      ? "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications!inner(van_company, open_date, channel, reception_channel)"
+      : "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications(van_company, open_date, channel, reception_channel)";
     let query = supabase.from("installations").select(installsSelect);
     if (deliveryOnly) query = query.eq("delivery_type", "delivery");
     else query = query.neq("delivery_type", "delivery");
@@ -1737,6 +1745,8 @@ export default function InstallsClient({
       tasks.push(saveInstallField(id, "scheduled_time", detailDraft.scheduled_time));
     if (detailDraft.open_date !== (inst.open_date ?? ""))
       tasks.push(saveInstallField(id, "open_date", detailDraft.open_date));
+    if (detailDraft.tracking_number !== (inst.tracking_number ?? ""))
+      tasks.push(saveInstallField(id, "tracking_number", detailDraft.tracking_number));
     if (detailDraft.notes !== (inst.notes ?? ""))
       tasks.push(saveInstallField(id, "notes", detailDraft.notes));
     if (JSON.stringify(detailDraft.items) !== JSON.stringify(inst.items ?? [])) {
@@ -2038,7 +2048,14 @@ export default function InstallsClient({
     !showCanceled &&
     !showCompleted;
 
-  const columns = MAIN_COLUMNS;
+  const phoneColIndex = MAIN_COLUMNS.findIndex((c) => c.key === "phone");
+  const columns: { key: string; label: string }[] = mineOnly
+    ? [
+        ...MAIN_COLUMNS.slice(0, phoneColIndex + 1),
+        { key: "tracking_number", label: "송장번호" },
+        ...MAIN_COLUMNS.slice(phoneColIndex + 1),
+      ]
+    : [...MAIN_COLUMNS];
 
   const reorderInstalls = useCallback(
     (dragId: string, dropId: string) => {
@@ -2956,6 +2973,21 @@ export default function InstallsClient({
                             가맹이관
                           </span>
                         )}
+                        {inst.franchise_application_id &&
+                          (() => {
+                            const tone = resolveChannel(
+                              inst.franchise?.channel,
+                              inst.franchise?.reception_channel,
+                            );
+                            return (
+                              <span
+                                className={`shrink-0 inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${tone.soft}`}
+                              >
+                                {tone.star && <Star size={10} className="fill-current" />}
+                                {tone.short}
+                              </span>
+                            );
+                          })()}
                         <VanBadge
                           value={
                             Array.isArray(inst.franchise)
@@ -3266,18 +3298,33 @@ export default function InstallsClient({
                         className="px-4 py-3 font-medium text-slate-900 whitespace-nowrap overflow-hidden text-ellipsis"
                         title={inst.customer_name}
                       >
-                        <div className="flex items-center gap-1.5">
-                          <span>{inst.customer_name}</span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="min-w-0 truncate">{inst.customer_name}</span>
                           {inst.franchise_application_id && (
-                            <span className="text-[10px] font-semibold bg-purple-100 text-purple-600 border border-purple-200 px-1.5 py-0.5 rounded-md">
+                            <span className="text-[10px] font-semibold bg-purple-100 text-purple-600 border border-purple-200 px-1.5 py-0.5 rounded-md shrink-0">
                               가맹이관
                             </span>
                           )}
                           {inst.woo_customer_id && (
-                            <span className="text-[10px] font-semibold bg-teal-100 text-teal-600 border border-teal-200 px-1.5 py-0.5 rounded-md">
+                            <span className="text-[10px] font-semibold bg-teal-100 text-teal-600 border border-teal-200 px-1.5 py-0.5 rounded-md shrink-0">
                               우국상이관
                             </span>
                           )}
+                          {inst.franchise_application_id &&
+                            (() => {
+                              const tone = resolveChannel(
+                                inst.franchise?.channel,
+                                inst.franchise?.reception_channel,
+                              );
+                              return (
+                                <span
+                                  className={`ml-1.5 shrink-0 inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${tone.soft}`}
+                                >
+                                  {tone.star && <Star size={10} className="fill-current" />}
+                                  {tone.short}
+                                </span>
+                              );
+                            })()}
                         </div>
                       </td>
                       <td
@@ -3356,12 +3403,12 @@ export default function InstallsClient({
                       >
                         {inst.customer_phone || "-"}
                       </td>
-                      <td
-                        className="px-4 py-3 text-slate-700 whitespace-nowrap overflow-hidden text-ellipsis"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {mineOnly ? (
-                          canEdit && inst.status !== "completed" ? (
+                      {mineOnly && (
+                        <td
+                          className="px-4 py-3 text-slate-700 whitespace-nowrap overflow-hidden text-ellipsis"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {canEdit && inst.status !== "completed" ? (
                             <button
                               onClick={() => setTransitNoticeModal({ id: inst.id, eta: "" })}
                               className="text-xs font-semibold px-2 py-1 rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors whitespace-nowrap"
@@ -3370,16 +3417,9 @@ export default function InstallsClient({
                             </button>
                           ) : (
                             "-"
-                          )
-                        ) : canEdit ? (
-                          <EditableInstallText
-                            value={inst.tracking_number ?? ""}
-                            onSave={(v) => saveInstallField(inst.id, "tracking_number", v)}
-                          />
-                        ) : (
-                          inst.tracking_number || "-"
-                        )}
-                      </td>
+                          )}
+                        </td>
+                      )}
                       <td
                         className="px-4 py-3 text-slate-700 whitespace-nowrap overflow-hidden text-ellipsis"
                         title={

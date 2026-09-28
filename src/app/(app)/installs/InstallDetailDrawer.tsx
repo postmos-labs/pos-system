@@ -65,6 +65,7 @@ export interface InstallDetailDraft {
   scheduled_date: string;
   scheduled_time: string;
   open_date: string;
+  tracking_number: string;
   items: { name: string; quantity: number }[];
   notes: string;
 }
@@ -422,6 +423,17 @@ export default function InstallDetailDrawer({
                     />
                   ) : (
                     <ReadValue>{installation.address || "-"}</ReadValue>
+                  )}
+                </Field>
+                <Field label="송장번호">
+                  {canEdit ? (
+                    <input
+                      value={draft?.tracking_number ?? installation.tracking_number ?? ""}
+                      onChange={(e) => onDraftChange({ tracking_number: e.target.value })}
+                      className={inputClass}
+                    />
+                  ) : (
+                    <ReadValue>{installation.tracking_number || "-"}</ReadValue>
                   )}
                 </Field>
                 <Field label="제품">
