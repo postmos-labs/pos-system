@@ -60,7 +60,7 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-2xl mb-4">
             <span className="text-white text-2xl font-bold">P</span>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">POS 전산 시스템</h1>
+          <h1 className="text-2xl font-bold text-slate-900">포스모스 POSMOS 전산</h1>
           <p className="text-slate-500 mt-1 text-sm">이름과 비밀번호로 로그인하세요</p>
         </div>
 
