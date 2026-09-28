@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import type { Profile, FranchiseApplication, VanGroup } from "@/types";
 import { FRANCHISE_STATUS_LABEL, VAN_GROUP_LABEL } from "@/types";
-import { resolveChannel } from "@/lib/franchiseChannel";
+import { CHANNEL_KEYS, resolveChannel } from "@/lib/franchiseChannel";
 import { useToast } from "@/components/ui/Toast";
 import BulkConfirmDialog from "@/components/ui/BulkConfirmDialog";
 import { NotificationHistory } from "@/components/ui/NotificationHistory";
@@ -149,6 +149,8 @@ export interface Installation {
     reception_channel?: string | null;
   } | null;
   franchise_application_id?: string;
+  /** 가맹접수와 연결되지 않은 설치건의 인입경로 (supabase/156) */
+  channel?: string | null;
   woo_customer_id?: string;
   address?: string;
   delivery_type?: string;
@@ -197,6 +199,17 @@ export type CompletionApproval = {
 
 const PAGE_SIZE = 50;
 const FETCH_LIMIT = 300;
+
+// 설치건의 인입경로 — 가맹접수에서 넘어온 건은 가맹접수의 channel, 직접 만든 건은 설치건의 channel(156).
+// stored는 실제로 저장된 값이 있을 때만 채워진다(접수채널 문구로 추정한 값은 저장값이 아니다).
+function installChannelSource(inst: Installation) {
+  const linked = !!inst.franchise_application_id;
+  const tone = linked
+    ? resolveChannel(inst.franchise?.channel, inst.franchise?.reception_channel)
+    : resolveChannel(inst.channel);
+  const stored = !tone.inferred && tone.key !== "none" ? tone.key : null;
+  return { linked, stored, tone };
+}
 
 const MAIN_COLUMNS = [
   { key: "name", label: "상호명" },
@@ -1687,6 +1700,36 @@ export default function InstallsClient({
     return true;
   }
 
+  // 인입경로 지정 — 가맹접수에서 넘어온 건은 가맹접수에 저장해 승인함·대시보드·가맹접수 목록까지 같이 맞춘다.
+  async function saveInstallChannel(inst: Installation, channel: string) {
+    if (!channel) return;
+    const linked = !!inst.franchise_application_id;
+    const { error } = linked
+      ? await supabase
+          .from("franchise_applications")
+          .update({ channel })
+          .eq("id", inst.franchise_application_id!)
+      : await supabase.from("installations").update({ channel }).eq("id", inst.id);
+    if (error) {
+      toast.error(
+        linked
+          ? "인입경로 저장 실패: " + error.message
+          : "인입경로 저장 실패: " + error.message + " (supabase/156 실행이 필요할 수 있습니다)",
+      );
+      return;
+    }
+    setInstalls((prev) =>
+      prev.map((i) => {
+        if (linked && i.franchise_application_id === inst.franchise_application_id) {
+          return { ...i, franchise: { ...(i.franchise ?? { van_company: null }), channel } };
+        }
+        if (!linked && i.id === inst.id) return { ...i, channel };
+        return i;
+      }),
+    );
+    toast.success("인입경로를 지정했습니다.");
+  }
+
   async function saveInstallField(
     id: string,
     field:
@@ -2975,12 +3018,9 @@ export default function InstallsClient({
                             가맹이관
                           </span>
                         )}
-                        {inst.franchise_application_id &&
+                        {(inst.franchise_application_id || inst.channel) &&
                           (() => {
-                            const tone = resolveChannel(
-                              inst.franchise?.channel,
-                              inst.franchise?.reception_channel,
-                            );
+                            const { tone } = installChannelSource(inst);
                             return (
                               <span
                                 className={`shrink-0 inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${tone.soft}`}
@@ -3314,31 +3354,50 @@ export default function InstallsClient({
                           )}
                         </div>
                       </td>
-                      {/* 인입경로 — 설치건에는 값이 없고 연결된 가맹접수에서 가져온다. 직접 만든 설치건은 "-" */}
-                      <td className="px-3 py-3 whitespace-nowrap">
-                        {inst.franchise_application_id ? (
-                          (() => {
-                            const tone = resolveChannel(
-                              inst.franchise?.channel,
-                              inst.franchise?.reception_channel,
-                            );
+                      {/* 인입경로 — 저장된 값이 없으면 여기서 지정한다(기사 페이지 제외). 직접 만든 설치건은 설치건 칸(156)에 저장 */}
+                      <td
+                        className="px-3 py-3 whitespace-nowrap"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {(() => {
+                          const { linked, stored, tone } = installChannelSource(inst);
+                          if (!stored && canEdit && !mineOnly) {
                             return (
-                              <span
-                                className={`inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[11px] font-bold ${tone.soft}`}
-                                title={
-                                  tone.inferred
-                                    ? `접수채널 "${inst.franchise?.reception_channel}"에서 추정`
-                                    : undefined
-                                }
-                              >
-                                {tone.star && <Star size={11} className="fill-current" />}
-                                {tone.short}
-                              </span>
+                              <AppSelect
+                                value=""
+                                onValueChange={(value) => saveInstallChannel(inst, value)}
+                                aria-label="인입경로 지정"
+                                className="h-auto border-dashed py-1 text-xs text-slate-500"
+                                options={[
+                                  {
+                                    value: "",
+                                    label: tone.inferred ? `추정: ${tone.short}` : "지정",
+                                  },
+                                  ...CHANNEL_KEYS.filter((key) => key !== "none").map((key) => ({
+                                    value: key,
+                                    label: resolveChannel(key).label,
+                                  })),
+                                ]}
+                              />
                             );
-                          })()
-                        ) : (
-                          <span className="text-xs text-slate-300">-</span>
-                        )}
+                          }
+                          if (!stored && !linked) {
+                            return <span className="text-xs text-slate-300">-</span>;
+                          }
+                          return (
+                            <span
+                              className={`inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[11px] font-bold ${tone.soft}`}
+                              title={
+                                tone.inferred
+                                  ? `접수채널 "${inst.franchise?.reception_channel}"에서 추정`
+                                  : undefined
+                              }
+                            >
+                              {tone.star && <Star size={11} className="fill-current" />}
+                              {tone.short}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td
                         className="px-2 py-3 whitespace-nowrap"
