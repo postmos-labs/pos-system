@@ -200,6 +200,7 @@ const FETCH_LIMIT = 300;
 
 const MAIN_COLUMNS = [
   { key: "name", label: "상호명" },
+  { key: "channel", label: "인입경로" },
   { key: "delivery_type", label: "구분" },
   { key: "scheduled_date", label: "설치예정일" },
   { key: "open_date", label: "오픈일" },
@@ -212,6 +213,7 @@ const MAIN_COLUMNS = [
 ] as const;
 const DEFAULT_WIDTHS: Record<string, number> = {
   name: 140,
+  channel: 110,
   delivery_type: 90,
   scheduled_date: 126,
   open_date: 116,
@@ -3310,22 +3312,33 @@ export default function InstallsClient({
                               우국상이관
                             </span>
                           )}
-                          {inst.franchise_application_id &&
-                            (() => {
-                              const tone = resolveChannel(
-                                inst.franchise?.channel,
-                                inst.franchise?.reception_channel,
-                              );
-                              return (
-                                <span
-                                  className={`ml-1.5 shrink-0 inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${tone.soft}`}
-                                >
-                                  {tone.star && <Star size={10} className="fill-current" />}
-                                  {tone.short}
-                                </span>
-                              );
-                            })()}
                         </div>
+                      </td>
+                      {/* 인입경로 — 설치건에는 값이 없고 연결된 가맹접수에서 가져온다. 직접 만든 설치건은 "-" */}
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        {inst.franchise_application_id ? (
+                          (() => {
+                            const tone = resolveChannel(
+                              inst.franchise?.channel,
+                              inst.franchise?.reception_channel,
+                            );
+                            return (
+                              <span
+                                className={`inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[11px] font-bold ${tone.soft}`}
+                                title={
+                                  tone.inferred
+                                    ? `접수채널 "${inst.franchise?.reception_channel}"에서 추정`
+                                    : undefined
+                                }
+                              >
+                                {tone.star && <Star size={11} className="fill-current" />}
+                                {tone.short}
+                              </span>
+                            );
+                          })()
+                        ) : (
+                          <span className="text-xs text-slate-300">-</span>
+                        )}
                       </td>
                       <td
                         className="px-2 py-3 whitespace-nowrap"

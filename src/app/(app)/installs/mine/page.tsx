@@ -19,7 +19,7 @@ export default async function MyInstallsPage() {
       supabase
         .from("installations")
         .select(
-          "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications(open_date)",
+          "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications(open_date, channel, reception_channel)",
         )
         .not("assigned_to", "is", null)
         .neq("delivery_type", "delivery")
