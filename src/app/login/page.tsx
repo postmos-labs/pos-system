@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,6 +16,7 @@ export default function LoginPage() {
     setError("");
 
     try {
+      // 계정 찾기와 비밀번호 로그인을 서버가 한 번에 처리하고 로그인 쿠키를 응답에 실어 준다.
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -24,31 +24,23 @@ export default function LoginPage() {
       });
       const data = await res.json().catch(() => null);
 
-      if (!res.ok || !data || data.error) {
-        setError("이름 또는 비밀번호가 올바르지 않습니다.");
-        return;
-      }
-
-      const supabase = createClient();
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: data.email,
-        password,
-      });
-
-      if (signInError) {
-        setError("이름 또는 비밀번호가 올바르지 않습니다.");
+      if (!res.ok || !data?.ok) {
+        setError(data?.error ?? "이름 또는 비밀번호가 올바르지 않습니다.");
+        setLoading(false);
         return;
       }
 
       // 보호된 화면에서 넘어왔으면 그 화면으로 돌려보낸다(링크를 다시 누르지 않아도 되게).
       // 바깥 주소로 튕기지 않도록 우리 사이트 안의 경로만 허용한다.
+      // 그 외에는 서버가 정해 준 첫 화면으로 바로 간다 — "/"를 거쳐 한 번 더 넘기지 않는다.
+      // 새 화면은 쿠키를 들고 새로 그려지므로 router.refresh()로 한 번 더 그릴 필요가 없다.
       const next = new URLSearchParams(window.location.search).get("next");
-      const back = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
-      router.push(back);
-      router.refresh();
+      const dest =
+        next && next.startsWith("/") && !next.startsWith("//") ? next : (data.home ?? "/dashboard");
+      // 이동이 끝날 때까지 "로그인 중..."을 유지해 버튼을 두 번 누르지 않게 한다.
+      router.replace(dest);
     } catch {
       setError("서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.");
-    } finally {
       setLoading(false);
     }
   }
