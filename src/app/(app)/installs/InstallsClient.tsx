@@ -208,7 +208,12 @@ function installChannelSource(inst: Installation) {
     ? resolveChannel(inst.franchise?.channel, inst.franchise?.reception_channel)
     : resolveChannel(inst.channel);
   const stored = !tone.inferred && tone.key !== "none" ? tone.key : null;
-  return { linked, stored, tone };
+  // 값이 없을 때 어디서 온 건인지로 문구를 나눈다 — 가맹접수 쪽을 고칠지, 여기서 지정할지 바로 알 수 있게.
+  const missingLabel = linked ? "가맹접수 미지정" : "설치관리 등록건 · 지정필요";
+  const inferredHint = tone.inferred
+    ? `접수채널 "${inst.franchise?.reception_channel}"로 보아 ${tone.label}로 추정`
+    : undefined;
+  return { linked, stored, tone, missingLabel, inferredHint };
 }
 
 const MAIN_COLUMNS = [
@@ -226,7 +231,7 @@ const MAIN_COLUMNS = [
 ] as const;
 const DEFAULT_WIDTHS: Record<string, number> = {
   name: 140,
-  channel: 110,
+  channel: 160,
   delivery_type: 90,
   scheduled_date: 126,
   open_date: 116,
@@ -3018,18 +3023,24 @@ export default function InstallsClient({
                             가맹이관
                           </span>
                         )}
-                        {(inst.franchise_application_id || inst.channel) &&
-                          (() => {
-                            const { tone } = installChannelSource(inst);
+                        {(() => {
+                          const { stored, tone, missingLabel } = installChannelSource(inst);
+                          if (!stored && !tone.inferred) {
                             return (
-                              <span
-                                className={`shrink-0 inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${tone.soft}`}
-                              >
-                                {tone.star && <Star size={10} className="fill-current" />}
-                                {tone.short}
+                              <span className="shrink-0 text-[10px] font-medium text-amber-700">
+                                {missingLabel}
                               </span>
                             );
-                          })()}
+                          }
+                          return (
+                            <span
+                              className={`shrink-0 inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${tone.soft}`}
+                            >
+                              {tone.star && <Star size={10} className="fill-current" />}
+                              {tone.short}
+                            </span>
+                          );
+                        })()}
                         <VanBadge
                           value={
                             Array.isArray(inst.franchise)
@@ -3360,38 +3371,38 @@ export default function InstallsClient({
                         onClick={(e) => e.stopPropagation()}
                       >
                         {(() => {
-                          const { linked, stored, tone } = installChannelSource(inst);
+                          const { stored, tone, missingLabel, inferredHint } =
+                            installChannelSource(inst);
                           if (!stored && canEdit && !mineOnly) {
                             return (
-                              <AppSelect
-                                value=""
-                                onValueChange={(value) => saveInstallChannel(inst, value)}
-                                aria-label="인입경로 지정"
-                                className="h-auto border-dashed py-1 text-xs text-slate-500"
-                                options={[
-                                  {
-                                    value: "",
-                                    label: tone.inferred ? `추정: ${tone.short}` : "지정",
-                                  },
-                                  ...CHANNEL_KEYS.filter((key) => key !== "none").map((key) => ({
-                                    value: key,
-                                    label: resolveChannel(key).label,
-                                  })),
-                                ]}
-                              />
+                              <span title={inferredHint} className="block">
+                                <AppSelect
+                                  value=""
+                                  onValueChange={(value) => saveInstallChannel(inst, value)}
+                                  aria-label="인입경로 지정"
+                                  className="h-auto border-dashed border-amber-300 bg-amber-50 py-1 text-xs font-medium text-amber-700"
+                                  options={[
+                                    { value: "", label: missingLabel },
+                                    ...CHANNEL_KEYS.filter((key) => key !== "none").map((key) => ({
+                                      value: key,
+                                      label: resolveChannel(key).label,
+                                    })),
+                                  ]}
+                                />
+                              </span>
                             );
                           }
-                          if (!stored && !linked) {
-                            return <span className="text-xs text-slate-300">-</span>;
+                          if (!stored && !tone.inferred) {
+                            return (
+                              <span className="text-xs font-medium text-amber-700">
+                                {missingLabel}
+                              </span>
+                            );
                           }
                           return (
                             <span
                               className={`inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[11px] font-bold ${tone.soft}`}
-                              title={
-                                tone.inferred
-                                  ? `접수채널 "${inst.franchise?.reception_channel}"에서 추정`
-                                  : undefined
-                              }
+                              title={inferredHint}
                             >
                               {tone.star && <Star size={11} className="fill-current" />}
                               {tone.short}
