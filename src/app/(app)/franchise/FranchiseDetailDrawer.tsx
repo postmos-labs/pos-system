@@ -782,9 +782,25 @@ export default function FranchiseDetailDrawer({
               )}
             </>
           ) : transferApproval?.status === "approved" ? (
-            <span className="self-center text-xs font-medium text-emerald-600">
-              승인 완료 · 자동 이관 처리 중
-            </span>
+            linkedInstall?.status === "rejected" ? (
+              <>
+                <span className="self-center text-xs font-medium text-red-600">
+                  기술지원 반려됨
+                </span>
+                <button
+                  type="button"
+                  onClick={onRequestTransfer}
+                  disabled={transferring}
+                  className={secondaryButton}
+                >
+                  다시 승인요청
+                </button>
+              </>
+            ) : (
+              <span className="self-center text-xs font-medium text-orange-600">
+                승인 완료 · 설치건 확인 필요
+              </span>
+            )
           ) : transferApproval?.status === "rejected" ? (
             <>
               <span className="self-center text-xs font-medium text-red-600">반려됨</span>

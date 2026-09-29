@@ -46,6 +46,11 @@ import RateBadge from "@/components/ui/RateBadge";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField } from "@/components/ui/DatePickerField";
 import { VanBadge } from "@/components/ui/VanBadge";
+import {
+  resolveTransferState,
+  TRANSFER_STATE_BADGE,
+  type TransferApprovalStatus,
+} from "./transferState";
 
 const VAN_TONE = {
   all: {
@@ -189,6 +194,7 @@ interface Props {
   sortBy: SortBy;
   csProfiles: Pick<Profile, "id" | "name" | "role">[];
   linkedInstalls: Record<string, { id: string; status: string }>;
+  transferApprovals: Record<string, { status: TransferApprovalStatus }>;
   linkedInternets: Record<string, { id: string; status: string | null; category: string | null }>;
   busyId: string | null;
   onHelp: () => void;
@@ -1030,6 +1036,12 @@ export default function FranchiseReceiptSurface(props: Props) {
               {props.rows.map((row) => {
                 const tone = statusTone(row.status);
                 const memos = pinnedMemoEntries(row.memo);
+                const transferState = resolveTransferState(
+                  props.transferApprovals[row.id]?.status,
+                  props.linkedInstalls[row.id]?.status,
+                );
+                const transferBadge =
+                  transferState === "none" ? null : TRANSFER_STATE_BADGE[transferState];
                 return (
                   <tr
                     key={row.id}
@@ -1120,7 +1132,17 @@ export default function FranchiseReceiptSurface(props: Props) {
                           </span>
                         )}
                       </button>
-                      <VanBadge value={row.van_company} className="mt-0.5 max-w-full truncate" />
+                      <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                        <VanBadge value={row.van_company} className="max-w-full truncate" />
+                        {transferBadge && (
+                          <span
+                            className={`inline-flex shrink-0 items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${transferBadge.className}`}
+                            title={transferBadge.hint}
+                          >
+                            {transferBadge.label}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="text-foreground px-2.5 py-2.5 whitespace-nowrap">
                       {row.owner_name || "-"}

@@ -111,6 +111,27 @@ async function fetchArchivedSummary(
   return { data: rows, error };
 }
 
+async function fetchTransferApprovals(supabase: SupabaseServerClient) {
+  const runQuery = (from: number, to: number) =>
+    supabase
+      .from("franchise_transfer_approvals")
+      .select(
+        "franchise_application_id,status,delivery_type,requested_by,requested_by_name,requested_at,approved_by,approved_by_name,approved_at,cs_approved_by,cs_approved_by_name,cs_approved_at,approval_notes",
+      )
+      // 상한(5000행)에 걸리면 오래된 기록부터 잘리도록 최신순으로 받는다. id는 동점 정리용.
+      .order("requested_at", { ascending: false })
+      .order("id")
+      .range(from, to);
+
+  type Row = NonNullable<Awaited<ReturnType<typeof runQuery>>["data"]>[number];
+
+  const { data: rows, error } = await fetchAllRows<Row>(runQuery, {
+    label: "fetchTransferApprovals",
+  });
+
+  return { data: rows, error };
+}
+
 export async function fetchFranchiseListData(
   supabase: SupabaseServerClient,
   userId: string,
@@ -160,11 +181,7 @@ export async function fetchFranchiseListData(
       .in("to_status", ["card_done", "toss_review_done"])
       .gte("created_at", kstPrevDayStart.toISOString())
       .lt("created_at", kstDayStart.toISOString()),
-    supabase
-      .from("franchise_transfer_approvals")
-      .select(
-        "franchise_application_id,status,delivery_type,requested_by,requested_by_name,requested_at,approved_by,approved_by_name,approved_at,cs_approved_by,cs_approved_by_name,cs_approved_at,approval_notes",
-      ),
+    fetchTransferApprovals(supabase),
     scope === "open"
       ? fetchArchivedSummary(supabase, isLargeFranchise, cutoffIso)
       : Promise.resolve({ data: [] as { status: FranchiseStatus }[], error: null }),

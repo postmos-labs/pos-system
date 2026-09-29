@@ -3293,6 +3293,7 @@ export default function FranchiseClient({
         sortBy={sortBy}
         csProfiles={csProfiles}
         linkedInstalls={localLinkedInstalls}
+        transferApprovals={transferApprovals}
         linkedInternets={localLinkedInternets}
         busyId={busyId}
         onHelp={() => setShowShortcuts(true)}
