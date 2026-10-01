@@ -52,7 +52,7 @@ type InventoryLogRow = {
 
 type CallLogRow = {
   id: string;
-  call_type: "missed" | "completed" | "reconsult";
+  call_type: "missed" | "completed";
   note: string | null;
   created_at: string;
   user_name: string | null;
@@ -473,7 +473,7 @@ export default async function AdminLogsPage({
         fromStatus: null,
         toStatus: null,
         details: null,
-        description: `${log.call_type === "missed" ? "통화 부재" : log.call_type === "reconsult" ? "재상담" : "통화 완료"}${log.note ? ` · ${log.note}` : ""}`,
+        description: `${log.call_type === "missed" ? "통화 부재" : "통화 완료"}${log.note ? ` · ${log.note}` : ""}`,
         createdAt: log.created_at,
       };
     }),
