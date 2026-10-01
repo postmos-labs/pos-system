@@ -23,6 +23,7 @@ function actionLabelFor(type: string | null, href?: string) {
   if (type === "ticket_revision_canceled") return "인입내역 보기";
   if (type === "supply_request") return "물품요청 보기";
   if (type === "own_lead") return "가맹접수 보기";
+  if (type === "franchise_reconsult" || type === "franchise_canceled") return "가맹접수 보기";
   return "알림 보기";
 }
 

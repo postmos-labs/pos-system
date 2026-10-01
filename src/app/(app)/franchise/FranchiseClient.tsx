@@ -36,6 +36,7 @@ import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { mergeRowsPreservingIdentity } from "@/lib/mergeRows";
 import { resolveChannel } from "@/lib/franchiseChannel";
 import { deleteFranchiseRows, loadArchivedFranchiseRows } from "./actions";
+import { notifyFranchiseCanceled, recordFranchiseReconsult } from "./callAlertActions";
 import { markLeadConverted } from "../leads/actions";
 import {
   approveCsResponsibleTransfer,
@@ -2674,6 +2675,16 @@ export default function FranchiseClient({
     });
   }
 
+  async function sendCancelAlert(row: FranchiseApplication, reason: string | null) {
+    const result = await notifyFranchiseCanceled({ applicationId: row.id, reason });
+    if (result.error) {
+      toast.warning("취소는 처리됐지만 알림 발송에 실패했습니다: " + result.error);
+      return;
+    }
+    if (result.notifiedCount > 0)
+      toast.success(`취소 알림을 ${result.notifiedCount}명에게 보냈습니다.`);
+  }
+
   async function recordMissedCall(
     row: FranchiseApplication,
     note?: string,
@@ -2705,6 +2716,8 @@ export default function FranchiseClient({
           : r,
       ),
     );
+    if (updated.status === "canceled" && row.status !== "canceled")
+      await sendCancelAlert(row, cancelReason || "통화 부재 3회 자동 취소");
     return true;
   }
 
@@ -2732,6 +2745,39 @@ export default function FranchiseClient({
           : r,
       ),
     );
+    return true;
+  }
+
+  async function recordReconsult(row: FranchiseApplication, note: string): Promise<boolean> {
+    const result = await recordFranchiseReconsult({ applicationId: row.id, note });
+    if (result.error) {
+      toast.error("재상담 기록 실패: " + result.error);
+      return false;
+    }
+    // 취소 사유와 같은 방식으로 비고 메모에도 남겨 목록의 비고 칸에서 바로 보이게 한다.
+    const stamped = stampMemo(currentUserName, `재상담: ${note}`);
+    const previous = (row.memo ?? "").trim();
+    const memo = previous ? `${previous}\n${stamped}` : stamped;
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("franchise_applications")
+      .update({ memo })
+      .eq("id", row.id);
+    if (error) toast.warning("재상담은 기록됐지만 비고 메모 저장에 실패했습니다: " + error.message);
+    else
+      setLocalRows((prev) =>
+        prev.map((r) =>
+          r.id === row.id ? { ...r, memo, updated_at: new Date().toISOString() } : r,
+        ),
+      );
+    if (result.notificationError)
+      toast.warning("재상담은 기록됐지만 알림 발송에 실패했습니다: " + result.notificationError);
+    else
+      toast.success(
+        result.notifiedCount > 0
+          ? `재상담을 기록하고 ${result.notifiedCount}명에게 알림을 보냈습니다.`
+          : "재상담을 기록했습니다. (알림 받을 사람 없음)",
+      );
     return true;
   }
 
@@ -3500,11 +3546,14 @@ export default function FranchiseClient({
             <FranchiseCallDrawer
               row={row}
               currentUserName={currentUserName}
+              currentUserId={currentUserId}
               onClose={() => setCallOpenId(null)}
               onRecordMissed={recordMissedCall}
               onRecordCompleted={recordCompletedCall}
-              onCancel={(row, reason) => {
-                updateStatus(row, "canceled", false, undefined, reason);
+              onReconsult={recordReconsult}
+              onCancel={async (row, reason) => {
+                const ok = await updateStatus(row, "canceled", false, undefined, reason);
+                if (ok) await sendCancelAlert(row, reason);
               }}
             />
           );
