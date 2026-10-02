@@ -47,7 +47,7 @@ export const TRANSFER_STATE_BADGE: Record<
   team_lead_waiting: {
     label: "팀장 승인대기",
     className: AMBER,
-    hint: "CS책임 승인 완료 — 팀장 최종 승인 대기",
+    hint: "팀장 최종 승인 대기",
   },
   approval_rejected: {
     label: "이관 반려",

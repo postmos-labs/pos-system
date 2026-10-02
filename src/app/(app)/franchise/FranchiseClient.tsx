@@ -2339,8 +2339,8 @@ export default function FranchiseClient({
   }
 
   function requestTransferApproval(row: FranchiseApplication) {
-    if (!["cs_manager", "cs_responsible"].includes(currentUserApprovalRole)) {
-      toast.warning("이관 승인요청은 CS매니저 또는 CS책임만 등록할 수 있습니다.");
+    if (!["cs_manager", "cs_responsible", "team_lead"].includes(currentUserApprovalRole)) {
+      toast.warning("이관 승인요청은 CS매니저·CS책임·팀장만 등록할 수 있습니다.");
       return;
     }
     const existing = transferApprovals[row.id];
@@ -2365,8 +2365,9 @@ export default function FranchiseClient({
     if (!row) return;
     const note = transferRequestNote.trim();
     const requestedByResponsible = currentUserApprovalRole === "cs_responsible";
+    const skipsCsApproval = requestedByResponsible || currentUserApprovalRole === "team_lead";
     const existing = transferApprovals[row.id];
-    const approvalStatus = requestedByResponsible
+    const approvalStatus = skipsCsApproval
       ? ("cs_responsible_approved" as const)
       : ("requested" as const);
     const approvalNotes = appendApprovalNote(
@@ -2399,13 +2400,13 @@ export default function FranchiseClient({
     }
     if (result.notificationError) {
       toast.warning(
-        `승인요청은 등록됐지만 ${requestedByResponsible ? "팀장" : "CS책임"} 팝업 알림에 실패했습니다: ` +
+        `승인요청은 등록됐지만 ${skipsCsApproval ? "팀장" : "CS책임"} 팝업 알림에 실패했습니다: ` +
           result.notificationError,
       );
     }
     setTransferApprovals((prev) => ({ ...prev, [row.id]: approval }));
     toast.success(
-      requestedByResponsible
+      skipsCsApproval
         ? "팀장 최종 승인요청을 등록했습니다."
         : "기술지원 이관 승인요청을 등록했습니다.",
     );
@@ -2564,7 +2565,9 @@ export default function FranchiseClient({
       for (const { row, result } of succeeded) {
         const approvalStatus =
           "approvalStatus" in result && result.approvalStatus ? result.approvalStatus : "requested";
-        const requestedByResponsible = approvalStatus === "cs_responsible_approved";
+        const requestedByResponsible =
+          approvalStatus === "cs_responsible_approved" &&
+          currentUserApprovalRole === "cs_responsible";
         next[row.id] = {
           franchise_application_id: row.id,
           status: approvalStatus,
@@ -2594,12 +2597,12 @@ export default function FranchiseClient({
 
     if (succeeded.length)
       toast.success(
-        `${succeeded.length}건 ${currentUserApprovalRole === "cs_responsible" ? "팀장 최종 " : ""}기술지원 이관 승인요청 완료`,
+        `${succeeded.length}건 ${["cs_responsible", "team_lead"].includes(currentUserApprovalRole) ? "팀장 최종 " : ""}기술지원 이관 승인요청 완료`,
       );
     if (failed.length) toast.error(`${failed.length}건 승인요청 실패: ${failed[0].result.error}`);
     if (notificationFailed.length)
       toast.warning(
-        `${notificationFailed.length}건의 ${currentUserApprovalRole === "cs_responsible" ? "팀장" : "CS책임"} 팝업 알림 발송에 실패했습니다.`,
+        `${notificationFailed.length}건의 ${["cs_responsible", "team_lead"].includes(currentUserApprovalRole) ? "팀장" : "CS책임"} 팝업 알림 발송에 실패했습니다.`,
       );
   }
 
@@ -3039,7 +3042,7 @@ export default function FranchiseClient({
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-semibold text-slate-700">
-                {currentUserApprovalRole === "cs_responsible"
+                {["cs_responsible", "team_lead"].includes(currentUserApprovalRole)
                   ? "팀장에게 전달할 비고"
                   : "CS책임에게 전달할 비고"}
               </label>

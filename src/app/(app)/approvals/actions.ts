@@ -38,10 +38,22 @@ export async function requestFranchiseTransfer(franchiseApplicationId: string, n
     .select("name, approval_role")
     .eq("id", user.id)
     .single();
-  if (!profile || !["cs_manager", "cs_responsible"].includes(profile.approval_role ?? "")) {
+  if (
+    !profile ||
+    !["cs_manager", "cs_responsible", "team_lead"].includes(profile.approval_role ?? "")
+  ) {
     return { error: "이관 승인요청 권한이 없습니다." };
   }
   const admin = createAdminClient();
+  if (profile.approval_role === "team_lead") {
+    const { count, error: approverCountError } = await admin
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("approval_role", "team_lead")
+      .neq("id", user.id);
+    if (approverCountError) return { error: approverCountError.message };
+    if (!count) return { error: "최종 승인할 다른 팀장이 없어 승인요청을 올릴 수 없습니다." };
+  }
   const [{ data: franchise }, { data: existingApproval }, { data: existingInstall }] =
     await Promise.all([
       admin
@@ -73,7 +85,8 @@ export async function requestFranchiseTransfer(franchiseApplicationId: string, n
 
   const requestedAt = new Date().toISOString();
   const requestedByResponsible = profile.approval_role === "cs_responsible";
-  const approvalStatus: "requested" | "cs_responsible_approved" = requestedByResponsible
+  const skipsCsApproval = requestedByResponsible || profile.approval_role === "team_lead";
+  const approvalStatus: "requested" | "cs_responsible_approved" = skipsCsApproval
     ? "cs_responsible_approved"
     : "requested";
   const approvalValues = {
@@ -157,7 +170,7 @@ export async function requestFranchiseTransfer(franchiseApplicationId: string, n
     }
     return { error: "감사 로그 저장에 실패해 승인요청을 취소했습니다: " + logError.message };
   }
-  const nextApprovalRole = requestedByResponsible ? "team_lead" : "cs_responsible";
+  const nextApprovalRole = skipsCsApproval ? "team_lead" : "cs_responsible";
   const { data: approvers } = await admin
     .from("profiles")
     .select("id")
@@ -168,12 +181,10 @@ export async function requestFranchiseTransfer(franchiseApplicationId: string, n
         approvers.map(({ id }) => ({
           user_id: id,
           franchise_application_id: franchiseApplicationId,
-          type: requestedByResponsible ? "approval_team_lead_transfer" : "approval_cs_transfer",
-          title: requestedByResponsible
-            ? "[최종 승인요청] 기술지원 이관"
-            : "[승인요청] 기술지원 이관",
-          body: requestedByResponsible
-            ? `${profile.name ?? "CS책임"}님이 팀장 최종 승인을 요청했습니다.`
+          type: skipsCsApproval ? "approval_team_lead_transfer" : "approval_cs_transfer",
+          title: skipsCsApproval ? "[최종 승인요청] 기술지원 이관" : "[승인요청] 기술지원 이관",
+          body: skipsCsApproval
+            ? `${profile.name ?? (requestedByResponsible ? "CS책임" : "팀장")}님이 팀장 최종 승인을 요청했습니다.`
             : `${profile.name ?? "CS 담당자"}님이 CS책임 승인을 요청했습니다.`,
         })),
       )
