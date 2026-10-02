@@ -8,6 +8,7 @@ import { rejectFranchiseTransfer } from "./actions";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
 import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
+import { VanBadge } from "@/components/ui/VanBadge";
 import type { ApprovalNote } from "@/lib/approvalNotes";
 import type { ChannelTone } from "@/lib/franchiseChannel";
 
@@ -19,6 +20,7 @@ type Props = {
   phone: string | null;
   receptionChannel: string | null;
   receptionDate: string | null;
+  vanCompany: string | null;
   requesterName: string;
   csApproverName: string | null;
   approvalRole: "cs_responsible" | "team_lead";
@@ -34,6 +36,7 @@ export default function TransferApprovalItem({
   phone,
   receptionChannel,
   receptionDate,
+  vanCompany,
   requesterName,
   csApproverName,
   approvalRole,
@@ -84,11 +87,14 @@ export default function TransferApprovalItem({
           {tone.short}
         </span>
         <div className="min-w-0 flex-1">
-          <p
-            className={`truncate text-[15px] font-semibold text-slate-900 ${tone.star ? "font-bold text-violet-950" : ""}`}
-          >
-            {title}
-          </p>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p
+              className={`min-w-0 truncate text-[15px] font-semibold text-slate-900 ${tone.star ? "font-bold text-violet-950" : ""}`}
+            >
+              {title}
+            </p>
+            <VanBadge value={vanCompany} />
+          </div>
           <p className="text-xs text-slate-500 mt-0.5">
             {approvalName} · {approvalText}
             {tone.inferred && receptionChannel && ` · 접수채널 "${receptionChannel}"`}

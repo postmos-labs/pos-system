@@ -7,6 +7,8 @@ import {
   CHANNEL_KEYS,
   type ChannelKey,
 } from "@/lib/franchiseChannel";
+import { vanGroupOf } from "@/lib/vanGroup";
+import { VAN_GROUP_LABEL, type VanGroup } from "@/types";
 import TransferApprovalItem from "./TransferApprovalItem";
 import ApprovalButton from "./ApprovalButton";
 import type { ApprovalNote } from "@/lib/approvalNotes";
@@ -20,6 +22,7 @@ export type TransferApprovalRow = {
   channel: string | null;
   receptionChannel: string | null;
   receptionDate: string | null;
+  vanCompany: string | null;
   requesterName: string;
   csApproverName: string | null;
   notes: ApprovalNote[];
@@ -30,8 +33,25 @@ type Props = {
   approvalRole: "cs_responsible" | "team_lead";
 };
 
+const VAN_TABS: { key: "all" | VanGroup; label: string; active: string; idle: string }[] = [
+  { key: "all", label: "전체", active: "bg-slate-800 text-white", idle: "text-slate-600" },
+  {
+    key: "toss",
+    label: VAN_GROUP_LABEL.toss,
+    active: "bg-blue-600 text-white",
+    idle: "text-blue-600",
+  },
+  {
+    key: "kicc",
+    label: VAN_GROUP_LABEL.kicc,
+    active: "bg-emerald-600 text-white",
+    idle: "text-emerald-600",
+  },
+];
+
 export default function TransferApprovalList({ items, approvalRole }: Props) {
   const [filter, setFilter] = useState<ChannelKey | null>(null);
+  const [vanFilter, setVanFilter] = useState<VanGroup | "">("");
 
   const sortedItems = useMemo(() => {
     return items
@@ -39,6 +59,7 @@ export default function TransferApprovalList({ items, approvalRole }: Props) {
         item,
         index,
         tone: resolveChannel(item.channel, item.receptionChannel),
+        van: vanGroupOf(item.vanCompany),
       }))
       .sort((a, b) => {
         const rankDiff = CHANNEL_RANK[a.tone.key] - CHANNEL_RANK[b.tone.key];
@@ -54,16 +75,58 @@ export default function TransferApprovalList({ items, approvalRole }: Props) {
       direct_sales: 0,
       none: 0,
     };
-    for (const { tone } of sortedItems) {
+    for (const { tone, van } of sortedItems) {
+      if (vanFilter && van !== vanFilter) continue;
       result[tone.key] += 1;
     }
     return result;
-  }, [sortedItems]);
+  }, [sortedItems, vanFilter]);
 
-  const visibleItems = filter ? sortedItems.filter(({ tone }) => tone.key === filter) : sortedItems;
+  const vanCounts = useMemo(() => {
+    const result: Record<"all" | VanGroup, number> = { all: 0, toss: 0, kicc: 0 };
+    for (const { tone, van } of sortedItems) {
+      if (filter && tone.key !== filter) continue;
+      result.all += 1;
+      if (van) result[van] += 1;
+    }
+    return result;
+  }, [sortedItems, filter]);
+
+  const visibleItems = sortedItems.filter(
+    ({ tone, van }) => (!filter || tone.key === filter) && (!vanFilter || van === vanFilter),
+  );
 
   return (
     <div>
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 px-6 py-3">
+        {VAN_TABS.map((tab) => {
+          const active = tab.key === "all" ? vanFilter === "" : vanFilter === tab.key;
+          const count = vanCounts[tab.key];
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() =>
+                setVanFilter((current) => (tab.key === "all" || current === tab.key ? "" : tab.key))
+              }
+              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
+                active
+                  ? `${tab.active} ring-2 ring-slate-300 ring-offset-1`
+                  : `border border-slate-200 bg-white ${tab.idle}`
+              } ${count === 0 ? "opacity-50" : ""}`}
+            >
+              {tab.label}
+              <span
+                className={`inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[11px] ${
+                  active ? "bg-white/25" : "bg-slate-100"
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
       <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 px-6 py-3">
         {CHANNEL_KEYS.map((key) => {
           const tone = resolveChannel(key === "none" ? null : key);
@@ -107,6 +170,7 @@ export default function TransferApprovalList({ items, approvalRole }: Props) {
                 phone={item.phone}
                 receptionChannel={item.receptionChannel}
                 receptionDate={item.receptionDate}
+                vanCompany={item.vanCompany}
                 requesterName={item.requesterName}
                 csApproverName={item.csApproverName}
                 approvalRole={approvalRole}
@@ -124,7 +188,7 @@ export default function TransferApprovalList({ items, approvalRole }: Props) {
           ))}
         </div>
       ) : (
-        <div className="px-6 py-4 text-sm text-slate-500">해당 경로의 대기 건이 없습니다.</div>
+        <div className="px-6 py-4 text-sm text-slate-500">해당 조건의 대기 건이 없습니다.</div>
       )}
     </div>
   );

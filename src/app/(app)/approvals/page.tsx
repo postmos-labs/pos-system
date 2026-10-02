@@ -37,6 +37,7 @@ type TransferApproval = {
     channel: string | null;
     reception_channel: string | null;
     reception_date: string | null;
+    van_company: string | null;
   } | null;
 };
 
@@ -115,7 +116,7 @@ export default async function ApprovalsPage() {
       ? supabase
           .from("franchise_transfer_approvals")
           .select(
-            "franchise_application_id, requested_by, requested_by_name, requested_at, cs_approved_by_name, approval_notes, franchise:franchise_applications(id, business_name, owner_name, address, phone, channel, reception_channel, reception_date)",
+            "franchise_application_id, requested_by, requested_by_name, requested_at, cs_approved_by_name, approval_notes, franchise:franchise_applications(id, business_name, owner_name, address, phone, channel, reception_channel, reception_date, van_company)",
           )
           .eq(
             "status",
@@ -209,6 +210,7 @@ export default async function ApprovalsPage() {
                     channel: approval.franchise?.channel ?? null,
                     receptionChannel: approval.franchise?.reception_channel ?? null,
                     receptionDate: approval.franchise?.reception_date ?? null,
+                    vanCompany: approval.franchise?.van_company ?? null,
                     requesterName: approval.requested_by_name,
                     csApproverName: approval.cs_approved_by_name,
                     notes: approval.approval_notes,

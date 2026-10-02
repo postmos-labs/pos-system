@@ -35,6 +35,7 @@ import { formatPhone, formatBusinessNumber, formatDateText, digitsOnly } from "@
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { mergeRowsPreservingIdentity } from "@/lib/mergeRows";
 import { resolveChannel } from "@/lib/franchiseChannel";
+import { parseVanList, vanGroupOf } from "@/lib/vanGroup";
 import { deleteFranchiseRows, loadArchivedFranchiseRows } from "./actions";
 import { markLeadConverted } from "../leads/actions";
 import {
@@ -64,7 +65,6 @@ import {
   FRANCHISE_INSTALL_LOG_LABEL,
   FRANCHISE_TRANSFER_LOG_LABEL,
   VAN_COMPANIES,
-  KICC_VAN_COMPANY,
 } from "@/types";
 import type { DocCase } from "@/lib/solapi";
 import { useToast } from "@/components/ui/Toast";
@@ -129,22 +129,6 @@ const EQUIPMENT_CATALOG = [
   "원격",
 ];
 const INTERNET_PROVIDERS = ["3S", "백메가", "엑티브"];
-
-function parseVanList(value: string) {
-  return value
-    ? value
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : [];
-}
-
-function vanGroupOf(value: string | null | undefined): VanGroup | null {
-  const list = parseVanList(value ?? "");
-  if (list.length === 0) return null;
-  if (list.includes(KICC_VAN_COMPANY)) return "kicc";
-  return "toss";
-}
 
 const AUTO_FORMAT: Partial<Record<keyof FranchiseApplication, (raw: string) => string>> = {
   phone: formatPhone,
