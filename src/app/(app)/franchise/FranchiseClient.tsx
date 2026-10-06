@@ -3249,6 +3249,7 @@ export default function FranchiseClient({
         rows={pagedRows}
         allRows={localRows}
         filteredCount={filteredRows.length}
+        pageSize={PAGE_SIZE}
         todayDate={todayDate}
         selected={selected}
         allChecked={allChecked}

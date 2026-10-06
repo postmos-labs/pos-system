@@ -168,6 +168,7 @@ interface Props {
   allChecked: boolean;
   page: number;
   totalPages: number;
+  pageSize: number;
   kpiCounts: Record<KpiKey, number>;
   stageStats: StageStats;
   successRateStats: { rate: number | null; total: number; success: number };
@@ -950,10 +951,17 @@ export default function FranchiseReceiptSurface(props: Props) {
             );
           })}
         </div>
+        <span
+          className="text-muted-foreground flex-1 pl-4 text-sm font-semibold"
+          title="현재 필터 조건에 맞는 접수 건수"
+        >
+          {props.statusFilter
+            ? (FRANCHISE_STATUS_LABEL[props.statusFilter as FranchiseStatus] ?? props.statusFilter)
+            : "전체"}{" "}
+          <span className="text-primary text-lg font-bold tabular-nums">{props.filteredCount}</span>
+          건
+        </span>
         <div className="flex shrink-0 items-center gap-1 pb-2.5">
-          <span className="text-foreground text-sm font-semibold">
-            전체 {props.filteredCount}건
-          </span>
           {activeTab === "canceled" && (
             <button
               type="button"
@@ -974,7 +982,7 @@ export default function FranchiseReceiptSurface(props: Props) {
 
       <div className="border-border bg-card shrink-0 overflow-hidden rounded-xl border">
         <div className="overflow-x-auto rounded-t-xl">
-          <table className="w-full min-w-[1610px] border-collapse text-[12.5px]">
+          <table className="w-full min-w-[1660px] border-collapse text-[12.5px]">
             <thead>
               <tr className="bg-surface-subtle border-border border-b">
                 <th className="w-10 px-3 py-2.5 text-left">
@@ -985,6 +993,9 @@ export default function FranchiseReceiptSurface(props: Props) {
                     onChange={props.onToggleAll}
                     className="accent-primary size-[15px] cursor-pointer"
                   />
+                </th>
+                <th className="text-muted-foreground w-12 px-2 py-2.5 text-center font-semibold whitespace-nowrap">
+                  No
                 </th>
                 <th className="w-11 px-1 py-2.5 text-left">
                   <button
@@ -1025,7 +1036,7 @@ export default function FranchiseReceiptSurface(props: Props) {
               {props.rows.length === 0 && (
                 <tr className="border-border border-b">
                   <td
-                    colSpan={15}
+                    colSpan={16}
                     style={{ height: 50 * 49 }}
                     className="text-muted-foreground text-center text-sm"
                   >
@@ -1033,7 +1044,7 @@ export default function FranchiseReceiptSurface(props: Props) {
                   </td>
                 </tr>
               )}
-              {props.rows.map((row) => {
+              {props.rows.map((row, index) => {
                 const tone = statusTone(row.status);
                 const memos = pinnedMemoEntries(row.memo);
                 const transferState = resolveTransferState(
@@ -1055,6 +1066,9 @@ export default function FranchiseReceiptSurface(props: Props) {
                         onChange={() => props.onToggleRow(row.id)}
                         className="accent-primary size-[15px] cursor-pointer"
                       />
+                    </td>
+                    <td className="text-muted-foreground px-2 py-2.5 text-center tabular-nums">
+                      {(props.page - 1) * props.pageSize + index + 1}
                     </td>
                     <td className="px-1 py-1.5 text-center">
                       <button
@@ -1261,7 +1275,7 @@ export default function FranchiseReceiptSurface(props: Props) {
               {props.rows.length > 0 &&
                 Array.from({ length: Math.max(0, 50 - props.rows.length) }).map((_, index) => (
                   <tr key={`filler-${index}`} aria-hidden="true" className="border-border border-b">
-                    <td colSpan={14} style={{ height: 49 }} />
+                    <td colSpan={15} style={{ height: 49 }} />
                   </tr>
                 ))}
             </tbody>
