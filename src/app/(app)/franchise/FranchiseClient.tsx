@@ -1240,22 +1240,30 @@ export default function FranchiseClient({
     });
   }, [rows, archivedRows]);
 
-  const loadArchived = useCallback(async () => {
-    if (archivedLoading || archivedLoaded) return;
-    setArchivedLoading(true);
-    // 가맹접수 목록은 대형도 함께 보여 주므로, 보관된 건을 불러올 때도 대형을 빼지 않는다.
-    const result = await loadArchivedFranchiseRows(mode === "large_franchise" ? true : "all");
-    setArchivedLoading(false);
-    if (result.error) {
-      toast.error("이전 건 불러오기 실패: " + result.error);
-      return;
-    }
-    setArchivedRows(result.rows);
-    setLocalLinkedInstalls((prev) => ({ ...result.linkedInstalls, ...prev }));
-    setLocalLinkedInternets((prev) => ({ ...result.linkedInternets, ...prev }));
-    setArchivedLoaded(true);
-    toast.success(`${result.rows.length}건을 불러왔습니다.`);
-  }, [archivedLoading, archivedLoaded, mode, toast]);
+  const loadArchivedRows = useCallback(
+    async (auto: boolean) => {
+      if (archivedLoading || archivedLoaded) return;
+      setArchivedLoading(true);
+      // 가맹접수 목록은 대형도 함께 보여 주므로, 보관된 건을 불러올 때도 대형을 빼지 않는다.
+      const result = await loadArchivedFranchiseRows(mode === "large_franchise" ? true : "all");
+      setArchivedLoading(false);
+      if (result.error) {
+        toast.error("이전 건 불러오기 실패: " + result.error);
+        return;
+      }
+      setArchivedRows(result.rows);
+      setLocalLinkedInstalls((prev) => ({ ...result.linkedInstalls, ...prev }));
+      setLocalLinkedInternets((prev) => ({ ...result.linkedInternets, ...prev }));
+      setArchivedLoaded(true);
+      toast.success(
+        auto
+          ? `검색 결과가 없어 이전 건 ${result.rows.length}건까지 불러와 다시 찾았습니다.`
+          : `${result.rows.length}건을 불러왔습니다.`,
+      );
+    },
+    [archivedLoading, archivedLoaded, mode, toast],
+  );
+  const loadArchived = useCallback(() => loadArchivedRows(false), [loadArchivedRows]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -1509,6 +1517,31 @@ export default function FranchiseClient({
   }
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const pagedRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // 검색한 결과가 없으면 보관된(오래된 완료·취소) 건까지 자동으로 불러와 다시 찾는다.
+  // 평소에는 오래된 건을 읽지 않아 목록이 빠르고, 번호·상호를 쳤는데 안 나올 때만 한 번 더 읽는다.
+  // 불러오기가 실패하면 같은 조건이 계속 남아 있으므로, 자동 시도는 한 번만 하고 이후엔 버튼으로 받게 한다.
+  const autoArchiveTriedRef = useRef(false);
+  useEffect(() => {
+    if (archivedLoaded || archivedLoading || autoArchiveTriedRef.current) return;
+    if (!archivedSummary || archivedSummary.total === 0) return;
+    if (!search.trim() && !memoSearch.trim()) return;
+    if (filteredRows.length > 0) return;
+    // 타이핑 도중 잠깐 결과가 비는 것만으로 읽지 않도록 잠시 기다린다.
+    const timer = setTimeout(() => {
+      autoArchiveTriedRef.current = true;
+      void loadArchivedRows(true);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [
+    archivedLoaded,
+    archivedLoading,
+    archivedSummary,
+    search,
+    memoSearch,
+    filteredRows.length,
+    loadArchivedRows,
+  ]);
 
   const highlightAppliedRef = useRef(false);
   useEffect(() => {
