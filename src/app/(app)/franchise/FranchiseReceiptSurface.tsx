@@ -434,12 +434,6 @@ export default function FranchiseReceiptSurface(props: Props) {
       view: "approved" as TableView,
     },
     {
-      key: "techRejected",
-      label: "기술지원 반려",
-      count: props.tableViewCounts.tech_rejected,
-      view: "tech_rejected" as TableView,
-    },
-    {
       key: "persistentAbsence",
       label: "지속적 부재",
       count: props.tableViewCounts.persistent_absence,
@@ -450,6 +444,12 @@ export default function FranchiseReceiptSurface(props: Props) {
       label: "취소",
       count: props.tableViewCounts.canceled,
       view: "canceled" as TableView,
+    },
+    {
+      key: "techRejected",
+      label: "기술지원 반려",
+      count: props.tableViewCounts.tech_rejected,
+      view: "tech_rejected" as TableView,
     },
   ];
   const activeTab =
