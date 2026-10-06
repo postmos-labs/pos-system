@@ -1,0 +1,32 @@
+# 가맹접수 기술지원 반려 현황 — 반려 탭과 사유 표시
+
+## 배경
+
+- 이관 후 기술지원이 설치건을 반려해도 CS는 가맹접수 화면에서 사유를 알 수 없고, 기술지원 택배발송 탭에서 설치건을 열어야 확인된다는 요청
+
+## 결정
+
+- 탭 줄에 "기술지원 반려" 탭 추가 (건수 포함) — 승인 기록이 approved인데 설치건이 rejected인 건만 모아 봄
+- 반려된 행 바로 아래에 전체 폭 한 줄로 반려 사유 표시. 어느 탭에서 봐도 보임
+- 사유는 `installations.notes` (기술지원 상세의 비고와 같은 값). 응답이 커지지 않도록 반려된 설치건에 한해 별도 조회
+- 사유를 안 적었으면 "사유 미입력"으로 표시
+- 판정을 `isTechRejected` 하나로 합쳐 목록 필터와 탭 건수가 같이 씀. 화면 배지(`tech_rejected`)와도 같은 판정
+- 다시 승인요청해서 승인이 대기 상태가 되면 반려 현황에서 빠짐 (의도한 동작)
+
+## 참고
+
+- 사유는 반려 때 설치건 비고에 덮어써지는 값이라, 기술지원이 이후 비고를 고치면 함께 바뀜
+- 반려 일시·반려자는 이번에 넣지 않음
+- 가맹접수 없이 설치관리에서 직접 만든 설치건이 반려된 경우는 가맹접수 목록에 행이 없어 여기에 나오지 않음
+- 반려 목록은 화면을 열 때 불러오므로 새 반려는 화면을 다시 열어야 반영됨
+
+## 영향 파일
+
+- `src/app/(app)/franchise/fetchFranchiseListData.ts` — 반려된 설치건 사유 조회, `linkedInstalls.reject_reason`에 합침
+- `src/app/(app)/franchise/actions.ts` — `linkedInstalls` 반환 타입에 `reject_reason` 추가
+- `src/app/(app)/franchise/FranchiseClient.tsx` — `isTechRejected` 추가, `matchesFilters`·`tableViewCounts`가 사용
+- `src/app/(app)/franchise/FranchiseReceiptSurface.tsx` — "기술지원 반려" 탭, 반려된 행 아래 사유 줄
+
+## DB
+
+- 변경 없음

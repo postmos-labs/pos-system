@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -88,6 +88,7 @@ type TableView =
   | "doc_incomplete"
   | "doc_waiting"
   | "approved"
+  | "tech_rejected"
   | "persistent_absence"
   | "canceled";
 type KpiKey =
@@ -194,7 +195,7 @@ interface Props {
   dateTo: string;
   sortBy: SortBy;
   csProfiles: Pick<Profile, "id" | "name" | "role">[];
-  linkedInstalls: Record<string, { id: string; status: string }>;
+  linkedInstalls: Record<string, { id: string; status: string; reject_reason?: string | null }>;
   transferApprovals: Record<string, { status: TransferApprovalStatus }>;
   linkedInternets: Record<string, { id: string; status: string | null; category: string | null }>;
   busyId: string | null;
@@ -433,6 +434,12 @@ export default function FranchiseReceiptSurface(props: Props) {
       view: "approved" as TableView,
     },
     {
+      key: "techRejected",
+      label: "기술지원 반려",
+      count: props.tableViewCounts.tech_rejected,
+      view: "tech_rejected" as TableView,
+    },
+    {
       key: "persistentAbsence",
       label: "지속적 부재",
       count: props.tableViewCounts.persistent_absence,
@@ -452,11 +459,13 @@ export default function FranchiseReceiptSurface(props: Props) {
         ? "docMissing"
         : props.tableView === "approved"
           ? "techDone"
-          : props.tableView === "persistent_absence"
-            ? "persistentAbsence"
-            : props.tableView === "canceled"
-              ? "canceled"
-              : props.tableView;
+          : props.tableView === "tech_rejected"
+            ? "techRejected"
+            : props.tableView === "persistent_absence"
+              ? "persistentAbsence"
+              : props.tableView === "canceled"
+                ? "canceled"
+                : props.tableView;
   const trendBadge = (value: number) => {
     if (value === 0) return null;
     const up = value > 0;
@@ -1054,229 +1063,240 @@ export default function FranchiseReceiptSurface(props: Props) {
                 const transferBadge =
                   transferState === "none" ? null : TRANSFER_STATE_BADGE[transferState];
                 return (
-                  <tr
-                    key={row.id}
-                    className={`border-border border-b ${props.selected.has(row.id) ? "bg-primary-muted" : ""}`}
-                  >
-                    <td className="px-3 py-2.5">
-                      <input
-                        aria-label={`${row.business_name || row.owner_name || "접수"} 선택`}
-                        type="checkbox"
-                        checked={props.selected.has(row.id)}
-                        onChange={() => props.onToggleRow(row.id)}
-                        className="accent-primary size-[15px] cursor-pointer"
-                      />
-                    </td>
-                    <td className="text-muted-foreground px-2 py-2.5 text-center tabular-nums">
-                      {props.filteredCount - (props.page - 1) * props.pageSize - index}
-                    </td>
-                    <td className="px-1 py-1.5 text-center">
-                      <button
-                        type="button"
-                        onClick={() => props.onToggleLargeFranchise(row)}
-                        aria-label={`${row.business_name || row.owner_name || "접수"} ${props.mode === "large_franchise" ? "가맹접수로 되돌리기" : "대형 가맹점으로 이동"}`}
-                        title={
-                          props.mode === "large_franchise"
-                            ? "가맹접수로 되돌리기"
-                            : "대형 가맹점으로 이동"
-                        }
-                        aria-pressed={props.mode === "large_franchise"}
-                        className="text-muted-foreground hover:text-foreground inline-flex size-8 items-center justify-center rounded-md transition-colors"
-                      >
-                        <Star
-                          className={`size-4 ${props.mode === "large_franchise" ? "fill-current text-amber-400" : ""}`}
+                  <Fragment key={row.id}>
+                    <tr
+                      className={`border-border border-b ${props.selected.has(row.id) ? "bg-primary-muted" : ""}`}
+                    >
+                      <td className="px-3 py-2.5">
+                        <input
+                          aria-label={`${row.business_name || row.owner_name || "접수"} 선택`}
+                          type="checkbox"
+                          checked={props.selected.has(row.id)}
+                          onChange={() => props.onToggleRow(row.id)}
+                          className="accent-primary size-[15px] cursor-pointer"
                         />
-                      </button>
-                    </td>
-                    <td className="px-2.5 py-2.5 whitespace-nowrap">
-                      <DatePickerField
-                        ariaLabel="접수일"
-                        value={row.reception_date ?? ""}
-                        onChange={(value) => props.onSaveField(row, "reception_date", value)}
-                        className="h-auto border-none bg-transparent px-0 text-[12.5px]"
-                      />
-                    </td>
-                    <td className="px-2.5 py-2.5 whitespace-nowrap">
-                      <DatePickerField
-                        ariaLabel="오픈 예정일"
-                        value={row.open_date ?? ""}
-                        onChange={(value) => props.onSaveField(row, "open_date", value)}
-                        className="h-auto border-none bg-transparent px-0 text-[12.5px]"
-                      />
-                    </td>
-                    <td className="px-2.5 py-2.5 whitespace-nowrap">
-                      <AppSelect
-                        aria-label="채널"
-                        value={row.channel ?? ""}
-                        onValueChange={(value) => props.onSaveField(row, "channel", value)}
-                        className="text-foreground h-auto border-none bg-transparent py-0 pr-6 pl-0 text-[12.5px]"
-                        options={[
-                          { value: "", label: "미지정" },
-                          ...(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map(
-                            (c) => ({
-                              value: c,
-                              label: FRANCHISE_CHANNEL_LABEL[c],
-                            }),
-                          ),
-                        ]}
-                      />
-                    </td>
-                    <td className="px-2.5 py-2.5 whitespace-nowrap">
-                      <span className="text-foreground text-[12.5px]">
-                        {row.case_type ? FRANCHISE_CASE_TYPE_LABEL[row.case_type] : "미지정"}
-                      </span>
-                      {(row.is_rental || row.is_installment) && (
-                        <span className="text-muted-foreground ml-1 text-[11px]">
-                          {[row.is_rental && "렌탈", row.is_installment && "할부"]
-                            .filter(Boolean)
-                            .join("·")}
+                      </td>
+                      <td className="text-muted-foreground px-2 py-2.5 text-center tabular-nums">
+                        {props.filteredCount - (props.page - 1) * props.pageSize - index}
+                      </td>
+                      <td className="px-1 py-1.5 text-center">
+                        <button
+                          type="button"
+                          onClick={() => props.onToggleLargeFranchise(row)}
+                          aria-label={`${row.business_name || row.owner_name || "접수"} ${props.mode === "large_franchise" ? "가맹접수로 되돌리기" : "대형 가맹점으로 이동"}`}
+                          title={
+                            props.mode === "large_franchise"
+                              ? "가맹접수로 되돌리기"
+                              : "대형 가맹점으로 이동"
+                          }
+                          aria-pressed={props.mode === "large_franchise"}
+                          className="text-muted-foreground hover:text-foreground inline-flex size-8 items-center justify-center rounded-md transition-colors"
+                        >
+                          <Star
+                            className={`size-4 ${props.mode === "large_franchise" ? "fill-current text-amber-400" : ""}`}
+                          />
+                        </button>
+                      </td>
+                      <td className="px-2.5 py-2.5 whitespace-nowrap">
+                        <DatePickerField
+                          ariaLabel="접수일"
+                          value={row.reception_date ?? ""}
+                          onChange={(value) => props.onSaveField(row, "reception_date", value)}
+                          className="h-auto border-none bg-transparent px-0 text-[12.5px]"
+                        />
+                      </td>
+                      <td className="px-2.5 py-2.5 whitespace-nowrap">
+                        <DatePickerField
+                          ariaLabel="오픈 예정일"
+                          value={row.open_date ?? ""}
+                          onChange={(value) => props.onSaveField(row, "open_date", value)}
+                          className="h-auto border-none bg-transparent px-0 text-[12.5px]"
+                        />
+                      </td>
+                      <td className="px-2.5 py-2.5 whitespace-nowrap">
+                        <AppSelect
+                          aria-label="채널"
+                          value={row.channel ?? ""}
+                          onValueChange={(value) => props.onSaveField(row, "channel", value)}
+                          className="text-foreground h-auto border-none bg-transparent py-0 pr-6 pl-0 text-[12.5px]"
+                          options={[
+                            { value: "", label: "미지정" },
+                            ...(Object.keys(FRANCHISE_CHANNEL_LABEL) as FranchiseChannel[]).map(
+                              (c) => ({
+                                value: c,
+                                label: FRANCHISE_CHANNEL_LABEL[c],
+                              }),
+                            ),
+                          ]}
+                        />
+                      </td>
+                      <td className="px-2.5 py-2.5 whitespace-nowrap">
+                        <span className="text-foreground text-[12.5px]">
+                          {row.case_type ? FRANCHISE_CASE_TYPE_LABEL[row.case_type] : "미지정"}
                         </span>
-                      )}
-                    </td>
-                    <td className="max-w-[200px] px-2.5 py-2.5 font-semibold">
-                      <button
-                        type="button"
-                        onClick={() => props.onOpenDetail(row)}
-                        className="text-foreground hover:text-primary flex w-full items-center text-left"
-                      >
-                        <span className="min-w-0 truncate">{row.business_name || "-"}</span>
-                        {props.mode !== "large_franchise" && row.is_large_franchise && (
-                          <span className="ml-1.5 shrink-0 rounded-md border border-violet-300 bg-violet-100 px-1.5 py-0.5 text-[11px] font-bold text-violet-700">
-                            대형
+                        {(row.is_rental || row.is_installment) && (
+                          <span className="text-muted-foreground ml-1 text-[11px]">
+                            {[row.is_rental && "렌탈", row.is_installment && "할부"]
+                              .filter(Boolean)
+                              .join("·")}
                           </span>
                         )}
-                      </button>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                        <VanBadge value={row.van_company} className="max-w-full truncate" />
-                        {transferBadge && (
-                          <span
-                            className={`inline-flex shrink-0 items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${transferBadge.className}`}
-                            title={transferBadge.hint}
-                          >
-                            {transferBadge.label}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="text-foreground px-2.5 py-2.5 whitespace-nowrap">
-                      {row.owner_name || "-"}
-                    </td>
-                    <td className="text-foreground px-2.5 py-2.5 whitespace-nowrap">
-                      <div className="flex flex-col items-start gap-0.5">
-                        <span className="inline-flex items-center gap-1.5">
-                          <span
-                            className="cursor-pointer"
-                            onClick={() => row.phone && navigator.clipboard?.writeText(row.phone)}
-                            title="클릭하여 복사"
-                          >
-                            {row.phone || "-"}
-                          </span>
-                          {row.phone && (
-                            <button
-                              type="button"
-                              onClick={() => props.onOpenCall(row.id)}
-                              aria-label={`${row.business_name || row.owner_name || "접수"} 통화기록`}
-                              title={`통화기록 · 부재 ${row.missed_call_count ?? 0}/3 · 완료 ${row.completed_call_count ?? 0}회`}
-                              className={`shrink-0 rounded p-0.5 hover:bg-slate-100 ${(row.missed_call_count ?? 0) > 0 ? "text-red-500" : "text-muted-foreground"}`}
-                            >
-                              <PhoneCallIcon size={13} />
-                            </button>
-                          )}
-                        </span>
-                        {row.last_call_at &&
-                          row.last_call_type &&
-                          row.status !== "toss_review_done" &&
-                          row.status !== "completed" && (
-                            <span
-                              className={`text-[11px] font-medium ${row.last_call_type === "completed" ? "text-green-600" : "text-red-500"}`}
-                            >
-                              최근 통화: {formatLastCallAt(row.last_call_at)}
+                      </td>
+                      <td className="max-w-[200px] px-2.5 py-2.5 font-semibold">
+                        <button
+                          type="button"
+                          onClick={() => props.onOpenDetail(row)}
+                          className="text-foreground hover:text-primary flex w-full items-center text-left"
+                        >
+                          <span className="min-w-0 truncate">{row.business_name || "-"}</span>
+                          {props.mode !== "large_franchise" && row.is_large_franchise && (
+                            <span className="ml-1.5 shrink-0 rounded-md border border-violet-300 bg-violet-100 px-1.5 py-0.5 text-[11px] font-bold text-violet-700">
+                              대형
                             </span>
                           )}
-                      </div>
-                    </td>
-                    <td className="px-2.5 py-2.5 whitespace-nowrap">
-                      <AppSelect
-                        aria-label="담당자"
-                        value={row.cs_id ?? ""}
-                        onValueChange={(value) => props.onCsChange(row, value)}
-                        className="text-foreground h-auto border-none bg-transparent py-0 pr-6 pl-0 text-[12.5px]"
-                        options={[
-                          { value: "", label: "미배정" },
-                          ...props.csProfiles.map((profile) => ({
-                            value: profile.id,
-                            label: profile.name,
-                          })),
-                        ]}
-                      />
-                    </td>
-                    <td
-                      className={`px-2.5 py-2.5 font-semibold whitespace-nowrap ${props.linkedInternets[row.id] ? "text-green-500" : "text-muted-foreground"}`}
-                    >
-                      {props.linkedInternets[row.id]?.category || row.internet || "-"}
-                    </td>
-                    <td className="px-2.5 py-2.5 whitespace-nowrap">
-                      <AppSelect
-                        aria-label="상태"
-                        value={row.status}
-                        disabled={props.busyId === row.id}
-                        onValueChange={(value) =>
-                          props.onStatusChange(row, value as FranchiseStatus)
-                        }
-                        className={`h-auto rounded-md border-none px-2.5 py-1.5 text-[11.5px] font-semibold ${tone.pill}`}
-                        options={STATUS_OPTIONS.map((status) => ({
-                          value: status,
-                          label: FRANCHISE_STATUS_LABEL[status],
-                        }))}
-                      />
-                    </td>
-                    <td className="px-2.5 py-2.5 whitespace-nowrap">
-                      {(() => {
-                        const severity = nextCheckSeverity(row.next_check_date, props.todayDate);
-                        const badgeClass = nextCheckBadgeClass(severity);
-                        return (
-                          <DatePickerField
-                            ariaLabel="확인일"
-                            value={row.next_check_date ?? ""}
-                            onChange={(value) => props.onSaveNextCheckDate(row, value)}
-                            className={`h-auto rounded-full px-2.5 py-1 text-[11.5px] ${badgeClass}`}
-                          />
-                        );
-                      })()}
-                    </td>
-                    <td
-                      className="text-foreground min-w-[140px] cursor-pointer px-2.5 py-2.5"
-                      title="클릭하여 비고(히스토리) 열기·수정"
-                      onClick={() => {
-                        if (window.getSelection()?.toString()) return;
-                        props.onOpenMemo(row.id);
-                      }}
-                    >
-                      {memos.length > 0 ? (
-                        <ul className="list-disc space-y-0.5 pl-4">
-                          {memos.map((entry, index) => (
-                            <li key={index} className="break-words whitespace-pre-wrap">
-                              {entry}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                    <td className="px-2.5 py-2.5 align-middle" title={row.memo || "메모 없음"}>
-                      <button
-                        type="button"
-                        onClick={() => props.onOpenMemo(row.id)}
-                        aria-label={`${row.business_name || row.owner_name || "접수"} 메모`}
-                        className="mx-auto block"
-                      >
-                        <StickyNoteIcon
-                          className={`size-4 ${row.memo ? "text-muted-foreground" : "text-border"}`}
+                        </button>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                          <VanBadge value={row.van_company} className="max-w-full truncate" />
+                          {transferBadge && (
+                            <span
+                              className={`inline-flex shrink-0 items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${transferBadge.className}`}
+                              title={transferBadge.hint}
+                            >
+                              {transferBadge.label}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="text-foreground px-2.5 py-2.5 whitespace-nowrap">
+                        {row.owner_name || "-"}
+                      </td>
+                      <td className="text-foreground px-2.5 py-2.5 whitespace-nowrap">
+                        <div className="flex flex-col items-start gap-0.5">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span
+                              className="cursor-pointer"
+                              onClick={() => row.phone && navigator.clipboard?.writeText(row.phone)}
+                              title="클릭하여 복사"
+                            >
+                              {row.phone || "-"}
+                            </span>
+                            {row.phone && (
+                              <button
+                                type="button"
+                                onClick={() => props.onOpenCall(row.id)}
+                                aria-label={`${row.business_name || row.owner_name || "접수"} 통화기록`}
+                                title={`통화기록 · 부재 ${row.missed_call_count ?? 0}/3 · 완료 ${row.completed_call_count ?? 0}회`}
+                                className={`shrink-0 rounded p-0.5 hover:bg-slate-100 ${(row.missed_call_count ?? 0) > 0 ? "text-red-500" : "text-muted-foreground"}`}
+                              >
+                                <PhoneCallIcon size={13} />
+                              </button>
+                            )}
+                          </span>
+                          {row.last_call_at &&
+                            row.last_call_type &&
+                            row.status !== "toss_review_done" &&
+                            row.status !== "completed" && (
+                              <span
+                                className={`text-[11px] font-medium ${row.last_call_type === "completed" ? "text-green-600" : "text-red-500"}`}
+                              >
+                                최근 통화: {formatLastCallAt(row.last_call_at)}
+                              </span>
+                            )}
+                        </div>
+                      </td>
+                      <td className="px-2.5 py-2.5 whitespace-nowrap">
+                        <AppSelect
+                          aria-label="담당자"
+                          value={row.cs_id ?? ""}
+                          onValueChange={(value) => props.onCsChange(row, value)}
+                          className="text-foreground h-auto border-none bg-transparent py-0 pr-6 pl-0 text-[12.5px]"
+                          options={[
+                            { value: "", label: "미배정" },
+                            ...props.csProfiles.map((profile) => ({
+                              value: profile.id,
+                              label: profile.name,
+                            })),
+                          ]}
                         />
-                      </button>
-                    </td>
-                  </tr>
+                      </td>
+                      <td
+                        className={`px-2.5 py-2.5 font-semibold whitespace-nowrap ${props.linkedInternets[row.id] ? "text-green-500" : "text-muted-foreground"}`}
+                      >
+                        {props.linkedInternets[row.id]?.category || row.internet || "-"}
+                      </td>
+                      <td className="px-2.5 py-2.5 whitespace-nowrap">
+                        <AppSelect
+                          aria-label="상태"
+                          value={row.status}
+                          disabled={props.busyId === row.id}
+                          onValueChange={(value) =>
+                            props.onStatusChange(row, value as FranchiseStatus)
+                          }
+                          className={`h-auto rounded-md border-none px-2.5 py-1.5 text-[11.5px] font-semibold ${tone.pill}`}
+                          options={STATUS_OPTIONS.map((status) => ({
+                            value: status,
+                            label: FRANCHISE_STATUS_LABEL[status],
+                          }))}
+                        />
+                      </td>
+                      <td className="px-2.5 py-2.5 whitespace-nowrap">
+                        {(() => {
+                          const severity = nextCheckSeverity(row.next_check_date, props.todayDate);
+                          const badgeClass = nextCheckBadgeClass(severity);
+                          return (
+                            <DatePickerField
+                              ariaLabel="확인일"
+                              value={row.next_check_date ?? ""}
+                              onChange={(value) => props.onSaveNextCheckDate(row, value)}
+                              className={`h-auto rounded-full px-2.5 py-1 text-[11.5px] ${badgeClass}`}
+                            />
+                          );
+                        })()}
+                      </td>
+                      <td
+                        className="text-foreground min-w-[140px] cursor-pointer px-2.5 py-2.5"
+                        title="클릭하여 비고(히스토리) 열기·수정"
+                        onClick={() => {
+                          if (window.getSelection()?.toString()) return;
+                          props.onOpenMemo(row.id);
+                        }}
+                      >
+                        {memos.length > 0 ? (
+                          <ul className="list-disc space-y-0.5 pl-4">
+                            {memos.map((entry, index) => (
+                              <li key={index} className="break-words whitespace-pre-wrap">
+                                {entry}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                      <td className="px-2.5 py-2.5 align-middle" title={row.memo || "메모 없음"}>
+                        <button
+                          type="button"
+                          onClick={() => props.onOpenMemo(row.id)}
+                          aria-label={`${row.business_name || row.owner_name || "접수"} 메모`}
+                          className="mx-auto block"
+                        >
+                          <StickyNoteIcon
+                            className={`size-4 ${row.memo ? "text-muted-foreground" : "text-border"}`}
+                          />
+                        </button>
+                      </td>
+                    </tr>
+                    {transferState === "tech_rejected" && (
+                      <tr className="border-border border-b bg-red-50/60">
+                        <td colSpan={16} className="px-4 py-2 text-[12px] text-red-700">
+                          <span className="font-semibold">기술지원 반려 사유</span>
+                          <span className="ml-2 break-words whitespace-pre-wrap">
+                            {props.linkedInstalls[row.id]?.reject_reason || "사유 미입력"}
+                          </span>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })}
               {props.rows.length > 0 &&

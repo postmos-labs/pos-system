@@ -216,7 +216,10 @@ export async function fetchFranchiseListData(
     return { ...row, next_check_date };
   }) as FranchiseApplication[];
 
-  const linkedInstalls: Record<string, { id: string; status: string }> = {};
+  const linkedInstalls: Record<
+    string,
+    { id: string; status: string; reject_reason?: string | null }
+  > = {};
   const linkedInternets: Record<
     string,
     { id: string; status: string | null; category: string | null }
@@ -229,6 +232,7 @@ export async function fetchFranchiseListData(
       { data: internetsById, error: internetsByIdError },
       { data: internetsByPhone, error: internetsByPhoneError },
       { data: callLogsRaw, error: callLogsError },
+      { data: rejectedInstalls, error: rejectedInstallsError },
     ] = await Promise.all([
       fetchByIdChunks(ids, (chunk) =>
         supabase
@@ -259,9 +263,20 @@ export async function fetchFranchiseListData(
             .order("created_at", { ascending: false }),
         40,
       ),
+      fetchByIdChunks(ids, (chunk) =>
+        supabase
+          .from("installations")
+          .select("franchise_application_id, notes")
+          .eq("status", "rejected")
+          .in("franchise_application_id", chunk),
+      ),
     ]);
     const connectionError =
-      installsError ?? internetsByIdError ?? internetsByPhoneError ?? callLogsError;
+      installsError ??
+      internetsByIdError ??
+      internetsByPhoneError ??
+      callLogsError ??
+      rejectedInstallsError;
     if (connectionError) {
       console.error("fetchFranchiseListData 연결 조회 실패:", connectionError.message);
     }
@@ -274,6 +289,12 @@ export async function fetchFranchiseListData(
           id: inst.id,
           status: inst.status,
         };
+    }
+    for (const inst of rejectedInstalls ?? []) {
+      const linked = inst.franchise_application_id
+        ? linkedInstalls[inst.franchise_application_id]
+        : undefined;
+      if (linked?.status === "rejected") linked.reject_reason = (inst.notes ?? "").trim() || null;
     }
     for (const net of internetsById ?? []) {
       if (net.franchise_application_id)

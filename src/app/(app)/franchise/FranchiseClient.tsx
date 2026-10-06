@@ -161,7 +161,7 @@ interface Props {
   initialStatusFilter?: string;
   initialChannelFilter?: string;
   initialHighlightId?: string;
-  linkedInstalls?: Record<string, { id: string; status: string }>;
+  linkedInstalls?: Record<string, { id: string; status: string; reject_reason?: string | null }>;
   linkedInternets?: Record<string, { id: string; status: string | null; category: string | null }>;
   todayDate: string;
   todayCompletedIds: string[];
@@ -221,6 +221,7 @@ type ReceiptTableView =
   | "doc_incomplete"
   | "doc_waiting"
   | "approved"
+  | "tech_rejected"
   | "persistent_absence"
   | "canceled";
 type ReceiptKpi =
@@ -1129,7 +1130,9 @@ export default function FranchiseClient({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [transferringId, setTransferringId] = useState<string | null>(null);
   const [localLinkedInstalls, setLocalLinkedInstalls] =
-    useState<Record<string, { id: string; status: string }>>(linkedInstalls);
+    useState<Record<string, { id: string; status: string; reject_reason?: string | null }>>(
+      linkedInstalls,
+    );
 
   const localLinkedInstallsRef = useRef(localLinkedInstalls);
   useEffect(() => {
@@ -1338,6 +1341,17 @@ export default function FranchiseClient({
     [currentUserId, currentUserApprovalRole, transferApprovals, localLinkedInstalls],
   );
 
+  // 기술지원 반려: 이관이 끝났는데 기술지원이 설치건을 반려한 건. 화면 배지(tech_rejected)와 같은 판정이다.
+  // 목록 필터와 탭 건수가 같은 판정을 써야 숫자와 목록이 어긋나지 않는다.
+  const isTechRejected = useCallback(
+    (row: FranchiseApplication) =>
+      resolveTransferState(
+        transferApprovals[row.id]?.status,
+        localLinkedInstalls[row.id]?.status,
+      ) === "tech_rejected",
+    [transferApprovals, localLinkedInstalls],
+  );
+
   type FilterSkip = {
     skipView?: boolean;
     skipKpi?: boolean;
@@ -1365,6 +1379,7 @@ export default function FranchiseClient({
       }
       if (!skip.skipView) {
         if (tableView === "mine" && !isMyWork(row)) return false;
+        if (tableView === "tech_rejected" && !isTechRejected(row)) return false;
         if (tableView === "doc_incomplete" && row.status !== "doc_incomplete") return false;
         if (tableView === "doc_waiting" && row.status !== "doc_waiting") return false;
         if (tableView === "approved" && !APPROVED_STATUS_SET.has(row.status)) return false;
@@ -1415,6 +1430,7 @@ export default function FranchiseClient({
       isTransferredOut,
       tableView,
       isMyWork,
+      isTechRejected,
       statusFilter,
       applicantTypeFilter,
       largeFilter,
@@ -1699,13 +1715,14 @@ export default function FranchiseClient({
     return {
       all: base.length,
       mine: base.filter((row) => isMyWork(row)).length,
+      tech_rejected: base.filter((row) => isTechRejected(row)).length,
       doc_incomplete: base.filter((row) => row.status === "doc_incomplete").length,
       doc_waiting: base.filter((row) => row.status === "doc_waiting").length,
       approved: base.filter((row) => APPROVED_STATUS_SET.has(row.status)).length,
       persistent_absence: base.filter((row) => row.status === "persistent_absence").length,
       canceled: base.filter((row) => row.status === "canceled").length,
     };
-  }, [localRows, search, matchesFilters, isMyWork]);
+  }, [localRows, search, matchesFilters, isMyWork, isTechRejected]);
 
   const kpiCounts = useMemo(() => {
     const term = search.trim().toLowerCase();
