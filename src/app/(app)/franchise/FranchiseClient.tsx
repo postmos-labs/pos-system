@@ -81,6 +81,7 @@ import FranchiseReceiptSurface, {
   type ColumnSortKey,
   type ColumnSortState,
 } from "./FranchiseReceiptSurface";
+import { resolveTransferState } from "./transferState";
 import {
   INSTALLATION_DELIVERY_TYPE_OPTIONS,
   type InstallationDeliveryType,
@@ -1297,6 +1298,28 @@ export default function FranchiseClient({
     [localLinkedInstalls],
   );
 
+  // 내 업무: 내가 담당(영업·CS)인 진행 건 + 내가 승인할 차례인 이관 건.
+  // 승인할 차례는 "팀장 승인대기"·"CS책임 승인대기" 배지, 승인 버튼, 서버 가드와 같은 조건이다.
+  // 목록 필터와 탭 건수가 같은 판정을 써야 숫자와 목록이 어긋나지 않는다.
+  const isMyWork = useCallback(
+    (row: FranchiseApplication) => {
+      if (
+        (row.sales_id === currentUserId || row.cs_id === currentUserId) &&
+        !COMPLETED_STATUS_SET.has(row.status) &&
+        row.status !== "canceled"
+      )
+        return true;
+      const approval = transferApprovals[row.id];
+      if (!approval || approval.requested_by === currentUserId) return false;
+      const state = resolveTransferState(approval.status, localLinkedInstalls[row.id]?.status);
+      return (
+        (currentUserApprovalRole === "cs_responsible" && state === "cs_waiting") ||
+        (currentUserApprovalRole === "team_lead" && state === "team_lead_waiting")
+      );
+    },
+    [currentUserId, currentUserApprovalRole, transferApprovals, localLinkedInstalls],
+  );
+
   type FilterSkip = {
     skipView?: boolean;
     skipKpi?: boolean;
@@ -1323,13 +1346,7 @@ export default function FranchiseClient({
         if (activeKpi === "persistent_absence" && row.status !== "persistent_absence") return false;
       }
       if (!skip.skipView) {
-        if (
-          tableView === "mine" &&
-          ((row.sales_id !== currentUserId && row.cs_id !== currentUserId) ||
-            COMPLETED_STATUS_SET.has(row.status) ||
-            row.status === "canceled")
-        )
-          return false;
+        if (tableView === "mine" && !isMyWork(row)) return false;
         if (tableView === "doc_incomplete" && row.status !== "doc_incomplete") return false;
         if (tableView === "doc_waiting" && row.status !== "doc_waiting") return false;
         if (tableView === "approved" && !APPROVED_STATUS_SET.has(row.status)) return false;
@@ -1379,7 +1396,7 @@ export default function FranchiseClient({
       todayCompletedIdSet,
       isTransferredOut,
       tableView,
-      currentUserId,
+      isMyWork,
       statusFilter,
       applicantTypeFilter,
       largeFilter,
@@ -1663,19 +1680,14 @@ export default function FranchiseClient({
     });
     return {
       all: base.length,
-      mine: base.filter(
-        (row) =>
-          (row.sales_id === currentUserId || row.cs_id === currentUserId) &&
-          !COMPLETED_STATUS_SET.has(row.status) &&
-          row.status !== "canceled",
-      ).length,
+      mine: base.filter((row) => isMyWork(row)).length,
       doc_incomplete: base.filter((row) => row.status === "doc_incomplete").length,
       doc_waiting: base.filter((row) => row.status === "doc_waiting").length,
       approved: base.filter((row) => APPROVED_STATUS_SET.has(row.status)).length,
       persistent_absence: base.filter((row) => row.status === "persistent_absence").length,
       canceled: base.filter((row) => row.status === "canceled").length,
     };
-  }, [localRows, search, matchesFilters, currentUserId]);
+  }, [localRows, search, matchesFilters, isMyWork]);
 
   const kpiCounts = useMemo(() => {
     const term = search.trim().toLowerCase();
