@@ -1068,7 +1068,7 @@ export default function FranchiseReceiptSurface(props: Props) {
                       />
                     </td>
                     <td className="text-muted-foreground px-2 py-2.5 text-center tabular-nums">
-                      {(props.page - 1) * props.pageSize + index + 1}
+                      {props.filteredCount - (props.page - 1) * props.pageSize - index}
                     </td>
                     <td className="px-1 py-1.5 text-center">
                       <button
