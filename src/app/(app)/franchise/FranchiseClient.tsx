@@ -1327,8 +1327,9 @@ export default function FranchiseClient({
     [localLinkedInstalls],
   );
 
-  // 내 업무: 내가 담당(영업·CS)인 진행 건 + 내가 승인할 차례인 이관 건.
-  // 승인할 차례는 "팀장 승인대기"·"CS책임 승인대기" 배지, 승인 버튼, 서버 가드와 같은 조건이다.
+  // 내 업무: 내가 담당(영업·CS)인 진행 건 + 내 승인 단계의 이관 대기 건.
+  // 팀장은 "팀장 승인대기", CS책임은 "CS책임 승인대기" 배지가 붙은 건을 모두 본다.
+  // 내가 직접 올린 건도 포함한다 — 본인 건은 다른 팀장이 승인해 승인 버튼은 안 보이지만, 진행 상황은 따라가야 한다.
   // 목록 필터와 탭 건수가 같은 판정을 써야 숫자와 목록이 어긋나지 않는다.
   const isMyWork = useCallback(
     (row: FranchiseApplication) => {
@@ -1339,7 +1340,7 @@ export default function FranchiseClient({
       )
         return true;
       const approval = transferApprovals[row.id];
-      if (!approval || approval.requested_by === currentUserId) return false;
+      if (!approval) return false;
       const state = resolveTransferState(approval.status, localLinkedInstalls[row.id]?.status);
       return (
         (currentUserApprovalRole === "cs_responsible" && state === "cs_waiting") ||
