@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pin, Trash2, X } from "lucide-react";
+import { Pencil, Pin, Trash2, X } from "lucide-react";
 import HistoryIcon from "@/components/ui/HistoryIcon";
 import { formatKst } from "@/lib/date";
 import { useApprovalNoteHistory } from "@/lib/useApprovalNoteHistory";
@@ -25,6 +25,7 @@ interface Props {
   onAdd: (content: string) => void | Promise<void>;
   onTogglePin: (index: number) => void | Promise<void>;
   onDelete: (index: number) => void | Promise<void>;
+  onEdit: (index: number, content: string) => void | Promise<void>;
 }
 
 function formatEntryDate(value: string) {
@@ -48,8 +49,11 @@ export default function FranchiseMemoDrawer({
   onAdd,
   onTogglePin,
   onDelete,
+  onEdit,
 }: Props) {
   const [draft, setDraft] = useState("");
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState("");
   const approvalNotes = useApprovalNoteHistory(row.id);
   const timelineItems: TimelineItem[] = [
     ...entries.map((entry): TimelineItem => ({
@@ -80,6 +84,12 @@ export default function FranchiseMemoDrawer({
     if (!content) return;
     void onAdd(content);
     setDraft("");
+  }
+
+  function saveEdit(entry: FranchiseMemoEntry) {
+    const next = editDraft.trim();
+    if (next && next !== entry.text) void onEdit(entry.index, next);
+    setEditingIndex(null);
   }
 
   return (
@@ -154,6 +164,16 @@ export default function FranchiseMemoDrawer({
                     </div>
                     <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
+                        onClick={() => {
+                          setEditingIndex(entry.index);
+                          setEditDraft(entry.text);
+                        }}
+                        aria-label="히스토리 수정"
+                        className="text-slate-500 hover:text-blue-300"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
                         onClick={() => onTogglePin(entry.index)}
                         aria-label={entry.pinned ? "고정 해제" : "상단 고정"}
                         className={
@@ -165,7 +185,10 @@ export default function FranchiseMemoDrawer({
                         <Pin size={14} className={entry.pinned ? "fill-current" : ""} />
                       </button>
                       <button
-                        onClick={() => onDelete(entry.index)}
+                        onClick={() => {
+                          setEditingIndex(null);
+                          void onDelete(entry.index);
+                        }}
                         aria-label="히스토리 삭제"
                         className="text-slate-500 hover:text-red-400"
                       >
@@ -173,7 +196,42 @@ export default function FranchiseMemoDrawer({
                       </button>
                     </div>
                   </div>
-                  <div className="whitespace-pre-wrap break-words">{entry.text}</div>
+                  {editingIndex === entry.index ? (
+                    <div>
+                      <textarea
+                        value={editDraft}
+                        onChange={(e) => setEditDraft(e.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" && !event.shiftKey) {
+                            event.preventDefault();
+                            saveEdit(entry);
+                          } else if (event.key === "Escape") {
+                            event.preventDefault();
+                            setEditingIndex(null);
+                          }
+                        }}
+                        rows={3}
+                        autoFocus
+                        className="w-full mt-1 bg-slate-800 border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-2 py-1.5 text-sm resize-y text-white"
+                      />
+                      <div className="mt-1 flex justify-end gap-1.5">
+                        <button
+                          onClick={() => saveEdit(entry)}
+                          className="rounded bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-500"
+                        >
+                          저장
+                        </button>
+                        <button
+                          onClick={() => setEditingIndex(null)}
+                          className="rounded bg-slate-700 px-2.5 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-600"
+                        >
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="whitespace-pre-wrap break-words">{entry.text}</div>
+                  )}
                 </li>
               );
             })}

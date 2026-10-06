@@ -1244,7 +1244,14 @@ export default function FranchiseReceiptSurface(props: Props) {
                         );
                       })()}
                     </td>
-                    <td className="text-foreground min-w-[140px] px-2.5 py-2.5">
+                    <td
+                      className="text-foreground min-w-[140px] cursor-pointer px-2.5 py-2.5"
+                      title="클릭하여 비고(히스토리) 열기·수정"
+                      onClick={() => {
+                        if (window.getSelection()?.toString()) return;
+                        props.onOpenMemo(row.id);
+                      }}
+                    >
                       {memos.length > 0 ? (
                         <ul className="list-disc space-y-0.5 pl-4">
                           {memos.map((entry, index) => (

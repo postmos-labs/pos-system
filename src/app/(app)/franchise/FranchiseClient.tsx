@@ -599,6 +599,24 @@ function togglePinEntry(memo: string | undefined | null, index: number): string 
   return blocks.join("\n");
 }
 
+// index번째 항목의 내용만 바꾼다. 스탬프(작성자·시각)와 고정 마커는 그대로 둔다.
+function updateMemoEntry(memo: string | undefined | null, index: number, newText: string): string {
+  const blocks = splitMemoBlocks(memo);
+  const target = blocks[index];
+  const text = newText.trim();
+  if (target === undefined || !text) return blocks.join("\n");
+  const stamp = target.match(/^\[(.+?) (?:\d{4}\. )?\d{2}\. \d{2}\. \d{2}:\d{2}\]/);
+  if (stamp) {
+    blocks[index] = `${stamp[0]} ${text}`;
+  } else {
+    // 스탬프 없는 옛 메모: 고정 마커가 있으면 보존한다.
+    const pin =
+      target.match(PIN_RE)?.[0] ?? (target.startsWith(LEGACY_PIN_MARKER) ? LEGACY_PIN_MARKER : "");
+    blocks[index] = `${pin}${text}`;
+  }
+  return blocks.join("\n");
+}
+
 // 비고 + 상태 변경 이력을 한 화면(플로팅 창)에서 시간순으로 합쳐 보여준다
 interface HistoryPanelProps {
   row: FranchiseApplication;
@@ -3475,6 +3493,7 @@ export default function FranchiseClient({
           }));
           return (
             <FranchiseMemoDrawer
+              key={row.id}
               row={row}
               entries={entries}
               onClose={() => setHistoryOpenId(null)}
@@ -3489,6 +3508,9 @@ export default function FranchiseClient({
                 return saveMemoRaw(row, removeMemoEntry(row.memo, index));
               }}
               onTogglePin={(index) => saveMemoRaw(row, togglePinEntry(row.memo, index))}
+              onEdit={(index, content) =>
+                saveMemoRaw(row, updateMemoEntry(row.memo, index, content))
+              }
             />
           );
         })()}
