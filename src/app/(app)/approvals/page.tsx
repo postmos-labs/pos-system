@@ -218,6 +218,13 @@ export default async function ApprovalsPage() {
                   approvalRole={p.approval_role as "cs_responsible" | "team_lead"}
                 />
               )}
+              {(completionApprovals.length >= APPROVAL_LIST_LIMIT ||
+                transferApprovals.length >= APPROVAL_LIST_LIMIT) && (
+                <p className="border-t border-slate-100 bg-amber-50 px-6 py-2.5 text-xs text-amber-700">
+                  승인 대기가 {APPROVAL_LIST_LIMIT}건 이상이라 오래된 {APPROVAL_LIST_LIMIT}건만
+                  보입니다. 먼저 처리하면 다음 건이 나타납니다.
+                </p>
+              )}
             </>
           ) : (
             <div className="px-6 py-4 text-sm text-slate-500">승인 대기 중인 요청이 없습니다.</div>
