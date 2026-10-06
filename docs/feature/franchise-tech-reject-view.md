@@ -19,10 +19,12 @@
 - 반려 일시·반려자는 이번에 넣지 않음
 - 가맹접수 없이 설치관리에서 직접 만든 설치건이 반려된 경우는 가맹접수 목록에 행이 없어 여기에 나오지 않음
 - 반려 목록은 화면을 열 때 불러오므로 새 반려는 화면을 다시 열어야 반영됨
+- 이관 승인 대기·기술지원 반려 건은 완료 계열 상태에서 30일 넘게 갱신이 없어도 보관 규칙과 무관하게 기본 목록에 포함됨. 반려는 설치건만 바꾸고 가맹접수 행의 갱신 시각을 올리지 않아서, 이관 30일 뒤에 반려되면 CS가 가맹접수에서 건을 찾을 수 없었던 문제
+- 이렇게 다시 포함된 건은 "이전 건 모두 불러오기" 건수 안내에서 제외됨 (목록에 이미 보이므로)
 
 ## 영향 파일
 
-- `src/app/(app)/franchise/fetchFranchiseListData.ts` — 반려된 설치건 사유 조회, `linkedInstalls.reject_reason`에 합침
+- `src/app/(app)/franchise/fetchFranchiseListData.ts` — 반려된 설치건 사유 조회, `linkedInstalls.reject_reason`에 합침, 보관 규칙 예외 조회
 - `src/app/(app)/franchise/actions.ts` — `linkedInstalls` 반환 타입에 `reject_reason` 추가
 - `src/app/(app)/franchise/FranchiseClient.tsx` — `isTechRejected` 추가, `matchesFilters`·`tableViewCounts`가 사용
 - `src/app/(app)/franchise/FranchiseReceiptSurface.tsx` — "기술지원 반려" 탭, 반려된 행 아래 사유 줄

@@ -25,6 +25,15 @@ async function fetchAllApplications(
   cutoffIso: string,
   includeIds: string[],
 ) {
+  // 예외가 나도 목록 자체는 떠야 하므로 빈 배열로 대체한다(함수 안에서 못 잡은 예외 대비).
+  const workflowIdsPromise =
+    scope === "open"
+      ? fetchOpenTransferWorkflowIds(supabase).catch((e: unknown) => {
+          console.error("fetchOpenTransferWorkflowIds 실패:", e);
+          return [] as string[];
+        })
+      : Promise.resolve<string[]>([]);
+
   const select =
     "*, sales:profiles!franchise_applications_sales_id_fkey(id,name,role), cs:profiles!franchise_applications_cs_id_fkey(id,name,role), creator:profiles!franchise_applications_created_by_fkey(id,name,role), next_check:franchise_next_check_dates(next_check_date)";
 
@@ -51,24 +60,45 @@ async function fetchAllApplications(
     label: "fetchAllApplications",
   });
 
-  if (error || scope !== "open" || includeIds.length === 0) {
+  if (error || scope !== "open") {
     return { data: rows, error };
   }
+
+  let result: Row[] = rows;
 
   const existingIds = new Set(rows.map((r) => r.id));
   const missingIds = includeIds.filter((id) => !existingIds.has(id));
-  if (missingIds.length === 0) {
-    return { data: rows, error };
+  if (missingIds.length > 0) {
+    const { data: includedRows, error: includeError } = await supabase
+      .from("franchise_applications")
+      .select(select)
+      .in("id", missingIds);
+    if (includeError) {
+      return { data: rows, error: includeError };
+    }
+    result = [...rows, ...(includedRows ?? [])] as Row[];
   }
 
-  const { data: includedRows, error: includeError } = await supabase
-    .from("franchise_applications")
-    .select(select)
-    .in("id", missingIds);
-  if (includeError) {
-    return { data: rows, error: includeError };
+  const workflowIds = await workflowIdsPromise;
+  const loadedIds = new Set(result.map((r) => r.id));
+  const missingWorkflowIds = workflowIds.filter((id) => !loadedIds.has(id));
+  if (missingWorkflowIds.length > 0) {
+    const { data: workflowRows, error: workflowError } = await fetchByIdChunks(
+      missingWorkflowIds,
+      (chunk) => {
+        let query = supabase.from("franchise_applications").select(select).in("id", chunk);
+        if (isLargeFranchise !== "all") query = query.eq("is_large_franchise", isLargeFranchise);
+        return query;
+      },
+    );
+    if (workflowError) {
+      console.error("fetchAllApplications 이관 진행 건 조회 실패:", workflowError.message);
+    } else {
+      result = [...result, ...workflowRows] as Row[];
+    }
   }
-  return { data: [...rows, ...(includedRows ?? [])] as Row[], error: null };
+
+  return { data: result, error: null };
 }
 
 export type TransferApproval = {
@@ -109,6 +139,59 @@ async function fetchArchivedSummary(
   });
 
   return { data: rows, error };
+}
+
+/**
+ * 이관이 끝나지 않은 건의 가맹접수 id — 이관 승인 대기 중이거나 기술지원이 설치건을 반려한 건.
+ * 완료 계열 상태에서 30일 넘게 갱신이 없으면 기본 목록·검색에서 빠지는데(보관), 이 건들은
+ * 아직 사람이 처리해야 해서 보관 규칙과 상관없이 목록에 남겨야 한다. 반려는 설치건만 바꾸고
+ * 가맹접수 행의 updated_at은 올리지 않아서, 이관 후 30일이 지나 반려되면 CS가 찾을 수 없게 된다.
+ * 조회에 실패해도 목록 자체는 떠야 하므로 빈 배열을 돌려준다.
+ */
+async function fetchOpenTransferWorkflowIds(supabase: SupabaseServerClient): Promise<string[]> {
+  const runPendingQuery = (from: number, to: number) =>
+    supabase
+      .from("franchise_transfer_approvals")
+      .select("franchise_application_id")
+      .in("status", ["requested", "cs_responsible_approved"])
+      .order("id")
+      .range(from, to);
+
+  const runRejectedQuery = (from: number, to: number) =>
+    supabase
+      .from("installations")
+      .select("franchise_application_id")
+      .eq("status", "rejected")
+      .not("franchise_application_id", "is", null)
+      .order("id")
+      .range(from, to);
+
+  type PendingRow = NonNullable<Awaited<ReturnType<typeof runPendingQuery>>["data"]>[number];
+  type RejectedRow = { franchise_application_id: string | null };
+
+  const [pending, rejected] = await Promise.all([
+    fetchAllRows<PendingRow>(runPendingQuery, { label: "fetchOpenTransferWorkflowIds:pending" }),
+    fetchAllRows<RejectedRow>(runRejectedQuery, {
+      label: "fetchOpenTransferWorkflowIds:rejected",
+    }),
+  ]);
+
+  const ids = new Set<string>();
+  if (pending.error) {
+    console.error("fetchOpenTransferWorkflowIds 승인 대기 조회 실패:", pending.error.message);
+  } else {
+    for (const row of pending.data) {
+      if (row.franchise_application_id) ids.add(row.franchise_application_id);
+    }
+  }
+  if (rejected.error) {
+    console.error("fetchOpenTransferWorkflowIds 반려 조회 실패:", rejected.error.message);
+  } else {
+    for (const row of rejected.data) {
+      if (row.franchise_application_id) ids.add(row.franchise_application_id);
+    }
+  }
+  return [...ids];
 }
 
 async function fetchTransferApprovals(supabase: SupabaseServerClient) {
@@ -203,7 +286,15 @@ export async function fetchFranchiseListData(
             const status = row.status as FranchiseStatus;
             byStatus[status] = (byStatus[status] ?? 0) + 1;
           }
-          return { total: (archivedSummaryRows ?? []).length, byStatus };
+          let total = (archivedSummaryRows ?? []).length;
+          for (const row of rows ?? []) {
+            const status = row.status as FranchiseStatus;
+            if (CLOSED_STATUSES.includes(status) && new Date(row.updated_at).getTime() < cutoffMs) {
+              byStatus[status] = Math.max(0, (byStatus[status] ?? 0) - 1);
+              total = Math.max(0, total - 1);
+            }
+          }
+          return { total, byStatus };
         })();
 
   const flatRows = (rows ?? []).map((row) => {
