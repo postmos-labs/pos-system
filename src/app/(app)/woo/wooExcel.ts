@@ -40,3 +40,26 @@ export function buildWooExport(
 
   return { customers, history };
 }
+
+// 엑셀 칸 너비. 한글·한자는 영문보다 두 배 넓어 2칸으로 센다. 열자마자 읽히도록 내용에 맞추되 너무 넓어지지 않게 막는다.
+export function columnWidths(
+  records: Record<string, string>[],
+  options: { min?: number; max?: number } = {},
+): { wch: number }[] {
+  const { min = 8, max = 50 } = options;
+  const width = (text: string) => {
+    let total = 0;
+    for (const ch of text) total += ch.charCodeAt(0) > 0x2e7f ? 2 : 1;
+    return total;
+  };
+  if (records.length === 0) return [];
+  return Object.keys(records[0]).map((header) => {
+    const longest = Math.max(
+      width(header),
+      ...records.map((record) =>
+        Math.max(...(record[header] ?? "").split(/\r?\n/).map((line) => width(line))),
+      ),
+    );
+    return { wch: Math.min(max, Math.max(min, longest + 2)) };
+  });
+}

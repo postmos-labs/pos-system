@@ -17,7 +17,7 @@ import { formatPhone, formatBusinessNumber, formatDateText } from "@/lib/format"
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { mergeRowsPreservingIdentity } from "@/lib/mergeRows";
 import { deleteWooRows } from "./actions";
-import { buildWooExport } from "./wooExcel";
+import { buildWooExport, columnWidths } from "./wooExcel";
 import type { WooCustomer } from "@/types";
 import { useToast } from "@/components/ui/Toast";
 import BulkDeleteActions from "@/components/ui/BulkDeleteActions";
@@ -531,9 +531,13 @@ export default function WooClient({
     import("xlsx")
       .then((XLSX) => {
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(customers), "가맹점 정보");
+        const infoSheet = XLSX.utils.json_to_sheet(customers);
+        infoSheet["!cols"] = columnWidths(customers);
+        XLSX.utils.book_append_sheet(wb, infoSheet, "가맹점 정보");
         const historySheet = XLSX.utils.json_to_sheet(history);
         historySheet["!cols"] = [10, 20, 12, 16, 18, 12, 80].map((wch) => ({ wch }));
+        // 머리글에 필터 화살표를 달아, 엑셀에서 상호명 등으로 바로 걸러 볼 수 있게 한다.
+        historySheet["!autofilter"] = { ref: `A1:G${history.length + 1}` };
         XLSX.utils.book_append_sheet(wb, historySheet, "히스토리");
         XLSX.writeFile(wb, `우국상_히스토리_${kstDate().replace(/-/g, "")}.xlsx`);
       })
