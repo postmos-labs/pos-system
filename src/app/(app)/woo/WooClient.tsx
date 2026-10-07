@@ -17,6 +17,7 @@ import { formatPhone, formatBusinessNumber, formatDateText } from "@/lib/format"
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { mergeRowsPreservingIdentity } from "@/lib/mergeRows";
 import { deleteWooRows } from "./actions";
+import { buildWooExport } from "./wooExcel";
 import type { WooCustomer } from "@/types";
 import { useToast } from "@/components/ui/Toast";
 import BulkDeleteActions from "@/components/ui/BulkDeleteActions";
@@ -517,6 +518,28 @@ export default function WooClient({
     setSelected(new Set());
   }, [selected]);
 
+  const handleExcel = useCallback(() => {
+    // 화면에 보이는 순서(필터·정렬 적용)대로 먼저 넣고, 필터에 가려진 선택 건은 그 뒤에 붙인다.
+    const shownRows = filteredRows.filter((r) => selected.has(r.id));
+    const shownIds = new Set(shownRows.map((r) => r.id));
+    const targetRows = [
+      ...shownRows,
+      ...localRows.filter((r) => selected.has(r.id) && !shownIds.has(r.id)),
+    ];
+    if (targetRows.length === 0) return;
+    const { customers, history } = buildWooExport(targetRows, COLUMNS);
+    import("xlsx")
+      .then((XLSX) => {
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(customers), "가맹점 정보");
+        const historySheet = XLSX.utils.json_to_sheet(history);
+        historySheet["!cols"] = [10, 20, 12, 16, 18, 12, 80].map((wch) => ({ wch }));
+        XLSX.utils.book_append_sheet(wb, historySheet, "히스토리");
+        XLSX.writeFile(wb, `우국상_히스토리_${kstDate().replace(/-/g, "")}.xlsx`);
+      })
+      .catch(() => toast.error("엑셀 파일을 만들지 못했습니다."));
+  }, [filteredRows, localRows, selected, toast]);
+
   const handleCreate = useCallback(async (form: typeof EMPTY_FORM) => {
     setSubmitting(true);
     const supabase = createClient();
@@ -779,6 +802,12 @@ export default function WooClient({
           onDelete={handleDelete}
           onCancel={() => setSelected(new Set())}
         >
+          <button
+            onClick={handleExcel}
+            className="text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            엑셀 내보내기
+          </button>
           <button
             onClick={() => setBulkTransferConfirmOpen(true)}
             className="text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 px-3 py-1.5 rounded-lg transition-colors"
