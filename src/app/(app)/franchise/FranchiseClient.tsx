@@ -1245,7 +1245,18 @@ export default function FranchiseClient({
       if (archivedLoading || archivedLoaded) return;
       setArchivedLoading(true);
       // 가맹접수 목록은 대형도 함께 보여 주므로, 보관된 건을 불러올 때도 대형을 빼지 않는다.
-      const result = await loadArchivedFranchiseRows(mode === "large_franchise" ? true : "all");
+      let result: Awaited<ReturnType<typeof loadArchivedFranchiseRows>>;
+      try {
+        result = await loadArchivedFranchiseRows(mode === "large_franchise" ? true : "all");
+      } catch {
+        // 서버가 시간 초과·네트워크 오류로 응답하지 못하면 예외가 난다. 로딩 표시를 반드시 꺼야
+        // 안내 줄이 "불러오는 중..."에 멈추지 않고 버튼도 다시 눌린다.
+        setArchivedLoading(false);
+        toast.error(
+          "이전 건 불러오기 실패: 서버가 응답하지 않았습니다. 잠시 후 다시 시도해주세요.",
+        );
+        return;
+      }
       setArchivedLoading(false);
       if (result.error) {
         toast.error("이전 건 불러오기 실패: " + result.error);
