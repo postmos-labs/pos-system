@@ -76,6 +76,7 @@ const FranchiseCreateDialog = dynamic(() => import("./FranchiseCreateDialog"));
 const FranchiseDetailDrawer = dynamic(() => import("./FranchiseDetailDrawer"));
 import FranchiseMemoDrawer from "./FranchiseMemoDrawer";
 import FranchiseCallDrawer from "./FranchiseCallDrawer";
+import { nextRefreshDelay } from "./realtimeRefresh";
 import FranchiseReceiptSurface, {
   nextCheckSeverity,
   type ColumnSortKey,
@@ -1304,6 +1305,7 @@ export default function FranchiseClient({
   }, []);
 
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastRefreshAtRef = useRef(0);
 
   useEffect(() => {
     const supabase = createClient();
@@ -1313,13 +1315,22 @@ export default function FranchiseClient({
         "postgres_changes",
         { event: "*", schema: "public", table: "franchise_applications" },
         () => {
-          if (refreshTimer.current) clearTimeout(refreshTimer.current);
-          refreshTimer.current = setTimeout(() => startTransition(() => router.refresh()), 400);
+          // 내가 고친 변경도 다시 불러온다. "오늘 완료" 건수처럼 서버에서만 계산되는 값은
+          // 재조회가 있어야 갱신되기 때문이다. 대신 재조회 횟수를 아래처럼 제한한다.
+          // 이미 재조회가 예약돼 있으면 그 한 번에 합친다. 예약마다 마지막 재조회 후 최소 간격을 지킨다.
+          if (refreshTimer.current) return;
+          const delay = nextRefreshDelay(Date.now(), lastRefreshAtRef.current);
+          refreshTimer.current = setTimeout(() => {
+            refreshTimer.current = null;
+            lastRefreshAtRef.current = Date.now();
+            startTransition(() => router.refresh());
+          }, delay);
         },
       )
       .subscribe();
     return () => {
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
+      refreshTimer.current = null;
       supabase.removeChannel(channel);
     };
   }, [router]);
