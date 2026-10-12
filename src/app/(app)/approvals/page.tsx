@@ -113,19 +113,26 @@ export default async function ApprovalsPage() {
 
   const transferApprovalQuery =
     p.approval_role === "cs_responsible" || p.approval_role === "team_lead"
-      ? supabase
-          .from("franchise_transfer_approvals")
-          .select(
-            "franchise_application_id, requested_by, requested_by_name, requested_at, cs_approved_by_name, approval_notes, franchise:franchise_applications(id, business_name, owner_name, address, phone, channel, reception_channel, reception_date, van_company)",
+      ? (() => {
+          const query = supabase
+            .from("franchise_transfer_approvals")
+            .select(
+              "franchise_application_id, requested_by, requested_by_name, requested_at, cs_approved_by_name, approval_notes, franchise:franchise_applications(id, business_name, owner_name, address, phone, channel, reception_channel, reception_date, van_company)",
+            )
+            .eq(
+              "status",
+              p.approval_role === "cs_responsible" ? "requested" : "cs_responsible_approved",
+            );
+          // CS책임 1차 승인은 요청자 본인이 승인할 수 없어 본인 건을 뺀다. 요청자가 삭제돼 NULL인 건도 남긴다.
+          // 팀장은 본인이 올린 건도 직접 최종 승인할 수 있어 거르지 않는다.
+          return (
+            p.approval_role === "cs_responsible"
+              ? query.or(`requested_by.is.null,requested_by.neq.${userId}`)
+              : query
           )
-          .eq(
-            "status",
-            p.approval_role === "cs_responsible" ? "requested" : "cs_responsible_approved",
-          )
-          // 위와 같은 이유로 요청자가 삭제된 건(NULL)도 승인함에 남긴다.
-          .or(`requested_by.is.null,requested_by.neq.${userId}`)
-          .order("requested_at", { ascending: true })
-          .limit(APPROVAL_LIST_LIMIT)
+            .order("requested_at", { ascending: true })
+            .limit(APPROVAL_LIST_LIMIT);
+        })()
       : null;
 
   const rejectedTransferQuery = supabase

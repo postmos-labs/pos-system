@@ -2504,16 +2504,16 @@ export default function FranchiseClient({
   function approveTransfer(row: FranchiseApplication) {
     const approval = transferApprovals[row.id];
     if (!approval) return;
-    if (approval.requested_by === currentUserId) {
-      toast.warning("요청자는 직접 승인할 수 없습니다.");
-      return;
-    }
     const isCsResponsibleApproval =
       currentUserApprovalRole === "cs_responsible" && approval.status === "requested";
     const isTeamLeadApproval =
       currentUserApprovalRole === "team_lead" && approval.status === "cs_responsible_approved";
     if (!isCsResponsibleApproval && !isTeamLeadApproval) {
       toast.warning("현재 승인 단계의 권한이 없습니다.");
+      return;
+    }
+    if (isCsResponsibleApproval && approval.requested_by === currentUserId) {
+      toast.warning("요청자는 직접 승인할 수 없습니다.");
       return;
     }
     if (isTeamLeadApproval) {
@@ -3540,11 +3540,11 @@ export default function FranchiseClient({
                   : transferApprovals[row.id]
               }
               canApproveTransfer={
-                ((currentUserApprovalRole === "cs_responsible" &&
-                  transferApprovals[row.id]?.status === "requested") ||
-                  (currentUserApprovalRole === "team_lead" &&
-                    transferApprovals[row.id]?.status === "cs_responsible_approved")) &&
-                transferApprovals[row.id]?.requested_by !== currentUserId
+                (currentUserApprovalRole === "cs_responsible" &&
+                  transferApprovals[row.id]?.status === "requested" &&
+                  transferApprovals[row.id]?.requested_by !== currentUserId) ||
+                (currentUserApprovalRole === "team_lead" &&
+                  transferApprovals[row.id]?.status === "cs_responsible_approved")
               }
               onRequestTransfer={() => requestTransferApproval(row)}
               onApproveTransfer={() => approveTransfer(row)}

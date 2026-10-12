@@ -45,15 +45,6 @@ export async function requestFranchiseTransfer(franchiseApplicationId: string, n
     return { error: "이관 승인요청 권한이 없습니다." };
   }
   const admin = createAdminClient();
-  if (profile.approval_role === "team_lead") {
-    const { count, error: approverCountError } = await admin
-      .from("profiles")
-      .select("id", { count: "exact", head: true })
-      .eq("approval_role", "team_lead")
-      .neq("id", user.id);
-    if (approverCountError) return { error: approverCountError.message };
-    if (!count) return { error: "최종 승인할 다른 팀장이 없어 승인요청을 올릴 수 없습니다." };
-  }
   const [{ data: franchise }, { data: existingApproval }, { data: existingInstall }] =
     await Promise.all([
       admin
@@ -307,7 +298,8 @@ export async function rejectFranchiseTransfer(franchiseApplicationId: string, re
     .eq("status", expectedStatus)
     .single();
   if (!approval) return { error: "처리할 승인 요청이 없습니다." };
-  if (approval.requested_by === user.id) return { error: "요청자는 직접 반려할 수 없습니다." };
+  if (expectedStatus === "requested" && approval.requested_by === user.id)
+    return { error: "요청자는 직접 반려할 수 없습니다." };
 
   const { error } = await admin
     .from("franchise_transfer_approvals")
@@ -359,17 +351,19 @@ export async function rejectFranchiseTransfer(franchiseApplicationId: string, re
 
   // 요청자 계정이 삭제됐으면 보낼 곳이 없다. notifications.user_id는 NOT NULL이라
   // NULL을 그대로 넣으면 insert가 실패하므로 알림만 건너뛴다(반려 자체는 이미 처리됨).
-  const { error: notificationError } = approval.requested_by
-    ? await admin.from("notifications").insert({
-        user_id: approval.requested_by,
-        franchise_application_id: franchiseApplicationId,
-        type: "approval_transfer_rejected",
-        title: "[반려] 기술지원 이관 승인요청",
-        body: trimmedReason
-          ? `${profile?.name ?? "승인자"}님이 이관 승인요청을 반려했습니다. 사유: ${trimmedReason}`
-          : `${profile?.name ?? "승인자"}님이 이관 승인요청을 반려했습니다.`,
-      })
-    : { error: null };
+  // 팀장이 본인이 올린 건을 직접 반려(철회)한 경우에는 본인에게 알릴 필요가 없다.
+  const { error: notificationError } =
+    approval.requested_by && approval.requested_by !== user.id
+      ? await admin.from("notifications").insert({
+          user_id: approval.requested_by,
+          franchise_application_id: franchiseApplicationId,
+          type: "approval_transfer_rejected",
+          title: "[반려] 기술지원 이관 승인요청",
+          body: trimmedReason
+            ? `${profile?.name ?? "승인자"}님이 이관 승인요청을 반려했습니다. 사유: ${trimmedReason}`
+            : `${profile?.name ?? "승인자"}님이 이관 승인요청을 반려했습니다.`,
+        })
+      : { error: null };
 
   return { error: null, notificationError: notificationError?.message ?? null };
 }
@@ -403,8 +397,7 @@ export async function approveFranchiseTransfer(
       .single(),
   ]);
   if (!approval || !franchise) return { error: "처리할 승인 요청이 없습니다." };
-  if (approval.requested_by === approver.user.id)
-    return { error: "요청자는 직접 승인할 수 없습니다." };
+  // 최종 승인자는 팀장이다. 팀장이 직접 올린 건도 본인이 승인할 수 있다(요청·승인 기록은 모두 남는다).
 
   const { data: existingInstall } = await admin
     .from("installations")
