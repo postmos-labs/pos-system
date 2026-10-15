@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import WooClient from "./WooClient";
+import { getSessionProfile } from "@/lib/auth/session";
 import { fetchAllRows, fetchByIdChunks, DEFAULT_MAX_ROWS } from "@/lib/fetchAllRows";
 import { TruncationNotice } from "@/components/ui/TruncationNotice";
 import type { WooCustomer } from "@/types";
@@ -16,6 +17,7 @@ export default async function WooPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   const { highlight } = await searchParams;
+  const profile = await getSessionProfile();
 
   const {
     data: rows,
@@ -63,6 +65,7 @@ export default async function WooPage({
           <WooClient
             rows={rows ?? []}
             currentUserId={user.id}
+            currentUserName={profile?.name ?? ""}
             linkedInstalls={linkedInstalls}
             initialHighlightId={highlight}
           />

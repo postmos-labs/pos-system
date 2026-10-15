@@ -18,6 +18,7 @@ import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { mergeRowsPreservingIdentity } from "@/lib/mergeRows";
 import { deleteWooRows } from "./actions";
 import { buildWooExport, columnWidths } from "./wooExcel";
+import { appendStampedMemo } from "@/lib/memoStamp";
 import type { WooCustomer } from "@/types";
 import { useToast } from "@/components/ui/Toast";
 import BulkDeleteActions from "@/components/ui/BulkDeleteActions";
@@ -33,6 +34,7 @@ import { kstDate } from "@/lib/date";
 interface Props {
   rows: WooCustomer[];
   currentUserId: string;
+  currentUserName: string;
   linkedInstalls?: Record<string, { id: string; status: string }>;
   initialHighlightId?: string;
 }
@@ -354,6 +356,7 @@ const CreateForm = memo(function CreateForm({ onSubmit, submitting, onClose }: C
 export default function WooClient({
   rows,
   currentUserId,
+  currentUserName,
   linkedInstalls = {},
   initialHighlightId,
 }: Props) {
@@ -1053,11 +1056,7 @@ export default function WooClient({
               memo={row.memo}
               createdAt={row.created_at}
               onAddMemo={(value) =>
-                saveField(
-                  row,
-                  "memo",
-                  `${(row.memo ?? "").trim()}${(row.memo ?? "").trim() ? "\n" : ""}${value}`,
-                )
+                saveField(row, "memo", appendStampedMemo(row.memo, currentUserName, value))
               }
               onDeleteMemo={(newMemo) => saveField(row, "memo", newMemo)}
               onClose={() => setHistoryOpenId(null)}

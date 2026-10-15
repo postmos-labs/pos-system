@@ -38,9 +38,11 @@ import MemoHistoryPanel from "@/components/ui/MemoHistoryPanel";
 import KpiCard from "@/components/ui/KpiCard";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField } from "@/components/ui/DatePickerField";
+import { appendStampedMemo } from "@/lib/memoStamp";
 
 interface Props {
   rows: InternetManagement[];
+  currentUserName: string;
 }
 
 const STATUSES = ["접수완료", "개통완료", "취소"];
@@ -386,7 +388,7 @@ const CreateForm = memo(function CreateForm({ onSubmit, submitting, onClose }: C
   );
 });
 
-export default function InternetClient({ rows }: Props) {
+export default function InternetClient({ rows, currentUserName }: Props) {
   const router = useRouter();
   const toast = useToast();
   const [isPending, startTransition] = useTransition();
@@ -1097,11 +1099,7 @@ export default function InternetClient({ rows }: Props) {
               memo={row.memo}
               createdAt={row.created_at}
               onAddMemo={(value) =>
-                saveField(
-                  row,
-                  "memo",
-                  `${(row.memo ?? "").trim()}${(row.memo ?? "").trim() ? "\n" : ""}${value}`,
-                )
+                saveField(row, "memo", appendStampedMemo(row.memo, currentUserName, value))
               }
               onDeleteMemo={(newMemo) => saveField(row, "memo", newMemo)}
               onClose={() => setHistoryOpenId(null)}

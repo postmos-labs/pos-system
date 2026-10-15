@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import InternetClient from "./InternetClient";
+import { getSessionProfile } from "@/lib/auth/session";
 import { fetchAllRows, DEFAULT_MAX_ROWS } from "@/lib/fetchAllRows";
 import { TruncationNotice } from "@/components/ui/TruncationNotice";
 import type { InternetManagement } from "@/types";
@@ -11,6 +12,7 @@ export default async function InternetPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  const profile = await getSessionProfile();
 
   const {
     data: rows,
@@ -40,7 +42,7 @@ export default async function InternetPage() {
       ) : (
         <>
           {truncated && <TruncationNotice maxRows={DEFAULT_MAX_ROWS} />}
-          <InternetClient rows={rows ?? []} />
+          <InternetClient rows={rows ?? []} currentUserName={profile?.name ?? ""} />
         </>
       )}
     </div>
