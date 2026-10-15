@@ -2,10 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { getSessionUser, getSessionProfile } from "@/lib/auth/session";
 import { canApproveFirstBy, canApproveFinalBy } from "@/lib/auth/installApproval";
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { AlertTriangle, ArrowRight, ClipboardCheck } from "lucide-react";
-import ApprovalButton from "./ApprovalButton";
+import { AlertTriangle, ClipboardCheck } from "lucide-react";
 import TransferApprovalList from "./TransferApprovalList";
+import CompletionApprovalList from "./CompletionApprovalList";
 import RejectedTransferItem from "./RejectedTransferItem";
 import ApprovalLogSection from "./ApprovalLogSection";
 import type { ApprovalNote } from "@/lib/approvalNotes";
@@ -18,7 +17,12 @@ type CompletionApproval = {
   requested_by_name: string;
   requested_at: string;
   approval_notes: ApprovalNote[];
-  installation: { id: string; customer_name: string | null; address: string | null } | null;
+  installation: {
+    id: string;
+    customer_name: string | null;
+    address: string | null;
+    franchise_application_id: string | null;
+  } | null;
 };
 
 type TransferApproval = {
@@ -101,7 +105,7 @@ export default async function ApprovalsPage() {
       ? supabase
           .from("installation_completion_approvals")
           .select(
-            "installation_id, target_status, status, requested_by, requested_by_name, requested_at, approval_notes, installation:installations(id, customer_name, address)",
+            "installation_id, target_status, status, requested_by, requested_by_name, requested_at, approval_notes, installation:installations(id, customer_name, address, franchise_application_id)",
           )
           .in("status", completionStatuses)
           // 요청자 계정이 삭제되면 requested_by가 NULL이 된다. neq만 쓰면 NULL 행이
@@ -156,6 +160,39 @@ export default async function ApprovalsPage() {
   const transferApprovals = (transferApprovalsResult.data ?? []) as TransferApproval[];
   const rejectedTransfers = (rejectedTransfersResult.data ?? []) as unknown as RejectedTransfer[];
 
+  // 설치 단계 승인 목록의 인입경로. 연결된 가맹접수의 channel을 먼저 쓰고, 없으면 설치건에 직접 지정한 channel을 쓴다.
+  // 설치건 channel 칸(156번 마이그레이션)이 아직 없어도 승인함이 죽지 않도록 따로 조회하고 실패는 무시한다.
+  const completionInstallIds = completionApprovals.map((a) => a.installation_id);
+  const completionFranchiseIds = completionApprovals
+    .map((a) => a.installation?.franchise_application_id)
+    .filter((id): id is string => !!id);
+  const [franchiseChannelResult, installChannelResult] = await Promise.all([
+    completionFranchiseIds.length > 0
+      ? supabase
+          .from("franchise_applications")
+          .select("id, channel, reception_channel")
+          .in("id", completionFranchiseIds)
+      : Promise.resolve({ data: [] }),
+    completionInstallIds.length > 0
+      ? supabase.from("installations").select("id, channel").in("id", completionInstallIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+  const franchiseChannelById = new Map(
+    (
+      (franchiseChannelResult.data ?? []) as {
+        id: string;
+        channel: string | null;
+        reception_channel: string | null;
+      }[]
+    ).map((row) => [row.id, row]),
+  );
+  const installChannelById = new Map(
+    ((installChannelResult.data ?? []) as { id: string; channel: string | null }[]).map((row) => [
+      row.id,
+      row.channel,
+    ]),
+  );
+
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
       <h1 className="text-2xl font-bold text-slate-900">승인함</h1>
@@ -172,39 +209,27 @@ export default async function ApprovalsPage() {
           {completionApprovals.length > 0 || transferApprovals.length > 0 ? (
             <>
               {completionApprovals.length > 0 && (
-                <div className="divide-y divide-slate-100">
-                  {completionApprovals.map((approval) => (
-                    <div
-                      key={approval.installation_id}
-                      className="flex items-center gap-4 px-6 py-3.5 transition-colors hover:bg-slate-50"
-                    >
-                      <Link
-                        href={`/installs?id=${approval.installation_id}`}
-                        className="flex min-w-0 flex-1 items-center gap-4"
-                      >
-                        <span className="h-2 w-2 rounded-full bg-amber-500" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-slate-900">
-                            {approval.installation?.customer_name ?? "설치 건"}
-                          </p>
-                          <p className="mt-0.5 text-xs text-slate-500">
-                            {approval.requested_by_name} ·{" "}
-                            {INSTALL_STEP_LABEL[approval.target_status] ?? approval.target_status}{" "}
-                            {approval.status === "responsible_approved" ? "최종 " : "1차 "}승인요청
-                          </p>
-                        </div>
-                        <ArrowRight size={16} className="text-slate-400" />
-                      </Link>
-                      <ApprovalButton
-                        type={
-                          approval.status === "responsible_approved" ? "tech_final" : "completion"
-                        }
-                        id={approval.installation_id}
-                        notes={approval.approval_notes}
-                      />
-                    </div>
-                  ))}
-                </div>
+                <CompletionApprovalList
+                  items={completionApprovals.map((approval) => {
+                    const franchise = approval.installation?.franchise_application_id
+                      ? franchiseChannelById.get(approval.installation.franchise_application_id)
+                      : undefined;
+                    return {
+                      installationId: approval.installation_id,
+                      customerName: approval.installation?.customer_name ?? null,
+                      requesterName: approval.requested_by_name,
+                      stepLabel:
+                        INSTALL_STEP_LABEL[approval.target_status] ?? approval.target_status,
+                      isFinal: approval.status === "responsible_approved",
+                      channel:
+                        franchise?.channel ??
+                        installChannelById.get(approval.installation_id) ??
+                        null,
+                      receptionChannel: franchise?.reception_channel ?? null,
+                      notes: approval.approval_notes,
+                    };
+                  })}
+                />
               )}
               {transferApprovals.length > 0 && (
                 <TransferApprovalList
