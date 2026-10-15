@@ -1,12 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Trash2 } from "lucide-react";
+import { X, Trash2, Pencil, Pin } from "lucide-react";
 import HistoryIcon from "./HistoryIcon";
 import { createClient } from "@/lib/supabase/client";
 import { formatKst } from "@/lib/date";
 import { useApprovalNoteHistory } from "@/lib/useApprovalNoteHistory";
 import { APPROVAL_NOTE_STAGE_LABEL } from "@/lib/approvalNotes";
+import {
+  MEMO_STAMP_RE,
+  splitMemoBlocks,
+  stripPin,
+  togglePinEntry,
+  updateMemoEntry,
+} from "@/lib/memoEntries";
 import {
   INSTALLATION_DELIVERY_TYPE_LABEL,
   isInstallationDeliveryType,
@@ -37,10 +44,6 @@ type FranchiseLog = {
   details: { delivery_type?: string } | null;
 };
 
-// 스탬프(`[이름 YYYY. MM. DD. HH:mm]`, 연도 도입 전 옛 형식은 `[이름 MM. DD. HH:mm]`)가 붙은 항목뿐
-// 아니라, 스탬프 도입 전에 저장된 맨 텍스트도 하나의 항목으로 살려서 반환한다
-const MEMO_STAMP_RE = /\[(.+?) (?:(\d{4})\. )?(\d{2})\. (\d{2})\. (\d{2}):(\d{2})\]/g;
-
 // 옛 형식(연도 없음) 스탬프의 연도를 추정한다. 일단 올해로 채워보고, 그 결과가 오늘보다
 // 미래면 작년으로 본다 (예: 작년 12월에 쓴 메모를 올해 1월에 볼 때 올해 12월로 잘못 읽히는 것을 방지).
 function resolveLegacyYear(month: number, day: number, hour: number, minute: number): number {
@@ -52,18 +55,29 @@ function resolveLegacyYear(month: number, day: number, hour: number, minute: num
 export function parseMemoEntries(
   memo: string | undefined | null,
   fallbackAt: string,
-): { at: string; user: string; text: string }[] {
+): { at: string; user: string; text: string; pinned: boolean; pinnedAt: string | null }[] {
   if (!memo?.trim()) return [];
   const re = MEMO_STAMP_RE;
   const matches = [...memo.matchAll(re)];
   if (matches.length === 0) {
-    return [{ at: fallbackAt, user: "-", text: memo.trim() }];
+    const { pinned, pinnedAt, text } = stripPin(memo.trim());
+    return [{ at: fallbackAt, user: "-", text, pinned, pinnedAt }];
   }
-  const entries: { at: string; user: string; text: string }[] = [];
-  const leading = memo.slice(0, matches[0].index).trim();
-  if (leading) entries.push({ at: fallbackAt, user: "-", text: leading });
+  const entries: {
+    at: string;
+    user: string;
+    text: string;
+    pinned: boolean;
+    pinnedAt: string | null;
+  }[] = [];
+  const leadingRaw = memo.slice(0, matches[0].index).trim();
+  if (leadingRaw) {
+    const { pinned, pinnedAt, text } = stripPin(leadingRaw);
+    entries.push({ at: fallbackAt, user: "-", text, pinned, pinnedAt });
+  }
   matches.forEach((m, i) => {
-    const [, user, yearStr, month, day, hour, minute] = m;
+    const [, userRaw, yearStr, month, day, hour, minute] = m;
+    const { pinned, pinnedAt, text: user } = stripPin(userRaw);
     const start = m.index! + m[0].length;
     const end = i + 1 < matches.length ? matches[i + 1].index! : memo.length;
     const text = memo.slice(start, end).trim();
@@ -78,30 +92,13 @@ export function parseMemoEntries(
       Number(hour),
       Number(minute),
     ).toISOString();
-    entries.push({ at, user, text });
+    entries.push({ at, user, text, pinned, pinnedAt });
   });
   return entries;
 }
 
 // parseMemoEntries와 동일한 순서로 원본 텍스트(스탬프 포함)를 블록 단위로 쪼갠다.
 // 특정 인덱스를 제외하고 다시 합치면 해당 메모 항목만 삭제된 원본 메모 문자열을 얻을 수 있다.
-function splitMemoBlocks(memo: string | undefined | null): string[] {
-  if (!memo?.trim()) return [];
-  const re = MEMO_STAMP_RE;
-  const matches = [...memo.matchAll(re)];
-  if (matches.length === 0) return [memo.trim()];
-  const blocks: string[] = [];
-  const leading = memo.slice(0, matches[0].index).trim();
-  if (leading) blocks.push(leading);
-  matches.forEach((m, i) => {
-    const start = m.index!;
-    const end = i + 1 < matches.length ? matches[i + 1].index! : memo.length;
-    const block = memo.slice(start, end).trim();
-    if (block) blocks.push(block);
-  });
-  return blocks;
-}
-
 export function removeMemoEntry(memo: string | undefined | null, index: number): string {
   const blocks = splitMemoBlocks(memo);
   return blocks.filter((_, i) => i !== index).join("\n");
@@ -138,6 +135,10 @@ export default function MemoHistoryPanel({
   const [notifLogs, setNotifLogs] = useState<NotificationLog[]>([]);
   const [franchiseLogs, setFranchiseLogs] = useState<FranchiseLog[]>([]);
   const approvalNotes = useApprovalNoteHistory(franchiseApplicationId);
+  // 편집 대상이 잡힌 시점의 memo를 함께 저장해, 창이 다른 행으로 바뀌거나 memo가 바뀌면 편집 상태를 무시한다
+  const [editing, setEditing] = useState<{ index: number; memo: string } | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const editingIndex = editing && editing.memo === (memo ?? "") ? editing.index : null;
 
   useEffect(() => {
     if (!entityType || !entityId) return;
@@ -180,11 +181,31 @@ export default function MemoHistoryPanel({
     onDeleteMemo(removeMemoEntry(memo, index));
   }
 
+  function toggleMemoPin(index: number) {
+    if (!onDeleteMemo) return;
+    onDeleteMemo(togglePinEntry(memo, index));
+  }
+
+  function saveEdit(index: number, current: string) {
+    const next = editDraft.trim();
+    if (onDeleteMemo && next && next !== current) {
+      onDeleteMemo(updateMemoEntry(memo, index, next));
+    }
+    setEditing(null);
+  }
+
   const timeline = [
     ...parseMemoEntries(memo, createdAt).map((entry, i) => ({
       at: entry.at,
+      pinned: entry.pinned,
+      pinnedAt: entry.pinnedAt,
       node: (
-        <li key={`memo-${entry.at}-${entry.text}`} className="text-[15pt] text-slate-200 group">
+        <li
+          key={`memo-${entry.at}-${entry.text}`}
+          className={`text-[15pt] group ${
+            entry.pinned ? "text-amber-200 border-l-2 border-amber-400 pl-2" : "text-slate-200"
+          }`}
+        >
           <div className="flex items-start justify-between gap-2">
             <div className="text-slate-400">
               {formatKst(entry.at)}
@@ -192,21 +213,84 @@ export default function MemoHistoryPanel({
               <span className="font-semibold text-blue-300">{entry.user}</span>
             </div>
             {onDeleteMemo && (
-              <button
-                onClick={() => deleteMemoEntry(i)}
-                aria-label="메모 삭제"
-                className="shrink-0 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Trash2 size={14} />
-              </button>
+              <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={() => {
+                    setEditing({ index: i, memo: memo ?? "" });
+                    setEditDraft(entry.text);
+                  }}
+                  aria-label="메모 수정"
+                  className="text-slate-500 hover:text-blue-300"
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  onClick={() => toggleMemoPin(i)}
+                  aria-label={entry.pinned ? "고정 해제" : "상단 고정"}
+                  className={
+                    entry.pinned
+                      ? "text-amber-300 hover:text-amber-200"
+                      : "text-slate-500 hover:text-amber-300"
+                  }
+                >
+                  <Pin size={14} className={entry.pinned ? "fill-current" : ""} />
+                </button>
+                <button
+                  onClick={() => {
+                    setEditing(null);
+                    deleteMemoEntry(i);
+                  }}
+                  aria-label="메모 삭제"
+                  className="text-slate-500 hover:text-red-400"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             )}
           </div>
-          <div>{entry.text}</div>
+          {editingIndex === i ? (
+            <div>
+              <textarea
+                value={editDraft}
+                onChange={(e) => setEditDraft(e.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    saveEdit(i, entry.text);
+                  } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    setEditing(null);
+                  }
+                }}
+                rows={3}
+                autoFocus
+                className="w-full mt-1 bg-slate-800 border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-2 py-1.5 text-sm resize-y text-white"
+              />
+              <div className="mt-1 flex justify-end gap-1.5">
+                <button
+                  onClick={() => saveEdit(i, entry.text)}
+                  className="rounded bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-500"
+                >
+                  저장
+                </button>
+                <button
+                  onClick={() => setEditing(null)}
+                  className="rounded bg-slate-700 px-2.5 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-600"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>{entry.text}</div>
+          )}
         </li>
       ),
     })),
     ...approvalNotes.map((note) => ({
       at: note.created_at,
+      pinned: false,
+      pinnedAt: null as string | null,
       node: (
         <li key={`approval-note-${note.id}`} className="text-[15pt] text-amber-300">
           <div className="text-slate-400">
@@ -222,6 +306,8 @@ export default function MemoHistoryPanel({
     })),
     ...notifLogs.map((log) => ({
       at: log.created_at,
+      pinned: false,
+      pinnedAt: null as string | null,
       node: (
         <li key={`notif-${log.id}`} className="text-[15pt] text-blue-400">
           <div className="text-slate-400">
@@ -249,6 +335,8 @@ export default function MemoHistoryPanel({
         const key = log.to_status!.replace("alimtalk:", "");
         return {
           at: log.created_at,
+          pinned: false,
+          pinnedAt: null as string | null,
           node: (
             <li key={`franchise-${log.id}`} className="text-[15pt] text-blue-400">
               <div className="text-slate-400">
@@ -264,6 +352,8 @@ export default function MemoHistoryPanel({
       if (installLabel || transferLabel) {
         return {
           at: log.created_at,
+          pinned: false,
+          pinnedAt: null as string | null,
           node: (
             <li
               key={`franchise-${log.id}`}
@@ -279,6 +369,8 @@ export default function MemoHistoryPanel({
       }
       return {
         at: log.created_at,
+        pinned: false,
+        pinnedAt: null as string | null,
         node: (
           <li key={`franchise-${log.id}`} className="text-[15pt] text-purple-300">
             <div className="text-slate-400">
@@ -298,7 +390,13 @@ export default function MemoHistoryPanel({
         ),
       };
     }),
-  ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  ].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    if (a.pinned && b.pinned) {
+      return new Date(b.pinnedAt ?? b.at).getTime() - new Date(a.pinnedAt ?? a.at).getTime();
+    }
+    return new Date(b.at).getTime() - new Date(a.at).getTime();
+  });
 
   function submit() {
     if (!value.trim()) return;
