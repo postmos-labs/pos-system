@@ -41,6 +41,7 @@ import { markLeadConverted } from "../leads/actions";
 import {
   approveCsResponsibleTransfer,
   approveFranchiseTransfer,
+  rejectFranchiseTransfer,
   requestFranchiseTransfer,
 } from "../approvals/actions";
 import type {
@@ -1210,6 +1211,8 @@ export default function FranchiseClient({
   const [teamLeadTransferNote, setTeamLeadTransferNote] = useState("");
   const [csApprovalRow, setCsApprovalRow] = useState<FranchiseApplication | null>(null);
   const [csApprovalNote, setCsApprovalNote] = useState("");
+  const [rejectTransferRow, setRejectTransferRow] = useState<FranchiseApplication | null>(null);
+  const [rejectTransferReason, setRejectTransferReason] = useState("");
   const [transferRequestRow, setTransferRequestRow] = useState<FranchiseApplication | null>(null);
   const [transferRequestNote, setTransferRequestNote] = useState("");
   const [bulkTransferNoteModal, setBulkTransferNoteModal] = useState(false);
@@ -2526,6 +2529,29 @@ export default function FranchiseClient({
     setCsApprovalRow(row);
   }
 
+  // 가맹접수 상세에서 바로 반려한다. 서버(rejectFranchiseTransfer)가 단계·권한을 다시 검사한다.
+  async function submitRejectTransfer() {
+    const row = rejectTransferRow;
+    const approval = row && transferApprovals[row.id];
+    if (!row || !approval) return;
+    setTransferringId(row.id);
+    const result = await rejectFranchiseTransfer(row.id, rejectTransferReason);
+    setTransferringId(null);
+    if (result.error) {
+      toast.error("반려 실패: " + result.error);
+      return;
+    }
+    if ("notificationError" in result && result.notificationError) {
+      toast.warning(
+        "반려는 처리됐지만 요청자 알림 전송에 실패했습니다: " + result.notificationError,
+      );
+    }
+    setTransferApprovals((prev) => ({ ...prev, [row.id]: { ...approval, status: "rejected" } }));
+    setRejectTransferRow(null);
+    setRejectTransferReason("");
+    toast.success("이관 승인요청을 반려했습니다.");
+  }
+
   async function submitCsApproval() {
     const row = csApprovalRow;
     const approval = row && transferApprovals[row.id];
@@ -3211,6 +3237,52 @@ export default function FranchiseClient({
         </FormModal>
       )}
 
+      {rejectTransferRow && (
+        <FormModal title="이관 반려" onClose={() => !transferringId && setRejectTransferRow(null)}>
+          <div className="space-y-4">
+            <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              {rejectTransferRow.business_name ||
+                rejectTransferRow.owner_name ||
+                rejectTransferRow.id}
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+                요청자에게 전달할 반려 사유
+              </label>
+              <textarea
+                value={rejectTransferReason}
+                onChange={(event) => setRejectTransferReason(event.target.value)}
+                maxLength={2000}
+                rows={4}
+                placeholder="반려 사유를 입력해주세요. (선택 사항)"
+                className="w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+              />
+              <p className="mt-1 text-right text-xs text-slate-400">
+                {rejectTransferReason.length}/2,000
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRejectTransferRow(null)}
+                disabled={!!transferringId}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={submitRejectTransfer}
+                disabled={!!transferringId}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {transferringId ? "반려 중..." : "반려"}
+              </button>
+            </div>
+          </div>
+        </FormModal>
+      )}
+
       {bulkTransferNoteModal && (
         <FormModal
           title="일괄 기술지원 이관 비고"
@@ -3548,6 +3620,10 @@ export default function FranchiseClient({
               }
               onRequestTransfer={() => requestTransferApproval(row)}
               onApproveTransfer={() => approveTransfer(row)}
+              onRejectTransfer={() => {
+                setRejectTransferReason("");
+                setRejectTransferRow(row);
+              }}
               onOpenInstalls={() => router.push("/installs")}
               onLinkInternet={() => linkToInternet(row)}
               onOpenInternet={() => router.push("/internet")}

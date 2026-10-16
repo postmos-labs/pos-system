@@ -87,6 +87,7 @@ interface Props {
   canApproveTransfer: boolean;
   onRequestTransfer: () => void;
   onApproveTransfer: () => void;
+  onRejectTransfer: () => void;
   onOpenInstalls: () => void;
   onLinkInternet: () => void;
   onOpenInternet: () => void;
@@ -270,6 +271,7 @@ export default function FranchiseDetailDrawer({
   canApproveTransfer,
   onRequestTransfer,
   onApproveTransfer,
+  onRejectTransfer,
   onOpenInstalls,
   onLinkInternet,
   onOpenInternet,
@@ -778,6 +780,16 @@ export default function FranchiseDetailDrawer({
                     : channelTone.star
                       ? "프리미엄 리드 승인 후 자동 이관"
                       : "승인 후 자동 이관"}
+                </button>
+              )}
+              {canApproveTransfer && (
+                <button
+                  type="button"
+                  onClick={onRejectTransfer}
+                  disabled={transferring}
+                  className={`${secondaryButton} text-red-600`}
+                >
+                  반려
                 </button>
               )}
             </>
