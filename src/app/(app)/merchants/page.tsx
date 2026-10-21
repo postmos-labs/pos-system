@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import MerchantsClient from "./MerchantsClient";
 import { loadMerchant360 } from "./loadMerchant360";
+import { TOSS_ONLY_OTHER_PATTERN } from "@/lib/vanGroup";
 import type { Merchant360Merchant } from "./merchant360";
 import type { FranchiseChannel, VanGroup } from "@/types";
 import { FRANCHISE_CHANNEL_LABEL } from "@/types";
@@ -37,8 +38,12 @@ interface VanFilterable<T> {
 
 function applyVanFilter<T extends VanFilterable<T>>(query: T, van: VanFilter): T {
   if (van === "kicc") return query.ilike("van_company", "%KICC%");
+  if (van === "nice") return query.ilike("van_company", "%NICE%");
   if (van === "toss") {
-    return query.not("van_company", "is", null).not("van_company", "ilike", "%KICC%");
+    return query
+      .not("van_company", "is", null)
+      .not("van_company", "eq", "")
+      .not("van_company", "imatch", TOSS_ONLY_OTHER_PATTERN);
   }
   return query;
 }
@@ -57,7 +62,8 @@ function applySearch<T extends SearchFilterable<T>>(query: T, safe: string): T {
 export default async function MerchantsPage({ searchParams }: Props) {
   const params = await searchParams;
   const page = Math.max(1, Number(params.page) || 1);
-  const van: VanFilter = params.van === "toss" || params.van === "kicc" ? params.van : "";
+  const van: VanFilter =
+    params.van === "toss" || params.van === "kicc" || params.van === "nice" ? params.van : "";
   // .or() 안에서 쉼표·괄호·따옴표·백슬래시는 문법 문자라 그대로 넘기면 쿼리가 깨진다.
   const raw = (params.q ?? "").trim().slice(0, 100);
   const safe = raw.replace(/[,()"'\\%*]/g, "");
@@ -91,15 +97,26 @@ export default async function MerchantsPage({ searchParams }: Props) {
     applyVanFilter(supabase.from("merchants").select("id", { count: "exact", head: true }), "kicc"),
     safe,
   );
+  const niceCountQuery = applySearch(
+    applyVanFilter(supabase.from("merchants").select("id", { count: "exact", head: true }), "nice"),
+    safe,
+  );
 
-  const [listResult, allCountResult, tossCountResult, kiccCountResult, profileResult] =
-    await Promise.all([
-      listQuery,
-      allCountQuery,
-      tossCountQuery,
-      kiccCountQuery,
-      supabase.from("profiles").select("role, can_delete").eq("id", user.id).single(),
-    ]);
+  const [
+    listResult,
+    allCountResult,
+    tossCountResult,
+    kiccCountResult,
+    niceCountResult,
+    profileResult,
+  ] = await Promise.all([
+    listQuery,
+    allCountQuery,
+    tossCountQuery,
+    kiccCountQuery,
+    niceCountQuery,
+    supabase.from("profiles").select("role, can_delete").eq("id", user.id).single(),
+  ]);
   const profile = profileResult.data;
   const canDelete =
     profile?.role === "admin" || profile?.role === "master" || !!profile?.can_delete;
@@ -107,7 +124,8 @@ export default async function MerchantsPage({ searchParams }: Props) {
   const vanMigrationMissing =
     isMissingColumnError(listResult.error) ||
     isMissingColumnError(tossCountResult.error) ||
-    isMissingColumnError(kiccCountResult.error);
+    isMissingColumnError(kiccCountResult.error) ||
+    isMissingColumnError(niceCountResult.error);
 
   // 폴백 조회는 van_company가 빠진 컬럼셋이라 두 결과의 추론 타입이 다르다.
   // 어차피 아래에서 Merchant360Merchant[]로 쓰므로 여기서 한 번만 맞춰둔다.
@@ -155,11 +173,12 @@ export default async function MerchantsPage({ searchParams }: Props) {
     });
   }
   const vanCounts = vanMigrationMissing
-    ? { all: null, toss: null, kicc: null }
+    ? { all: null, toss: null, kicc: null, nice: null }
     : {
         all: allCountResult.count ?? 0,
         toss: tossCountResult.count ?? 0,
         kicc: kiccCountResult.count ?? 0,
+        nice: niceCountResult.count ?? 0,
       };
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const selectedId = params.id ?? merchantRows[0]?.id ?? null;

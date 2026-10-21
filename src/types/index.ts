@@ -435,17 +435,20 @@ export const FRANCHISE_CHANNEL_LABEL: Record<FranchiseChannel, string> = {
 
 // VAN사 목록. 가맹접수(목록/등록/상세)와 가맹점 화면이 같은 값을 써야 하므로 여기서만 관리한다.
 // DB의 van_company는 TEXT라 값 추가에 마이그레이션이 필요 없다.
-export const VAN_COMPANIES = ["코세스2", "코세스1", "코벤", "기가맹", "KICC"] as const;
+export const VAN_COMPANIES = ["코세스2", "코세스1", "코벤", "기가맹", "KICC", "NICE"] as const;
 export type VanCompany = (typeof VAN_COMPANIES)[number];
 
 // VAN사 계열. 가맹점 목록 필터와 CS 리포트가 같은 기준으로 갈라야 화면과 보고서가 어긋나지 않는다.
-// van_company는 "코세스2,코벤"처럼 쉼표로 여러 개가 들어갈 수 있어, 목록 전체를 비교하는 대신
-// "KICC가 들어 있는가"로 판정한다. KICC 외 값은 전부 토스계열이다.
+// van_company는 "코세스2,코벤"처럼 쉼표로 여러 개가 들어갈 수 있고, 여러 VAN을 함께 쓰는 가맹점은
+// 해당하는 모든 계열에 집계한다(포함 방식). 항목은 대소문자를 무시하고 비교한다.
+// kicc: KICC가 있으면 / nice: NICE가 있으면 / toss: KICC·NICE가 아닌 값이 하나라도 있으면(목록에 없는 값 포함).
 export const KICC_VAN_COMPANY = "KICC";
-export type VanGroup = "toss" | "kicc";
+export const NICE_VAN_COMPANY = "NICE";
+export type VanGroup = "toss" | "kicc" | "nice";
 export const VAN_GROUP_LABEL: Record<VanGroup, string> = {
   toss: "토스계열",
   kicc: "KICC",
+  nice: "NICE",
 };
 
 export const FRANCHISE_CASE_TYPE_LABEL: Record<FranchiseCaseType, string> = {

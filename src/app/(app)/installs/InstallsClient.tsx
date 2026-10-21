@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import type { Profile, FranchiseApplication, VanGroup } from "@/types";
 import { FRANCHISE_STATUS_LABEL, VAN_GROUP_LABEL } from "@/types";
+import { TOSS_ONLY_OTHER_PATTERN } from "@/lib/vanGroup";
 import { CHANNEL_KEYS, resolveChannel } from "@/lib/franchiseChannel";
 import { useToast } from "@/components/ui/Toast";
 import BulkConfirmDialog from "@/components/ui/BulkConfirmDialog";
@@ -124,6 +125,15 @@ const VAN_TONE = {
     idleValue: "text-slate-500",
     dot: "bg-emerald-600",
   },
+  nice: {
+    activeBox: "border-orange-600 bg-orange-50",
+    idleBox: "border-slate-200 bg-white hover:border-orange-300",
+    activeLabel: "text-orange-700",
+    idleLabel: "text-orange-600",
+    activeValue: "text-orange-700",
+    idleValue: "text-slate-500",
+    dot: "bg-orange-600",
+  },
 } as const;
 
 export interface Installation {
@@ -175,7 +185,12 @@ interface Props {
   initialApprovalNoteHistory?: Record<string, ApprovalNote[]>;
   initialDeliveryStats?: { total: number; completed: number };
   van?: VanGroup | "";
-  vanCounts?: { all: number | null; toss: number | null; kicc: number | null };
+  vanCounts?: {
+    all: number | null;
+    toss: number | null;
+    kicc: number | null;
+    nice: number | null;
+  };
 }
 
 export type CompletionApproval = {
@@ -555,7 +570,7 @@ export default function InstallsClient({
   initialApprovalNoteHistory = {},
   initialDeliveryStats = { total: 0, completed: 0 },
   van = "",
-  vanCounts = { all: null, toss: null, kicc: null },
+  vanCounts = { all: null, toss: null, kicc: null, nice: null },
 }: Props) {
   const canEdit = ["tech", "cs", "admin", "master"].includes(profile.role);
   // 일정변경은 서버(requestInstallationStatusApproval)가 tech/admin/master만 받는다. cs는 버튼을 숨긴다.
@@ -807,10 +822,13 @@ export default function InstallsClient({
     else query = query.neq("delivery_type", "delivery");
     if (van === "kicc") {
       query = query.ilike("franchise.van_company", "%KICC%");
+    } else if (van === "nice") {
+      query = query.ilike("franchise.van_company", "%NICE%");
     } else if (van === "toss") {
       query = query
         .not("franchise.van_company", "is", null)
-        .not("franchise.van_company", "ilike", "%KICC%");
+        .not("franchise.van_company", "eq", "")
+        .not("franchise.van_company", "imatch", TOSS_ONLY_OTHER_PATTERN);
     }
     const { data } = await query
       .order("sort_order", { ascending: false, nullsFirst: false })
@@ -2803,7 +2821,7 @@ export default function InstallsClient({
       {/* 택배 발송·기사 페이지는 서버에서 van을 처리하지 않아 눌러도 아무 일이 없다.
           건수를 넘겨준 화면(설치관리 본 목록)에서만 보여준다. */}
       {vanCounts.all !== null && (
-        <div className="grid grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-4 gap-2.5">
           {(
             [
               { value: "" as const, label: "전체", count: vanCounts.all, tone: "all" as const },
@@ -2818,6 +2836,12 @@ export default function InstallsClient({
                 label: VAN_GROUP_LABEL.kicc,
                 count: vanCounts.kicc,
                 tone: "kicc" as const,
+              },
+              {
+                value: "nice" as const,
+                label: VAN_GROUP_LABEL.nice,
+                count: vanCounts.nice,
+                tone: "nice" as const,
               },
             ] satisfies {
               value: VanGroup | "";

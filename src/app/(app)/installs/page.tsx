@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSessionUser, getSessionProfile } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import InstallsClient from "./InstallsClient";
+import { TOSS_ONLY_OTHER_PATTERN } from "@/lib/vanGroup";
 import type { Profile, VanGroup } from "@/types";
 import type { ApprovalNote } from "@/lib/approvalNotes";
 import { fetchAllRows } from "@/lib/fetchAllRows";
@@ -19,17 +20,20 @@ interface VanFilterable<T> {
 
 function applyVanFilter<T extends VanFilterable<T>>(query: T, van: VanFilter): T {
   if (van === "kicc") return query.ilike("franchise.van_company", "%KICC%");
+  if (van === "nice") return query.ilike("franchise.van_company", "%NICE%");
   if (van === "toss") {
     return query
       .not("franchise.van_company", "is", null)
-      .not("franchise.van_company", "ilike", "%KICC%");
+      .not("franchise.van_company", "eq", "")
+      .not("franchise.van_company", "imatch", TOSS_ONLY_OTHER_PATTERN);
   }
   return query;
 }
 
 export default async function InstallsPage({ searchParams }: Props) {
   const { id, van: vanParam } = await searchParams;
-  const van: VanFilter = vanParam === "toss" || vanParam === "kicc" ? vanParam : "";
+  const van: VanFilter =
+    vanParam === "toss" || vanParam === "kicc" || vanParam === "nice" ? vanParam : "";
   const supabase = await createClient();
   const user = await getSessionUser();
   if (!user) redirect("/login");
@@ -49,6 +53,7 @@ export default async function InstallsPage({ searchParams }: Props) {
     { count: allVanCount },
     { count: tossVanCount },
     { count: kiccVanCount },
+    { count: niceVanCount },
   ] = await Promise.all([
     getSessionProfile(),
     applyVanFilter(
@@ -108,12 +113,23 @@ export default async function InstallsPage({ searchParams }: Props) {
         .neq("delivery_type", "delivery"),
       "kicc",
     ),
+    applyVanFilter(
+      supabase
+        .from("installations")
+        .select("id, franchise:franchise_applications!inner(van_company)", {
+          count: "exact",
+          head: true,
+        })
+        .neq("delivery_type", "delivery"),
+      "nice",
+    ),
   ]);
 
   const vanCounts = {
     all: allVanCount ?? 0,
     toss: tossVanCount ?? 0,
     kicc: kiccVanCount ?? 0,
+    nice: niceVanCount ?? 0,
   };
 
   const initialDeliveryStats = {

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { KICC_VAN_COMPANY, type VanGroup } from "@/types";
+import type { VanGroup } from "@/types";
+import { vanGroupsOf } from "@/lib/vanGroup";
 import { computeCsReportMetrics, type CsReportMemoInput } from "@/lib/csReport";
 import CsReportClient from "./CsReportClient";
 
@@ -190,7 +191,7 @@ export default async function CsReportPage({ searchParams }: Props) {
   const kstToday = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
   const month = isValidMonth(params.month) ? params.month : kstToday.slice(0, 7);
   // 리포트는 개별 VAN사가 아니라 계열(토스계열/KICC) 단위로만 본다. 기본은 토스계열.
-  const van: VanGroup = params.van === "kicc" ? "kicc" : "toss";
+  const van: VanGroup = params.van === "kicc" || params.van === "nice" ? params.van : "toss";
 
   const { startIso, endIso } = monthRangeKst(month);
   const { startIso: prevStartIso, endIso: prevEndIso } = monthRangeKst(shiftMonth(month, -1));
@@ -262,16 +263,12 @@ export default async function CsReportPage({ searchParams }: Props) {
     return parseVanList(own || fallback || "");
   }
 
-  // 가맹점 탭의 계열 필터와 같은 정의 — kicc: KICC 포함 / toss: VAN사가 있고 KICC 미포함.
-  const isKiccList = (list: string[]) =>
-    list.some((v) => v.toUpperCase().includes(KICC_VAN_COMPANY));
+  // 가맹점 탭의 계열 필터와 같은 정의(src/lib/vanGroup.ts) — 여러 VAN을 함께 쓰면 해당하는 모든 계열에 포함.
+  const groupsByMerchantId = new Map(
+    merchants.map((m) => [m.id, vanGroupsOf(effectiveVanList(m).join(","))]),
+  );
   const matchingMerchantIds = new Set(
-    merchants
-      .filter((m) => {
-        const list = effectiveVanList(m);
-        return van === "kicc" ? isKiccList(list) : list.length > 0 && !isKiccList(list);
-      })
-      .map((m) => m.id),
+    merchants.filter((m) => groupsByMerchantId.get(m.id)?.includes(van)).map((m) => m.id),
   );
   const brandByMerchantId = new Map(merchants.map((m) => [m.id, m.brand ?? null]));
 
@@ -288,19 +285,17 @@ export default async function CsReportPage({ searchParams }: Props) {
   }
 
   // 인입내역 등록이 만드는 가맹점은 VAN 정보가 없어 계열 매칭이 안 된다. VAN 미상 인입 건은
-  // 토스계열 리포트에만 합산하고, KICC 리포트에는 KICC로 확인된 가맹점 건만 넣는다
-  // (KICC 제출 숫자를 오염시키지 않기 위함).
-  const kiccMerchantIds = new Set(
-    merchants.filter((m) => isKiccList(effectiveVanList(m))).map((m) => m.id),
-  );
+  // 토스계열 리포트에만 합산하고, KICC·NICE 리포트에는 해당 계열로 확인된 가맹점 건만 넣는다
+  // (제출 숫자를 오염시키지 않기 위함).
+  function ticketBelongsToReport(merchantId: string) {
+    const groups = groupsByMerchantId.get(merchantId) ?? [];
+    if (van === "toss") return groups.length === 0 || groups.includes("toss");
+    return groups.includes(van);
+  }
 
   function toTicketInput(rows: TechTicketRow[]): CsReportMemoInput[] {
     return rows
-      .filter((row) =>
-        van === "kicc"
-          ? kiccMerchantIds.has(row.merchant_id)
-          : !kiccMerchantIds.has(row.merchant_id),
-      )
+      .filter((row) => ticketBelongsToReport(row.merchant_id))
       .map((row) => ({
         entry_type: "as" as const,
         issue_category: row.issue_category ?? null,

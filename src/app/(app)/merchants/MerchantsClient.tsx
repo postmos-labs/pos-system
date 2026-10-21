@@ -46,7 +46,12 @@ interface Props {
   page: number;
   totalPages: number;
   van: VanGroup | "";
-  vanCounts: { all: number | null; toss: number | null; kicc: number | null };
+  vanCounts: {
+    all: number | null;
+    toss: number | null;
+    kicc: number | null;
+    nice: number | null;
+  };
   canDelete: boolean;
   q: string;
 }
@@ -310,22 +315,32 @@ export default function MerchantsClient({
             />
           </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-1 rounded-[10px] bg-slate-100 p-[3px]">
+          <div className="mt-3 grid grid-cols-4 gap-1 rounded-[10px] bg-slate-100 p-[3px]">
             {(
               [
                 { value: "" as const, label: "전체", count: vanCounts.all },
                 { value: "toss" as const, label: VAN_GROUP_LABEL.toss, count: vanCounts.toss },
                 { value: "kicc" as const, label: VAN_GROUP_LABEL.kicc, count: vanCounts.kicc },
+                { value: "nice" as const, label: VAN_GROUP_LABEL.nice, count: vanCounts.nice },
               ] satisfies { value: VanGroup | ""; label: string; count: number | null }[]
             ).map(({ value, label, count }) => {
               const active = van === value;
-              const tone = value === "toss" ? "toss" : value === "kicc" ? "kicc" : "all";
+              const tone =
+                value === "toss"
+                  ? "toss"
+                  : value === "kicc"
+                    ? "kicc"
+                    : value === "nice"
+                      ? "nice"
+                      : "all";
               const activeBg =
                 tone === "toss"
                   ? "bg-blue-600 shadow-sm"
                   : tone === "kicc"
                     ? "bg-emerald-600 shadow-sm"
-                    : "bg-white shadow-sm";
+                    : tone === "nice"
+                      ? "bg-orange-600 shadow-sm"
+                      : "bg-white shadow-sm";
               const activeLabelColor = tone === "all" ? "text-slate-900" : "text-white";
               const activeValueColor = tone === "all" ? "text-slate-500" : "text-white";
               return (
@@ -342,7 +357,7 @@ export default function MerchantsClient({
                   >
                     {!active && tone !== "all" && (
                       <span
-                        className={`size-1.5 shrink-0 rounded-full ${tone === "toss" ? "bg-blue-600" : "bg-emerald-600"}`}
+                        className={`size-1.5 shrink-0 rounded-full ${tone === "toss" ? "bg-blue-600" : tone === "kicc" ? "bg-emerald-600" : "bg-orange-600"}`}
                       />
                     )}
                     {label}

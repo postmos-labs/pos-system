@@ -80,6 +80,15 @@ const VAN_TONE = {
     idleValue: "text-slate-500",
     dot: "bg-emerald-600",
   },
+  nice: {
+    activeBox: "border-orange-600 bg-orange-50",
+    idleBox: "border-slate-200 bg-white hover:border-orange-300",
+    activeLabel: "text-orange-700",
+    idleLabel: "text-orange-600",
+    activeValue: "text-orange-700",
+    idleValue: "text-slate-500",
+    dot: "bg-orange-600",
+  },
 } as const;
 
 type TableView =
@@ -190,7 +199,7 @@ interface Props {
   missedCallFilter: string;
   vanFilter: string;
   vanGroupFilter: VanGroup | "";
-  vanGroupCounts: { all: number; toss: number; kicc: number };
+  vanGroupCounts: { all: number; toss: number; kicc: number; nice: number };
   dateFrom: string;
   dateTo: string;
   sortBy: SortBy;
@@ -741,7 +750,7 @@ export default function FranchiseReceiptSurface(props: Props) {
             />
           </button>
         </div>
-        <div className="grid grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-4 gap-2.5">
           {(
             [
               {
@@ -761,6 +770,12 @@ export default function FranchiseReceiptSurface(props: Props) {
                 label: VAN_GROUP_LABEL.kicc,
                 count: props.vanGroupCounts.kicc,
                 tone: "kicc" as const,
+              },
+              {
+                value: "nice" as const,
+                label: VAN_GROUP_LABEL.nice,
+                count: props.vanGroupCounts.nice,
+                tone: "nice" as const,
               },
             ] satisfies {
               value: VanGroup | "";

@@ -31,18 +31,27 @@ const VAN_TONE = {
     idleValue: "text-slate-500",
     dot: "bg-emerald-600",
   },
+  nice: {
+    activeBox: "border-orange-600 bg-orange-50",
+    idleBox: "border-slate-200 bg-white hover:border-orange-300",
+    activeLabel: "text-orange-700",
+    idleLabel: "text-orange-600",
+    activeValue: "text-orange-700",
+    idleValue: "text-slate-500",
+    dot: "bg-orange-600",
+  },
 } as const;
 
 interface Props {
   van: VanGroup | "";
-  counts: { all: number; toss: number; kicc: number };
+  counts: { all: number; toss: number; kicc: number; nice: number };
 }
 
 export default function VanGroupTabs({ van, counts }: Props) {
   const router = useRouter();
 
   return (
-    <div className="grid grid-cols-3 gap-2.5">
+    <div className="grid grid-cols-4 gap-2.5">
       {(
         [
           { value: "" as const, label: "전체", count: counts.all, tone: "all" as const },
@@ -57,6 +66,12 @@ export default function VanGroupTabs({ van, counts }: Props) {
             label: VAN_GROUP_LABEL.kicc,
             count: counts.kicc,
             tone: "kicc" as const,
+          },
+          {
+            value: "nice" as const,
+            label: VAN_GROUP_LABEL.nice,
+            count: counts.nice,
+            tone: "nice" as const,
           },
         ] satisfies {
           value: VanGroup | "";

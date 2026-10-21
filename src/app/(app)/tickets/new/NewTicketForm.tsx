@@ -12,6 +12,7 @@ import { linkWooCustomerToMerchant } from "@/app/(app)/woo/actions";
 import Link from "next/link";
 import {
   KICC_VAN_COMPANY,
+  NICE_VAN_COMPANY,
   TEAM_LABEL,
   VAN_GROUP_LABEL,
   type TicketTeam,
@@ -44,13 +45,14 @@ interface MerchantSuggestion {
   van_company: string | null;
 }
 
-// 가맹점 계열 판정(토스계열 = VAN 있고 KICC 아님)에 맞는 저장 값.
+// 가맹점 계열 판정(토스계열 = KICC·NICE가 아닌 VAN이 있음)에 맞는 저장 값.
 // 토스계열은 특정 밴사가 아니라 계열이므로 자리표시 값 "토스"를 넣는다.
 const VAN_GROUP_VALUE: Record<VanGroup, string> = {
   toss: "토스",
   kicc: KICC_VAN_COMPANY,
+  nice: NICE_VAN_COMPANY,
 };
-const VAN_GROUPS: VanGroup[] = ["toss", "kicc"];
+const VAN_GROUPS: VanGroup[] = ["toss", "kicc", "nice"];
 const CHANNELS = ["채널톡", "유선"];
 
 // 컬럼이 없어 저장되지 못한 항목을 직원이 알아볼 수 있는 이름으로 알린다.
@@ -521,7 +523,7 @@ export default function NewTicketForm({ salesId, role }: Props) {
           {!(linkedMerchant && linkedMerchant.van_company) && (
             <div>
               <Label>VAN 계열 (선택)</Label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {VAN_GROUPS.map((group) => (
                   <button
                     key={group}

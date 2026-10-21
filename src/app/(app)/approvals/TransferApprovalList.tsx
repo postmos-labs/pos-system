@@ -7,7 +7,7 @@ import {
   CHANNEL_KEYS,
   type ChannelKey,
 } from "@/lib/franchiseChannel";
-import { vanGroupOf } from "@/lib/vanGroup";
+import { vanGroupsOf } from "@/lib/vanGroup";
 import { VAN_GROUP_LABEL, type VanGroup } from "@/types";
 import TransferApprovalItem from "./TransferApprovalItem";
 import ApprovalButton from "./ApprovalButton";
@@ -47,6 +47,12 @@ const VAN_TABS: { key: "all" | VanGroup; label: string; active: string; idle: st
     active: "bg-emerald-600 text-white",
     idle: "text-emerald-600",
   },
+  {
+    key: "nice",
+    label: VAN_GROUP_LABEL.nice,
+    active: "bg-orange-600 text-white",
+    idle: "text-orange-600",
+  },
 ];
 
 export default function TransferApprovalList({ items, approvalRole }: Props) {
@@ -59,7 +65,7 @@ export default function TransferApprovalList({ items, approvalRole }: Props) {
         item,
         index,
         tone: resolveChannel(item.channel, item.receptionChannel),
-        van: vanGroupOf(item.vanCompany),
+        vans: vanGroupsOf(item.vanCompany),
       }))
       .sort((a, b) => {
         const rankDiff = CHANNEL_RANK[a.tone.key] - CHANNEL_RANK[b.tone.key];
@@ -75,25 +81,26 @@ export default function TransferApprovalList({ items, approvalRole }: Props) {
       direct_sales: 0,
       none: 0,
     };
-    for (const { tone, van } of sortedItems) {
-      if (vanFilter && van !== vanFilter) continue;
+    for (const { tone, vans } of sortedItems) {
+      if (vanFilter && !vans.includes(vanFilter)) continue;
       result[tone.key] += 1;
     }
     return result;
   }, [sortedItems, vanFilter]);
 
   const vanCounts = useMemo(() => {
-    const result: Record<"all" | VanGroup, number> = { all: 0, toss: 0, kicc: 0 };
-    for (const { tone, van } of sortedItems) {
+    const result: Record<"all" | VanGroup, number> = { all: 0, toss: 0, kicc: 0, nice: 0 };
+    for (const { tone, vans } of sortedItems) {
       if (filter && tone.key !== filter) continue;
       result.all += 1;
-      if (van) result[van] += 1;
+      for (const van of vans) result[van] += 1;
     }
     return result;
   }, [sortedItems, filter]);
 
   const visibleItems = sortedItems.filter(
-    ({ tone, van }) => (!filter || tone.key === filter) && (!vanFilter || van === vanFilter),
+    ({ tone, vans }) =>
+      (!filter || tone.key === filter) && (!vanFilter || vans.includes(vanFilter)),
   );
 
   return (

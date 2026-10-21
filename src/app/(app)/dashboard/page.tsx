@@ -27,6 +27,7 @@ import ExcelDownloadButton from "./ExcelDownloadButton";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import VanGroupTabs from "./VanGroupTabs";
+import { TOSS_ONLY_OTHER_PATTERN } from "@/lib/vanGroup";
 import { resolveChannel, CHANNEL_KEYS, type ChannelKey } from "@/lib/franchiseChannel";
 import { CLOSED_STATUSES } from "../franchise/fetchFranchiseListData";
 
@@ -39,8 +40,12 @@ interface VanFilterable<T> {
 
 function applyVanFilter<T extends VanFilterable<T>>(query: T, van: VanFilter): T {
   if (van === "kicc") return query.ilike("van_company", "%KICC%");
+  if (van === "nice") return query.ilike("van_company", "%NICE%");
   if (van === "toss") {
-    return query.not("van_company", "is", null).not("van_company", "ilike", "%KICC%");
+    return query
+      .not("van_company", "is", null)
+      .not("van_company", "eq", "")
+      .not("van_company", "imatch", TOSS_ONLY_OTHER_PATTERN);
   }
   return query;
 }
@@ -51,7 +56,8 @@ interface Props {
 
 export default async function DashboardPage({ searchParams }: Props) {
   const params = await searchParams;
-  const van: VanFilter = params.van === "toss" || params.van === "kicc" ? params.van : "";
+  const van: VanFilter =
+    params.van === "toss" || params.van === "kicc" || params.van === "nice" ? params.van : "";
   const supabase = await createClient();
 
   const user = await getSessionUser();
@@ -163,12 +169,17 @@ export default async function DashboardPage({ searchParams }: Props) {
     ...countStatuses.map(buildCountQuery),
   ]);
 
-  const [{ count: vanAllCount }, { count: vanTossCount }, { count: vanKiccCount }] =
-    await Promise.all([
-      buildVanGroupCountQuery(""),
-      buildVanGroupCountQuery("toss"),
-      buildVanGroupCountQuery("kicc"),
-    ]);
+  const [
+    { count: vanAllCount },
+    { count: vanTossCount },
+    { count: vanKiccCount },
+    { count: vanNiceCount },
+  ] = await Promise.all([
+    buildVanGroupCountQuery(""),
+    buildVanGroupCountQuery("toss"),
+    buildVanGroupCountQuery("kicc"),
+    buildVanGroupCountQuery("nice"),
+  ]);
 
   // 1일로 먼저 맞춘 뒤 달을 뺀다. 31일에서 먼저 달을 빼면 없는 날짜가 돼 다음 달로 넘친다.
   const sixMonthsAgo = new Date();
@@ -319,6 +330,7 @@ export default async function DashboardPage({ searchParams }: Props) {
           all: vanAllCount ?? 0,
           toss: vanTossCount ?? 0,
           kicc: vanKiccCount ?? 0,
+          nice: vanNiceCount ?? 0,
         }}
       />
 

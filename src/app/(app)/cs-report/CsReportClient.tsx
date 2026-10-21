@@ -200,6 +200,7 @@ export default function CsReportClient({
           options={[
             { value: "toss", label: VAN_GROUP_LABEL.toss },
             { value: "kicc", label: VAN_GROUP_LABEL.kicc },
+            { value: "nice", label: VAN_GROUP_LABEL.nice },
           ]}
         />
 

@@ -35,7 +35,7 @@ import { formatPhone, formatBusinessNumber, formatDateText, digitsOnly } from "@
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { mergeRowsPreservingIdentity } from "@/lib/mergeRows";
 import { resolveChannel } from "@/lib/franchiseChannel";
-import { parseVanList, vanGroupOf } from "@/lib/vanGroup";
+import { inVanGroup, parseVanList } from "@/lib/vanGroup";
 import { deleteFranchiseRows, loadArchivedFranchiseRows } from "./actions";
 import { markLeadConverted } from "../leads/actions";
 import {
@@ -1434,7 +1434,7 @@ export default function FranchiseClient({
       if (caseTypeFilter && row.case_type !== caseTypeFilter) return false;
       if (missedCallFilter && (row.missed_call_count ?? 0) !== Number(missedCallFilter))
         return false;
-      if (vanGroupFilter && vanGroupOf(row.van_company) !== vanGroupFilter) return false;
+      if (vanGroupFilter && !inVanGroup(row.van_company, vanGroupFilter)) return false;
       if (
         vanFilter &&
         !row.van_company
@@ -1757,12 +1757,13 @@ export default function FranchiseClient({
   const vanGroupCounts = useMemo(() => {
     let toss = 0;
     let kicc = 0;
+    let nice = 0;
     for (const row of localRows) {
-      const group = vanGroupOf(row.van_company);
-      if (group === "toss") toss += 1;
-      else if (group === "kicc") kicc += 1;
+      if (inVanGroup(row.van_company, "toss")) toss += 1;
+      if (inVanGroup(row.van_company, "kicc")) kicc += 1;
+      if (inVanGroup(row.van_company, "nice")) nice += 1;
     }
-    return { all: localRows.length, toss, kicc };
+    return { all: localRows.length, toss, kicc, nice };
   }, [localRows]);
 
   const tableViewCounts = useMemo(() => {
