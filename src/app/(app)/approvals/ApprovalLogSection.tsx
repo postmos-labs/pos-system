@@ -1,5 +1,9 @@
 import { requireApprovalResponsible } from "@/lib/auth/require-admin";
 import { createClient } from "@/lib/supabase/server";
+import {
+  INSTALLATION_DELIVERY_TYPE_LABEL,
+  isInstallationDeliveryType,
+} from "@/lib/installationDeliveryType";
 
 type Relation<T> = T | T[] | null;
 function one<T>(relation: Relation<T>) {
@@ -111,12 +115,20 @@ export default async function ApprovalLogSection() {
     ...transferLogs.map((log) => {
       const meta = TRANSFER_STATUS_META[log.to_status ?? ""];
       const franchise = one(log.franchise_application);
-      const details = (log.details ?? {}) as { rejection_reason?: string | null };
+      const details = (log.details ?? {}) as {
+        rejection_reason?: string | null;
+        delivery_type?: string | null;
+      };
+      // 팀장 최종 승인 기록에는 이관 구분(설치·택배발송 등)이 함께 저장된다. 어떻게 이관됐는지 단계 옆에 보여준다.
+      const deliveryLabel =
+        details.delivery_type && isInstallationDeliveryType(details.delivery_type)
+          ? INSTALLATION_DELIVERY_TYPE_LABEL[details.delivery_type]
+          : null;
       return {
         id: `transfer-${log.id}`,
         source: "transfer" as const,
         subject: franchise?.business_name || franchise?.owner_name || "삭제된 가맹접수",
-        stageLabel: meta?.label ?? log.to_status ?? "-",
+        stageLabel: `${meta?.label ?? log.to_status ?? "-"}${deliveryLabel ? ` · ${deliveryLabel}` : ""}`,
         result: meta?.result ?? "request",
         actorName: log.user_name ?? one(log.user)?.name ?? "알 수 없음",
         reason: details.rejection_reason || null,
