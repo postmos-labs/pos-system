@@ -9,6 +9,7 @@ const CS_TABS = [
   { href: "/woo", label: "우국상 관리" },
   { href: "/changes", label: "변경 관리" },
   { href: "/internet", label: "인터넷 관리" },
+  { href: "/surveys", label: "리서치 응답" },
   { href: "/large-franchises", label: "대형 가맹점" },
 ] as const;
 

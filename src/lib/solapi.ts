@@ -386,3 +386,41 @@ export async function sendSignComplete({
     kakaoOptions: ko,
   });
 }
+
+// 가맹점 리서치 설문. 템플릿 버튼은 하나, https://#{링크} 로 등록하고 항목 선택은 웹 페이지에서 한다.
+// 알림톡은 고객이 요청한 정보만 보낼 수 있어(요청 없는 안내는 광고성으로 반려됨), 상담 중 안내를 요청한 고객에게만 보낸다.
+// 알림톡은 등록한 본문과 보내는 text가 다르면 실패하므로 템플릿 본문을 그대로 둔다.
+const SURVEY_TEMPLATE_ENV_KEY = "SOLAPI_KAKAO_TEMPLATE_FRANCHISE_SURVEY";
+
+export function isSurveyTemplateConfigured() {
+  return !!process.env[SURVEY_TEMPLATE_ENV_KEY];
+}
+
+export async function sendFranchiseSurvey({
+  phone,
+  ownerName,
+  businessName,
+  token,
+  expiresAt,
+}: {
+  phone: string;
+  ownerName?: string | null;
+  businessName?: string | null;
+  token: string;
+  expiresAt: Date;
+}) {
+  const name = ownerName || businessName || "고객";
+  const deadline = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(expiresAt);
+  const text = `${name} 사장님, 상담 중 요청하신 오픈 준비 상품 안내드립니다.\n\n아래 버튼을 눌러 안내받고 싶은 항목(정수기·배달앱·테이블오더·키오스크)을 선택해 주시면, 담당자가 사장님 매장 기준으로 확인 후 연락드립니다.\n\n▶ 선택 기한: ${deadline}까지 (한 번만 응답 가능)\n\n※ 본 메시지는 상담 시 안내를 요청하신 고객님께만 발송됩니다.`;
+  const ko = kakaoOptions(SURVEY_TEMPLATE_ENV_KEY, {
+    "#{고객명}": name,
+    "#{기한}": deadline,
+    "#{링크}": `${origin().replace(/^https?:\/\//, "")}/survey/${token}`,
+  });
+  await solapiSend({
+    to: phone,
+    from: process.env.SOLAPI_SENDER!,
+    text,
+    kakaoOptions: ko,
+  });
+}

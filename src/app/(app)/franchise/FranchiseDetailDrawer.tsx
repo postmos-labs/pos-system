@@ -24,6 +24,7 @@ import type { ApprovalNote } from "@/lib/approvalNotes";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { DatePickerField } from "@/components/ui/DatePickerField";
 import { resolveChannel } from "@/lib/franchiseChannel";
+import FranchiseSurveyPanel from "./FranchiseSurveyPanel";
 
 const EQUIPMENT_CATALOG = [
   "토스프론트",
@@ -715,6 +716,7 @@ export default function FranchiseDetailDrawer({
                 })}
               </div>
             </div>
+            <FranchiseSurveyPanel key={row.id} franchiseId={row.id} hasPhone={!!row.phone} />
             {transferApproval && (
               <div
                 className={`rounded-xl border p-4 ${channelTone.star ? "border-violet-200 bg-violet-50" : "border-slate-200 bg-slate-50"}`}

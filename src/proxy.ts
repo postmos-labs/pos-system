@@ -40,7 +40,8 @@ export async function proxy(request: NextRequest) {
   const isPublicPage =
     request.nextUrl.pathname.startsWith("/sign/") ||
     request.nextUrl.pathname.startsWith("/install-status/") ||
-    request.nextUrl.pathname.startsWith("/equipment-select/");
+    request.nextUrl.pathname.startsWith("/equipment-select/") ||
+    request.nextUrl.pathname.startsWith("/survey/");
 
   if (!user && !isLoginPage && !isPublicPage) {
     // 원래 가려던 주소를 함께 넘긴다. 그러지 않으면 링크를 눌러 들어온 사람이 로그인한 뒤

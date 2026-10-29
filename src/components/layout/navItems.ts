@@ -9,6 +9,7 @@ import {
   HardHat,
   Images,
   LayoutDashboard,
+  ListChecks,
   ChartNoAxesCombined,
   Network,
   Package,
@@ -62,6 +63,7 @@ export const ROLE_FOLDERS: NavGroup[] = [
       { href: "/woo", label: "우국상 관리", icon: Users },
       { href: "/changes", label: "변경 관리", icon: RefreshCw },
       { href: "/internet", label: "인터넷 관리", icon: Network },
+      { href: "/surveys", label: "리서치 응답", icon: ListChecks },
     ],
   },
   {
