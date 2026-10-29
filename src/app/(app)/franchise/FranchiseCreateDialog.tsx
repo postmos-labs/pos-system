@@ -45,6 +45,7 @@ export interface FranchiseCreateInput {
   business_name: string;
   owner_name: string;
   phone: string;
+  email: string;
   business_number: string;
   equipmentItems: EquipmentItem[];
   address: string;
@@ -100,6 +101,7 @@ function initialForm(mode: "new" | "existing"): FranchiseCreateInput {
     business_name: "",
     owner_name: "",
     phone: "",
+    email: "",
     business_number: "",
     equipmentItems: [],
     address: "",
@@ -499,7 +501,7 @@ export default function FranchiseCreateDialog({
                         />
                       </Field>
                     </div>
-                    <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
                       <Field label="사업자 유형">
                         <AppSelect
                           value={form.applicant_type}
@@ -535,6 +537,15 @@ export default function FranchiseCreateDialog({
                             </span>
                           </p>
                         )}
+                      </Field>
+                      <Field label="이메일">
+                        <input
+                          type="email"
+                          placeholder="example@email.com"
+                          value={form.email}
+                          onChange={(event) => setForm({ ...form, email: event.target.value })}
+                          className={inputClass}
+                        />
                       </Field>
                     </div>
                   </div>

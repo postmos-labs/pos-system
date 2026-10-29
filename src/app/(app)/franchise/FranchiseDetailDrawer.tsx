@@ -474,7 +474,7 @@ export default function FranchiseDetailDrawer({
                     />
                   </Field>
                 </div>
-                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
                   <Field label="사업자 유형">
                     <AppSelect
                       value={row.applicant_type}
@@ -494,6 +494,13 @@ export default function FranchiseDetailDrawer({
                       placeholder="000-00-00000"
                       formatter={formatBusinessNumber}
                       onSave={(value) => onSave("business_number", value)}
+                    />
+                  </Field>
+                  <Field label="이메일">
+                    <EditableInput
+                      value={row.email}
+                      placeholder="example@email.com"
+                      onSave={(value) => onSave("email", value.trim())}
                     />
                   </Field>
                 </div>

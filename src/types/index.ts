@@ -186,6 +186,7 @@ export interface FranchiseApplication {
   business_name?: string;
   owner_name?: string;
   phone?: string;
+  email?: string;
   business_number?: string;
   equipment?: string;
   equipment_items?: EquipmentItem[];

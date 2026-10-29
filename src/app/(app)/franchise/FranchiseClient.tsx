@@ -257,6 +257,7 @@ const EMPTY_FORM = {
   business_name: "",
   owner_name: "",
   phone: "",
+  email: "",
   business_number: "",
   equipmentItems: [] as EquipmentItem[],
   address: "",
@@ -1948,6 +1949,8 @@ export default function FranchiseClient({
         business_name: form.business_name || null,
         owner_name: form.owner_name || null,
         phone: form.phone ? formatPhone(form.phone) : null,
+        // 158 마이그레이션 전에도 등록이 되도록 입력했을 때만 칸을 보낸다.
+        ...(form.email.trim() ? { email: form.email.trim() } : {}),
         business_number: form.business_number ? formatBusinessNumber(form.business_number) : null,
         equipment_items: form.equipmentItems,
         address: form.address || null,
