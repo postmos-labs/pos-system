@@ -950,6 +950,34 @@ export default function InstallsClient({
     toast.success("가맹접수와 연결했습니다.");
   }
 
+  function handleFranchiseUnlinked(
+    installationId: string,
+    patch: { customer_name: string; notes: string | null },
+  ) {
+    const notes = patch.notes ?? undefined;
+    setInstalls((prev) =>
+      prev.map((row) =>
+        row.id === installationId
+          ? {
+              ...row,
+              franchise_application_id: undefined,
+              franchise: null,
+              customer_name: patch.customer_name,
+              notes,
+            }
+          : row,
+      ),
+    );
+    setDetailDraft((d) =>
+      d ? { ...d, customer_name: patch.customer_name, notes: notes ?? "" } : d,
+    );
+    setFranchiseDetail(null);
+    setLoadingDetail(false);
+    setCompositionMerchantId(null);
+    setCompositionEquipment([]);
+    toast.success("가맹접수 연결을 해제했습니다.");
+  }
+
   function closeInstallDetail() {
     setDetailInst(null);
     setDetailDraft(null);
@@ -2327,6 +2355,7 @@ export default function InstallsClient({
           onFranchiseLinked={(franchiseId, franchise, patch) =>
             handleFranchiseLinked(activeDetailInst.id, franchiseId, franchise, patch)
           }
+          onFranchiseUnlinked={(patch) => handleFranchiseUnlinked(activeDetailInst.id, patch)}
           onClose={closeInstallDetail}
         />
       )}

@@ -68,6 +68,7 @@ const FRANCHISE_ACTIVITY_LABEL: Record<string, string> = {
   install_transfer: "기술지원 이관",
   install_retransfer: "기술지원 재이관",
   install_rejected: "기술지원 반려",
+  install_unlinked: "설치건 연결 해제",
 };
 
 const ALIMTALK_LABEL: Record<string, string> = {
@@ -99,6 +100,7 @@ const INSTALLATION_ACTION_LABEL: Record<string, string> = {
   step_responsible_approved: "책임자 승인",
   step_final_approved: "팀장 승인",
   franchise_link: "가맹접수 연결",
+  franchise_unlink: "가맹접수 연결 해제",
   step_approval_rejected: "단계 승인 반려",
 };
 

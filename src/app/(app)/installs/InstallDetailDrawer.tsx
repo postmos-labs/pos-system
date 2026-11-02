@@ -36,6 +36,7 @@ import {
 } from "./installStatus";
 import type { Installation, CompletionApproval } from "./InstallsClient";
 import FranchiseLinkSection from "./FranchiseLinkSection";
+import FranchiseUnlinkButton from "./FranchiseUnlinkButton";
 import { installBadge, effectiveOpenDate, franchiseOpenDate } from "@/lib/openSchedule";
 
 // franchise_applications를 "*"로 select한 뒤 sales/cs 조인의 name만 붙인 결과 중,
@@ -120,6 +121,7 @@ interface Props {
     franchise: NonNullable<Installation["franchise"]>,
     patch: { customer_name: string; notes: string | null },
   ) => void;
+  onFranchiseUnlinked: (patch: { customer_name: string; notes: string | null }) => void;
 }
 
 const inputClass =
@@ -256,6 +258,7 @@ export default function InstallDetailDrawer({
   onOpenHistory,
   onOpenWoo,
   onFranchiseLinked,
+  onFranchiseUnlinked,
 }: Props) {
   const [franchiseOpen, setFranchiseOpen] = useState(false);
 
@@ -674,6 +677,13 @@ export default function InstallDetailDrawer({
                     <ChevronDown className="text-muted-foreground size-4" />
                   )}
                 </button>
+                {canEdit && (
+                  <FranchiseUnlinkButton
+                    installationId={installation.id}
+                    franchiseApplicationId={installation.franchise_application_id}
+                    onUnlinked={onFranchiseUnlinked}
+                  />
+                )}
                 {franchiseOpen && (
                   <div className="mt-3">
                     {franchiseLoading ? (

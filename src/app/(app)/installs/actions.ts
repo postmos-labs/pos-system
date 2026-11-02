@@ -1775,6 +1775,7 @@ export async function linkInstallationToFranchise(input: {
 
   // merchants 확보 — 101 트리거와 같은 규칙: 접수 연결 → franchise.merchant_id → 신규 생성
   let merchantId: string | null = null;
+  let merchantCreated = false;
   const { data: byFranchise } = await admin
     .from("merchants")
     .select("id")
@@ -1830,6 +1831,7 @@ export async function linkInstallationToFranchise(input: {
       return { error: createError?.message ?? "가맹점을 만들지 못했습니다." };
     }
     merchantId = created.id;
+    merchantCreated = true;
   }
 
   const { error: merchantLinkError } = await admin
@@ -1847,11 +1849,18 @@ export async function linkInstallationToFranchise(input: {
     Array.isArray(installation.items) && installation.items.length > 0
       ? installation.items
       : (franchise.equipment_items ?? []);
+  // 연결 해제 때 이 연결이 만든 초안만 지우려고, 시딩 전에 초안(source='application')이 있었는지 본다.
+  const { count: seedBefore } = await admin
+    .from("merchant_equipment")
+    .select("id", { count: "exact", head: true })
+    .eq("merchant_id", merchantId)
+    .eq("source", "application");
   const { error: seedError } = await admin.rpc("seed_merchant_equipment_from_application", {
     p_merchant_id: merchantId,
     p_equipment_items: seedItems,
   });
   if (seedError) console.error("설치 구성 초안 생성 실패", seedError);
+  const equipmentSeeded = !seedError && seedBefore === 0;
 
   // action CHECK 제약 때문에 새 action 값은 못 쓴다. to_status는 null이어야 가맹점 360이 완료 시각으로 오인하지 않는다.
   const { error: activityError } = await admin.from("installation_activity_logs").insert({
@@ -1864,6 +1873,14 @@ export async function linkInstallationToFranchise(input: {
       source: "franchise_link",
       franchise_application_id: franchiseApplicationId,
       reason: `가맹접수 연결 · ${franchise.business_name || franchise.owner_name || "미입력"}`,
+      // 연결 해제 때 되돌리기 위한 값
+      prev_customer_name: installation.customer_name,
+      prev_notes: installation.notes ?? null,
+      linked_customer_name: linkedName,
+      linked_notes: linkedNotes,
+      merchant_id: merchantId,
+      merchant_created: merchantCreated,
+      equipment_seeded: equipmentSeeded,
     },
   });
   if (activityError) {
@@ -1914,4 +1931,150 @@ export async function linkInstallationToFranchise(input: {
       reception_channel: franchise.reception_channel ?? null,
     },
   };
+}
+
+// 설치관리에서 수동으로 연결한 건인지 확인한다. 기술지원 이관(승인 기록이 있는 접수)은 해제 대상이 아니다.
+async function findManualFranchiseLink(
+  admin: ReturnType<typeof createAdminClient>,
+  installationId: string,
+) {
+  const { data: installation } = await admin
+    .from("installations")
+    .select("id,franchise_application_id,customer_name,notes")
+    .eq("id", installationId)
+    .maybeSingle();
+  const franchiseApplicationId = installation?.franchise_application_id as string | null;
+  if (!installation || !franchiseApplicationId) return null;
+
+  const [{ data: transfers }, { data: linkLog }] = await Promise.all([
+    admin
+      .from("franchise_transfer_approvals")
+      .select("id")
+      .eq("franchise_application_id", franchiseApplicationId)
+      .neq("status", "rejected")
+      .limit(1),
+    admin
+      .from("installation_activity_logs")
+      .select("details")
+      .eq("installation_id", installationId)
+      .eq("details->>source", "franchise_link")
+      .eq("details->>franchise_application_id", franchiseApplicationId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  if ((transfers ?? []).length > 0 || !linkLog) return null;
+  return {
+    installation,
+    franchiseApplicationId,
+    details: (linkLog.details ?? {}) as Record<string, unknown>,
+  };
+}
+
+export async function getFranchiseUnlinkable(installationId: string) {
+  const editor = await getInstallationEditor();
+  if ("error" in editor) return { unlinkable: false };
+  const link = await findManualFranchiseLink(createAdminClient(), installationId);
+  return { unlinkable: !!link };
+}
+
+// 가맹접수 연결 해제. 연결 때 바꾼 상호명·비고는 그 뒤 손대지 않았을 때만 원래 값으로 되돌린다.
+// 가맹점(merchants)은 그 접수의 가맹점이라 남겨 둔다 — 나중에 정상 이관되면 트리거가 그대로 다시 쓴다.
+// 연결이 만든 설치 구성 초안만 지워, 다음 이관 때 올바른 품목으로 다시 채워지게 한다.
+export async function unlinkInstallationFromFranchise(installationId: string) {
+  const editor = await getInstallationEditor();
+  if ("error" in editor) return { error: editor.error };
+
+  const admin = createAdminClient();
+  const link = await findManualFranchiseLink(admin, installationId);
+  if (!link) {
+    return {
+      error:
+        "설치관리에서 직접 연결한 건만 해제할 수 있습니다. 기술지원 이관건은 해제할 수 없습니다.",
+    };
+  }
+  const { installation, franchiseApplicationId, details } = link;
+
+  const currentNotes = (installation.notes as string | null) ?? null;
+  const customerName =
+    typeof details.prev_customer_name === "string" &&
+    installation.customer_name === details.linked_customer_name
+      ? details.prev_customer_name
+      : (installation.customer_name as string);
+  const notes =
+    "prev_notes" in details && currentNotes === ((details.linked_notes as string | null) ?? null)
+      ? ((details.prev_notes as string | null) ?? null)
+      : currentNotes;
+
+  const { data: unlinked, error: unlinkError } = await admin
+    .from("installations")
+    .update({ franchise_application_id: null, customer_name: customerName, notes })
+    .eq("id", installationId)
+    .eq("franchise_application_id", franchiseApplicationId)
+    .select("id");
+  if (unlinkError) return { error: unlinkError.message };
+  if (!unlinked || unlinked.length === 0) {
+    return { error: "연결 상태가 바뀌었습니다. 새로고침해 주세요." };
+  }
+
+  const merchantId = typeof details.merchant_id === "string" ? details.merchant_id : null;
+  if (merchantId) {
+    const [{ error: inventoryError }, { error: postHistoryError }] = await Promise.all([
+      admin
+        .from("inventory_logs")
+        .update({ merchant_id: null })
+        .eq("installation_id", installationId)
+        .eq("merchant_id", merchantId),
+      admin
+        .from("installation_post_history")
+        .update({ merchant_id: null })
+        .eq("installation_id", installationId)
+        .eq("merchant_id", merchantId),
+    ]);
+    if (inventoryError) console.error("재고 기록 가맹점 해제 실패", inventoryError);
+    if (postHistoryError && !isMissingInstallationPostHistoryTable(postHistoryError)) {
+      console.error("설치 이후 메모 가맹점 해제 실패", postHistoryError);
+    }
+    if (details.equipment_seeded === true) {
+      const { error: equipmentError } = await admin
+        .from("merchant_equipment")
+        .delete()
+        .eq("merchant_id", merchantId)
+        .eq("source", "application");
+      if (equipmentError) console.error("설치 구성 초안 삭제 실패", equipmentError);
+    }
+  }
+
+  const { data: franchise } = await admin
+    .from("franchise_applications")
+    .select("status,business_name,owner_name")
+    .eq("id", franchiseApplicationId)
+    .maybeSingle();
+  const { error: activityError } = await admin.from("installation_activity_logs").insert({
+    installation_id: installationId,
+    user_id: editor.user.id,
+    action: "status_changed",
+    from_status: null,
+    to_status: null,
+    details: {
+      source: "franchise_unlink",
+      franchise_application_id: franchiseApplicationId,
+      reason: `가맹접수 연결 해제 · ${franchise?.business_name || franchise?.owner_name || "미입력"}`,
+    },
+  });
+  if (activityError) console.error("가맹접수 연결 해제 로그 저장 실패", activityError);
+  const { error: franchiseLogError } = await admin.from("franchise_application_logs").insert({
+    franchise_application_id: franchiseApplicationId,
+    user_id: editor.user.id,
+    from_status: franchise?.status ?? null,
+    to_status: "install_unlinked",
+    details: { source: "manual_unlink", installation_id: installationId },
+  });
+  if (franchiseLogError) console.error("가맹접수 연결 해제 로그 저장 실패", franchiseLogError);
+
+  revalidatePath("/installs");
+  revalidatePath("/installs/mine");
+  revalidatePath("/merchants");
+  revalidatePath("/calendar");
+  return { error: null, customerName, notes };
 }

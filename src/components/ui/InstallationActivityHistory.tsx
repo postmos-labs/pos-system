@@ -88,7 +88,9 @@ export default function InstallationActivityHistory({
                 {formatKst(log.created_at)} · {log.user_name ?? log.user?.name ?? "알수없음"} ·{" "}
                 {log.details?.source === "franchise_link"
                   ? "가맹접수 연결"
-                  : (ACTION_LABEL[log.action] ?? log.action)}
+                  : log.details?.source === "franchise_unlink"
+                    ? "가맹접수 연결 해제"
+                    : (ACTION_LABEL[log.action] ?? log.action)}
                 {statusChange}
                 {assignmentChange}
                 {detail}

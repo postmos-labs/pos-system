@@ -400,6 +400,7 @@ export const FRANCHISE_INSTALL_LOG_LABEL: Record<string, string> = {
   install_transfer: "기술지원 이관",
   install_retransfer: "기술지원 재이관",
   install_rejected: "기술지원 반려",
+  install_unlinked: "설치건 연결 해제",
   card_done: "설치완료 (가맹접수 자동갱신)",
 };
 
