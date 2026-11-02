@@ -1696,7 +1696,7 @@ export async function linkInstallationToFranchise(input: {
 
   const { data: installation } = await admin
     .from("installations")
-    .select("id,franchise_application_id,delivery_type,channel,customer_name")
+    .select("id,franchise_application_id,delivery_type,channel,customer_name,notes")
     .eq("id", installationId)
     .maybeSingle();
   if (!installation) return { error: "설치건을 찾을 수 없습니다." };
@@ -1733,9 +1733,17 @@ export async function linkInstallationToFranchise(input: {
   if (transferError) return { error: transferError.message };
   if ((transfers ?? []).length > 0) return { error: "이관 승인 진행 중" };
 
+  // 연결하면 상호명은 가맹접수 상호명으로, 비고는 "가맹접수 비고 / 설치건 비고" 순서로 합친다(설치건 비고는 지우지 않는다).
+  const linkedName: string = franchise.business_name?.trim() || installation.customer_name;
+  const linkedNotes: string | null =
+    [franchise.memo?.trim(), installation.notes?.trim()].filter(Boolean).join(" / ") || null;
   const { data: linked, error: linkError } = await admin
     .from("installations")
-    .update({ franchise_application_id: franchiseApplicationId })
+    .update({
+      franchise_application_id: franchiseApplicationId,
+      customer_name: linkedName,
+      notes: linkedNotes,
+    })
     .eq("id", installationId)
     .is("franchise_application_id", null)
     .select("id");
@@ -1747,7 +1755,11 @@ export async function linkInstallationToFranchise(input: {
   const rollbackLink = async () => {
     await admin
       .from("installations")
-      .update({ franchise_application_id: null })
+      .update({
+        franchise_application_id: null,
+        customer_name: installation.customer_name,
+        notes: installation.notes,
+      })
       .eq("id", installationId);
   };
 
@@ -1851,6 +1863,8 @@ export async function linkInstallationToFranchise(input: {
   revalidatePath("/merchants");
   return {
     error: null,
+    customerName: linkedName,
+    notes: linkedNotes,
     franchise: {
       van_company: franchise.van_company ?? null,
       open_date: franchise.open_date ?? null,

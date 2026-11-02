@@ -10,7 +10,11 @@ import type { Installation } from "./InstallsClient";
 
 interface Props {
   installationId: string;
-  onLinked: (franchiseId: string, franchise: NonNullable<Installation["franchise"]>) => void;
+  onLinked: (
+    franchiseId: string,
+    franchise: NonNullable<Installation["franchise"]>,
+    patch: { customer_name: string; notes: string | null },
+  ) => void;
 }
 
 interface Row {
@@ -67,7 +71,10 @@ export default function FranchiseLinkSection({ installationId, onLinked }: Props
       toast.error(result.error ?? "연결에 실패했습니다.");
       return;
     }
-    onLinked(row.id, result.franchise);
+    onLinked(row.id, result.franchise, {
+      customer_name: result.customerName,
+      notes: result.notes,
+    });
   }
 
   return (

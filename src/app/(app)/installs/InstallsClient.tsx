@@ -926,13 +926,25 @@ export default function InstallsClient({
     installationId: string,
     franchiseId: string,
     franchise: NonNullable<Installation["franchise"]>,
+    patch: { customer_name: string; notes: string | null },
   ) {
+    const notes = patch.notes ?? undefined;
     setInstalls((prev) =>
       prev.map((row) =>
         row.id === installationId
-          ? { ...row, franchise_application_id: franchiseId, franchise }
+          ? {
+              ...row,
+              franchise_application_id: franchiseId,
+              franchise,
+              customer_name: patch.customer_name,
+              notes,
+            }
           : row,
       ),
+    );
+    // 열려 있는 드로어의 입력값도 맞춰 둔다 — 안 그러면 저장 시 옛 이름·비고로 되돌아간다.
+    setDetailDraft((d) =>
+      d ? { ...d, customer_name: patch.customer_name, notes: notes ?? "" } : d,
     );
     openFranchiseDetail(franchiseId);
     toast.success("가맹접수와 연결했습니다.");
@@ -2312,8 +2324,8 @@ export default function InstallsClient({
           onOpenPostHistory={() => setPostHistoryOpenId(activeDetailInst.id)}
           onOpenHistory={() => setHistoryOpenId(activeDetailInst.id)}
           onOpenWoo={() => router.push("/woo")}
-          onFranchiseLinked={(franchiseId, franchise) =>
-            handleFranchiseLinked(activeDetailInst.id, franchiseId, franchise)
+          onFranchiseLinked={(franchiseId, franchise, patch) =>
+            handleFranchiseLinked(activeDetailInst.id, franchiseId, franchise, patch)
           }
           onClose={closeInstallDetail}
         />

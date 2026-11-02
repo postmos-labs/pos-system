@@ -118,6 +118,7 @@ interface Props {
   onFranchiseLinked: (
     franchiseId: string,
     franchise: NonNullable<Installation["franchise"]>,
+    patch: { customer_name: string; notes: string | null },
   ) => void;
 }
 
