@@ -1696,7 +1696,7 @@ export async function linkInstallationToFranchise(input: {
 
   const { data: installation } = await admin
     .from("installations")
-    .select("id,franchise_application_id,delivery_type,channel,customer_name,notes")
+    .select("id,franchise_application_id,delivery_type,channel,customer_name,notes,items")
     .eq("id", installationId)
     .maybeSingle();
   if (!installation) return { error: "설치건을 찾을 수 없습니다." };
@@ -1830,6 +1830,18 @@ export async function linkInstallationToFranchise(input: {
     await rollbackLink();
     return { error: merchantLinkError.message };
   }
+
+  // 이관 트리거(115)처럼 "실제 설치 구성" 초안을 채운다. 이미 구성이 있으면 함수가 건너뛴다.
+  // 직접 등록건은 설치건에 적은 제품이 실제 나간 것이라 그걸 우선 쓰고, 없으면 접수 품목을 쓴다.
+  const seedItems =
+    Array.isArray(installation.items) && installation.items.length > 0
+      ? installation.items
+      : (franchise.equipment_items ?? []);
+  const { error: seedError } = await admin.rpc("seed_merchant_equipment_from_application", {
+    p_merchant_id: merchantId,
+    p_equipment_items: seedItems,
+  });
+  if (seedError) console.error("설치 구성 초안 생성 실패", seedError);
 
   // action CHECK 제약 때문에 새 action 값은 못 쓴다. to_status는 null이어야 가맹점 360이 완료 시각으로 오인하지 않는다.
   const { error: activityError } = await admin.from("installation_activity_logs").insert({
