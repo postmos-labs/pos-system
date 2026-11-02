@@ -637,8 +637,10 @@ export async function loadMerchant360(
     });
   }
 
-  // 설치완료: 위 설치·배송 줄은 등록일만 보여 언제 끝났는지 알 수 없어, 완료 처리한 시각을 따로 찍는다.
-  // 설치건은 설치완료, 배송건은 대부분 택배발송에서 끝나므로 택배발송(없으면 완료) 시각을 쓴다.
+  // 설치완료: 위 설치·배송 줄은 등록일만 보여 언제 끝났는지 알 수 없어, 설치한 시각을 따로 찍는다.
+  // 설치건은 설치완료, 배송건은 대부분 택배발송에서 끝나므로 택배발송(없으면 완료)을 기준으로 한다.
+  // 날짜는 팀장·실장 승인 시각이 아니라 현장에서 완료 승인요청을 올린 시각(실제 설치 시각)을 쓴다 —
+  // 승인이 늦으면 설치일이 밀려 보인다는 현장 요청. 승인 없이 바로 바뀐 건은 상태가 바뀐 시각을 쓴다.
   // 완료 뒤 상태를 되돌린 건은 지금 완료 상태가 아니므로 뺀다. AS는 AS 탭에서 따로 본다.
   for (const installation of installations) {
     const isDelivery = installation.delivery_type === "delivery";
@@ -647,9 +649,11 @@ export async function loadMerchant360(
     const doneStatuses = isDelivery ? ["delivery_sent", "completed"] : ["completed"];
     if (!doneStatuses.includes(installation.status)) continue;
     const logs = activityLogs.filter((log) => log.installation_id === installation.id);
+    const pickLast = (status: string, action?: string) =>
+      logs.filter((log) => log.to_status === status && (!action || log.action === action)).at(-1);
     const doneLog =
-      logs.filter((log) => log.to_status === doneStatuses[0]).at(-1) ??
-      logs.filter((log) => log.to_status && doneStatuses.includes(log.to_status)).at(-1);
+      doneStatuses.map((status) => pickLast(status, "step_approval_requested")).find(Boolean) ??
+      doneStatuses.map((status) => pickLast(status)).find(Boolean);
     if (!doneLog) continue;
     history.push({
       id: `${installation.id}:done`,
