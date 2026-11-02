@@ -1633,7 +1633,8 @@ export async function searchLinkableFranchises(query: string) {
     `owner_name.ilike.%${q}%`,
     `phone.ilike.%${q}%`,
   ];
-  if (digits.length >= 4) conditions.push(`phone.ilike.%${digits}%`);
+  // 전화번호는 하이픈을 넣어 저장된다(010-1234-5678). 숫자만 입력해도 찾도록 숫자 사이 하이픈을 허용하는 정규식으로 찾는다.
+  if (digits.length >= 4) conditions.push(`phone.match.${digits.split("").join("-?")}`);
 
   const admin = createAdminClient();
   const { data, error } = await admin
@@ -1696,15 +1697,24 @@ export async function linkInstallationToFranchise(input: {
 
   const { data: installation } = await admin
     .from("installations")
-    .select("id,franchise_application_id,delivery_type,channel,customer_name,notes,items")
+    .select(
+      "id,franchise_application_id,delivery_type,channel,customer_name,notes,items,status,woo_customer_id",
+    )
     .eq("id", installationId)
     .maybeSingle();
   if (!installation) return { error: "설치건을 찾을 수 없습니다." };
   if (installation.franchise_application_id) {
     return { error: "이미 가맹접수와 연결된 설치건입니다." };
   }
-  if (!["install", "delivery", "transfer"].includes(installation.delivery_type ?? "")) {
+  if (
+    !["install", "delivery", "transfer"].includes(installation.delivery_type ?? "") ||
+    installation.woo_customer_id
+  ) {
     return { error: "설치·배송·전환 건만 가맹접수와 연결할 수 있습니다." };
+  }
+  // 취소된 건을 붙이면 그 접수는 다시 이관할 수 없게 된다(이관은 반려 상태 설치건만 재사용).
+  if (installation.status === "canceled") {
+    return { error: "취소된 설치건은 가맹접수와 연결할 수 없습니다." };
   }
 
   const { data: franchise } = await admin
@@ -1870,9 +1880,29 @@ export async function linkInstallationToFranchise(input: {
   });
   if (franchiseLogError) console.error("가맹접수 연결 로그 저장 실패", franchiseLogError);
 
+  // 이미 완료된 건을 연결하면 완료 때 남은 재고 차감 기록·설치 이후 메모가 가맹점 없이 저장돼 있다.
+  // 가맹점 화면에 함께 보이도록 비어 있는 merchant_id만 채운다(실패해도 연결은 유지).
+  const [{ error: inventoryLinkError }, { error: postHistoryLinkError }] = await Promise.all([
+    admin
+      .from("inventory_logs")
+      .update({ merchant_id: merchantId })
+      .eq("installation_id", installationId)
+      .is("merchant_id", null),
+    admin
+      .from("installation_post_history")
+      .update({ merchant_id: merchantId })
+      .eq("installation_id", installationId)
+      .is("merchant_id", null),
+  ]);
+  if (inventoryLinkError) console.error("재고 기록 가맹점 연결 실패", inventoryLinkError);
+  if (postHistoryLinkError && !isMissingInstallationPostHistoryTable(postHistoryLinkError)) {
+    console.error("설치 이후 메모 가맹점 연결 실패", postHistoryLinkError);
+  }
+
   revalidatePath("/installs");
   revalidatePath("/installs/mine");
   revalidatePath("/merchants");
+  revalidatePath("/calendar");
   return {
     error: null,
     customerName: linkedName,

@@ -73,6 +73,11 @@ export async function requestFranchiseTransfer(franchiseApplicationId: string, n
   ) {
     return { error: "이미 이관 승인요청이 존재합니다." };
   }
+  // 설치관리에서 가맹접수 연결로 설치건이 붙은 접수는 승인 기록 없이 설치건만 있다.
+  // 여기서 막지 않으면 요청이 올라가도 팀장 최종 승인에서 "이미 이관됨"으로 멈춘다.
+  if (existingInstall && existingInstall.status !== "rejected") {
+    return { error: "이미 기술지원 설치건이 연결된 접수입니다." };
+  }
 
   const requestedAt = new Date().toISOString();
   const requestedByResponsible = profile.approval_role === "cs_responsible";

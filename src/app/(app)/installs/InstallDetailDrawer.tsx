@@ -649,7 +649,8 @@ export default function InstallDetailDrawer({
             {!installation.franchise_application_id &&
               canEdit &&
               ["install", "delivery", "transfer"].includes(installation.delivery_type ?? "") &&
-              !installation.woo_customer_id && (
+              !installation.woo_customer_id &&
+              installation.status !== "canceled" && (
                 <div className="border-border border-t pt-4">
                   <FranchiseLinkSection
                     installationId={installation.id}

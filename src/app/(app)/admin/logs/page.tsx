@@ -432,7 +432,8 @@ export default async function AdminLogsPage({
       fromStatus: log.from_status,
       toStatus: log.to_status,
       details: log.details,
-      description: log.action,
+      // 가맹접수 연결은 CHECK 제약 때문에 status_changed로 저장된다 — 라벨만 따로 보여 준다.
+      description: log.details?.source === "franchise_link" ? "franchise_link" : log.action,
       createdAt: log.created_at,
     })),
     ...ticketLogs.map((log) => {

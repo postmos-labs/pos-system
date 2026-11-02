@@ -98,6 +98,7 @@ const INSTALLATION_ACTION_LABEL: Record<string, string> = {
   step_approval_requested: "단계 승인 요청",
   step_responsible_approved: "책임자 승인",
   step_final_approved: "팀장 승인",
+  franchise_link: "가맹접수 연결",
   step_approval_rejected: "단계 승인 반려",
 };
 
