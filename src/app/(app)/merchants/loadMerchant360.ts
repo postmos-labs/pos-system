@@ -637,6 +637,33 @@ export async function loadMerchant360(
     });
   }
 
+  // 설치완료: 위 설치·배송 줄은 등록일만 보여 언제 끝났는지 알 수 없어, 완료 처리한 시각을 따로 찍는다.
+  // 설치건은 설치완료, 배송건은 대부분 택배발송에서 끝나므로 택배발송(없으면 완료) 시각을 쓴다.
+  // 완료 뒤 상태를 되돌린 건은 지금 완료 상태가 아니므로 뺀다. AS는 AS 탭에서 따로 본다.
+  for (const installation of installations) {
+    const isDelivery = installation.delivery_type === "delivery";
+    if (!isDelivery && !["install", "transfer"].includes(installation.delivery_type ?? ""))
+      continue;
+    const doneStatuses = isDelivery ? ["delivery_sent", "completed"] : ["completed"];
+    if (!doneStatuses.includes(installation.status)) continue;
+    const logs = activityLogs.filter((log) => log.installation_id === installation.id);
+    const doneLog =
+      logs.filter((log) => log.to_status === doneStatuses[0]).at(-1) ??
+      logs.filter((log) => log.to_status && doneStatuses.includes(log.to_status)).at(-1);
+    if (!doneLog) continue;
+    history.push({
+      id: `${installation.id}:done`,
+      date: doneLog.created_at,
+      title: isDelivery ? "택배 발송 완료" : "설치 완료",
+      summary: installation.customer_name || merchant.business_name,
+      category: "completed",
+      status: installationStatusLabel(installation.status, installation.delivery_type),
+      statusClass: installationStatusClass(installation.status),
+      href: `/installs?id=${installation.id}`,
+      actorName: doneLog.user_name,
+    });
+  }
+
   // 설치·배송 이후: installation_post_history.merchant_id 직접 연결 (100번 스키마).
   for (const entry of postHistory) {
     history.push({
