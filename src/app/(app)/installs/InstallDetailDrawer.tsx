@@ -35,6 +35,7 @@ import {
   statusOrderFor,
 } from "./installStatus";
 import type { Installation, CompletionApproval } from "./InstallsClient";
+import FranchiseLinkSection from "./FranchiseLinkSection";
 import { installBadge, effectiveOpenDate, franchiseOpenDate } from "@/lib/openSchedule";
 
 // franchise_applications를 "*"로 select한 뒤 sales/cs 조인의 name만 붙인 결과 중,
@@ -114,6 +115,10 @@ interface Props {
   onOpenPostHistory: () => void;
   onOpenHistory: () => void;
   onOpenWoo: () => void;
+  onFranchiseLinked: (
+    franchiseId: string,
+    franchise: NonNullable<Installation["franchise"]>,
+  ) => void;
 }
 
 const inputClass =
@@ -249,6 +254,7 @@ export default function InstallDetailDrawer({
   onOpenPostHistory,
   onOpenHistory,
   onOpenWoo,
+  onFranchiseLinked,
 }: Props) {
   const [franchiseOpen, setFranchiseOpen] = useState(false);
 
@@ -638,6 +644,18 @@ export default function InstallDetailDrawer({
                   .reduce((sum, item) => sum + (item.quantity ?? 1), 0)}
               />
             </div>
+
+            {!installation.franchise_application_id &&
+              canEdit &&
+              ["install", "delivery", "transfer"].includes(installation.delivery_type ?? "") &&
+              !installation.woo_customer_id && (
+                <div className="border-border border-t pt-4">
+                  <FranchiseLinkSection
+                    installationId={installation.id}
+                    onLinked={onFranchiseLinked}
+                  />
+                </div>
+              )}
 
             {installation.franchise_application_id && (
               <div className="border-border border-t pt-4">

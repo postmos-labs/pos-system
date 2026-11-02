@@ -86,7 +86,9 @@ export default function InstallationActivityHistory({
             return (
               <li key={log.id} className="text-xs text-slate-500">
                 {formatKst(log.created_at)} · {log.user_name ?? log.user?.name ?? "알수없음"} ·{" "}
-                {ACTION_LABEL[log.action] ?? log.action}
+                {log.details?.source === "franchise_link"
+                  ? "가맹접수 연결"
+                  : (ACTION_LABEL[log.action] ?? log.action)}
                 {statusChange}
                 {assignmentChange}
                 {detail}

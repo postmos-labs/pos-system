@@ -922,6 +922,22 @@ export default function InstallsClient({
     }
   }
 
+  function handleFranchiseLinked(
+    installationId: string,
+    franchiseId: string,
+    franchise: NonNullable<Installation["franchise"]>,
+  ) {
+    setInstalls((prev) =>
+      prev.map((row) =>
+        row.id === installationId
+          ? { ...row, franchise_application_id: franchiseId, franchise }
+          : row,
+      ),
+    );
+    openFranchiseDetail(franchiseId);
+    toast.success("가맹접수와 연결했습니다.");
+  }
+
   function closeInstallDetail() {
     setDetailInst(null);
     setDetailDraft(null);
@@ -2296,6 +2312,9 @@ export default function InstallsClient({
           onOpenPostHistory={() => setPostHistoryOpenId(activeDetailInst.id)}
           onOpenHistory={() => setHistoryOpenId(activeDetailInst.id)}
           onOpenWoo={() => router.push("/woo")}
+          onFranchiseLinked={(franchiseId, franchise) =>
+            handleFranchiseLinked(activeDetailInst.id, franchiseId, franchise)
+          }
           onClose={closeInstallDetail}
         />
       )}

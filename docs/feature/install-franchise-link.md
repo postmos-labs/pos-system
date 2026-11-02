@@ -1,0 +1,15 @@
+# 설치관리 직접 등록건 — 가맹접수 연결
+
+설치관리에서 바로 등록한 설치건(`franchise_application_id` 없음)을 나중에 가맹접수와 이어 붙이는 기능. 설치건 상세 드로어의 "가맹접수 연결" 칸에서 검색 → 연결.
+
+## 결정 사항
+
+- 대상: 설치·배송·전환(`install`/`delivery`/`transfer`) 건만. AS·명의변경, 우국상 이관건은 제외.
+- 권한: 화면 `canEdit`(tech/cs/admin/master)과 서버 `getInstallationEditor()`가 같은 기준.
+- 연결 불가 가맹접수
+  - 이미 설치건이 붙은 접수(반려 포함) — 이관·재이관·가맹접수 화면이 "접수 1건 = 설치건 최대 1건"을 전제로 `.maybeSingle()`을 쓴다.
+  - 이관 승인이 진행 중인 접수(`franchise_transfer_approvals.status ≠ rejected`) — 연결하면 팀장 최종 승인이 "이미 이관됨"으로 막힌다.
+- merchants: 101 트리거는 INSERT·재이관 때만 돌아 UPDATE 연결로는 가맹점이 안 생긴다. 서버 액션이 트리거와 같은 규칙(접수 연결 → `franchise.merchant_id` → 신규 생성)으로 직접 확보한다. 기존 가맹점 값은 덮어쓰지 않는다. DB 변경 없음.
+- 가맹접수 값은 바꾸지 않는다. 상태(알림톡 유발)·인입경로 모두 그대로. 직접 등록건에 잘못 적힌 인입경로가 가맹접수로 퍼지지 않게 하려고, 처음 계획했던 "접수 인입경로가 비면 설치건 값 복사"는 뺐다. 연결 뒤 화면의 인입경로·VAN은 가맹접수 값을 따른다.
+- 이력: 설치건 작업 이력에 "가맹접수 연결"(action `status_changed`, to_status null — CHECK 제약 때문, 그리고 가맹점 360이 완료 시각으로 오인하지 않게), 가맹접수 이력에 `install_transfer`(details.source `manual_link`).
+- 연결 해제 기능은 두지 않았다(가맹점이 자동 생성되어 되돌리기 복잡). 대신 연결 전 확인 창.

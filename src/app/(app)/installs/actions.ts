@@ -1613,3 +1613,249 @@ export async function saveDeliveryChecklist(input: {
   revalidatePath("/installs/mine");
   return { error: null, shortages: [], unmatched, checklist };
 }
+
+// 가맹접수를 거치지 않고 직접 등록한 설치건에 연결할 가맹접수를 찾는다.
+// 설치건이 이미 붙었거나 이관 승인이 진행 중인 접수는 linkable=false로 사유와 함께 돌려준다
+// ("가맹접수 1건 = 설치건 최대 1건" 전제 때문).
+export async function searchLinkableFranchises(query: string) {
+  const editor = await getInstallationEditor();
+  if ("error" in editor) return { error: editor.error, rows: [] };
+
+  const q = query
+    .trim()
+    .replace(/[,()%*\\]/g, "")
+    .trim();
+  if (q.length < 2) return { error: "검색어를 2자 이상 입력해주세요.", rows: [] };
+  const digits = q.replace(/\D/g, "");
+
+  const conditions = [
+    `business_name.ilike.%${q}%`,
+    `owner_name.ilike.%${q}%`,
+    `phone.ilike.%${q}%`,
+  ];
+  if (digits.length >= 4) conditions.push(`phone.ilike.%${digits}%`);
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("franchise_applications")
+    .select("id,business_name,owner_name,phone,address,status,created_at")
+    .or(conditions.join(","))
+    .order("created_at", { ascending: false })
+    .limit(30);
+  if (error) return { error: error.message, rows: [] };
+
+  const found = data ?? [];
+  const ids = found.map((row) => row.id as string);
+  const linkedIds = new Set<string>();
+  const pendingIds = new Set<string>();
+  if (ids.length > 0) {
+    const [installsRes, transfersRes] = await Promise.all([
+      admin
+        .from("installations")
+        .select("franchise_application_id")
+        .in("franchise_application_id", ids),
+      admin
+        .from("franchise_transfer_approvals")
+        .select("franchise_application_id,status")
+        .in("franchise_application_id", ids),
+    ]);
+    if (installsRes.error) return { error: installsRes.error.message, rows: [] };
+    if (transfersRes.error) return { error: transfersRes.error.message, rows: [] };
+    for (const row of installsRes.data ?? []) {
+      if (row.franchise_application_id) linkedIds.add(row.franchise_application_id as string);
+    }
+    for (const row of transfersRes.data ?? []) {
+      if (row.status !== "rejected" && row.franchise_application_id) {
+        pendingIds.add(row.franchise_application_id as string);
+      }
+    }
+  }
+
+  const rows = found.map((row) => {
+    const blockedReason = linkedIds.has(row.id as string)
+      ? "이미 설치건 연결됨"
+      : pendingIds.has(row.id as string)
+        ? "이관 승인 진행 중"
+        : null;
+    return { ...row, linkable: blockedReason === null, blockedReason };
+  });
+  return { error: null, rows };
+}
+
+// 직접 등록한 설치건을 가맹접수에 연결한다. 101 트리거는 INSERT 때만 merchants를 만들기 때문에
+// UPDATE로 연결하는 여기서는 코드로 merchants를 확보한다.
+export async function linkInstallationToFranchise(input: {
+  installationId: string;
+  franchiseApplicationId: string;
+}) {
+  const editor = await getInstallationEditor();
+  if ("error" in editor) return { error: editor.error };
+
+  const admin = createAdminClient();
+  const { installationId, franchiseApplicationId } = input;
+
+  const { data: installation } = await admin
+    .from("installations")
+    .select("id,franchise_application_id,delivery_type,channel,customer_name")
+    .eq("id", installationId)
+    .maybeSingle();
+  if (!installation) return { error: "설치건을 찾을 수 없습니다." };
+  if (installation.franchise_application_id) {
+    return { error: "이미 가맹접수와 연결된 설치건입니다." };
+  }
+  if (!["install", "delivery", "transfer"].includes(installation.delivery_type ?? "")) {
+    return { error: "설치·배송·전환 건만 가맹접수와 연결할 수 있습니다." };
+  }
+
+  const { data: franchise } = await admin
+    .from("franchise_applications")
+    .select(
+      "id,business_name,owner_name,business_number,phone,address,address_detail,memo,sales_id,open_date,equipment_items,merchant_id,status,channel,van_company,reception_channel",
+    )
+    .eq("id", franchiseApplicationId)
+    .maybeSingle();
+  if (!franchise) return { error: "가맹접수를 찾을 수 없습니다." };
+
+  const { data: existingInstalls, error: existingError } = await admin
+    .from("installations")
+    .select("id")
+    .eq("franchise_application_id", franchiseApplicationId)
+    .limit(1);
+  if (existingError) return { error: existingError.message };
+  if ((existingInstalls ?? []).length > 0) return { error: "이미 설치건 연결됨" };
+
+  const { data: transfers, error: transferError } = await admin
+    .from("franchise_transfer_approvals")
+    .select("id")
+    .eq("franchise_application_id", franchiseApplicationId)
+    .neq("status", "rejected")
+    .limit(1);
+  if (transferError) return { error: transferError.message };
+  if ((transfers ?? []).length > 0) return { error: "이관 승인 진행 중" };
+
+  const { data: linked, error: linkError } = await admin
+    .from("installations")
+    .update({ franchise_application_id: franchiseApplicationId })
+    .eq("id", installationId)
+    .is("franchise_application_id", null)
+    .select("id");
+  if (linkError) return { error: linkError.message };
+  if (!linked || linked.length === 0) {
+    return { error: "다른 사람이 먼저 연결했습니다. 새로고침해 주세요." };
+  }
+
+  const rollbackLink = async () => {
+    await admin
+      .from("installations")
+      .update({ franchise_application_id: null })
+      .eq("id", installationId);
+  };
+
+  // merchants 확보 — 101 트리거와 같은 규칙: 접수 연결 → franchise.merchant_id → 신규 생성
+  let merchantId: string | null = null;
+  const { data: byFranchise } = await admin
+    .from("merchants")
+    .select("id")
+    .eq("franchise_application_id", franchiseApplicationId)
+    .limit(1);
+  merchantId = byFranchise?.[0]?.id ?? null;
+
+  if (!merchantId && franchise.merchant_id) {
+    const { data: byId } = await admin
+      .from("merchants")
+      .select("id,franchise_application_id")
+      .eq("id", franchise.merchant_id)
+      .maybeSingle();
+    if (byId) {
+      merchantId = byId.id;
+      if (!byId.franchise_application_id) {
+        await admin
+          .from("merchants")
+          .update({ franchise_application_id: franchiseApplicationId })
+          .eq("id", byId.id);
+      }
+    }
+  }
+
+  if (!merchantId) {
+    const items = Array.isArray(franchise.equipment_items)
+      ? (franchise.equipment_items as { name?: string; quantity?: number }[])
+      : [];
+    const posModel =
+      items
+        .filter((item) => item?.name)
+        .map((item) => `${item.name} x${item.quantity ?? 1}`)
+        .join(", ") || null;
+    const { data: created, error: createError } = await admin
+      .from("merchants")
+      .insert({
+        business_name: franchise.business_name || "미입력",
+        owner_name: franchise.owner_name || "미입력",
+        business_number: franchise.business_number,
+        phone: franchise.phone || "미입력",
+        address: franchise.address || "미입력",
+        address_detail: franchise.address_detail,
+        pos_model: posModel,
+        open_date: franchise.open_date,
+        memo: franchise.memo,
+        sales_id: franchise.sales_id,
+        franchise_application_id: franchiseApplicationId,
+      })
+      .select("id")
+      .single();
+    if (createError || !created) {
+      await rollbackLink();
+      return { error: createError?.message ?? "가맹점을 만들지 못했습니다." };
+    }
+    merchantId = created.id;
+  }
+
+  const { error: merchantLinkError } = await admin
+    .from("franchise_applications")
+    .update({ merchant_id: merchantId })
+    .eq("id", franchiseApplicationId);
+  if (merchantLinkError) {
+    await rollbackLink();
+    return { error: merchantLinkError.message };
+  }
+
+  // action CHECK 제약 때문에 새 action 값은 못 쓴다. to_status는 null이어야 가맹점 360이 완료 시각으로 오인하지 않는다.
+  const { error: activityError } = await admin.from("installation_activity_logs").insert({
+    installation_id: installationId,
+    user_id: editor.user.id,
+    action: "status_changed",
+    from_status: null,
+    to_status: null,
+    details: {
+      source: "franchise_link",
+      franchise_application_id: franchiseApplicationId,
+      reason: `가맹접수 연결 · ${franchise.business_name || franchise.owner_name || "미입력"}`,
+    },
+  });
+  if (activityError) {
+    await rollbackLink();
+    return { error: activityError.message };
+  }
+
+  const { error: franchiseLogError } = await admin.from("franchise_application_logs").insert({
+    franchise_application_id: franchiseApplicationId,
+    user_id: editor.user.id,
+    from_status: franchise.status,
+    to_status: "install_transfer",
+    details: { source: "manual_link", installation_id: installationId },
+  });
+  if (franchiseLogError) console.error("가맹접수 연결 로그 저장 실패", franchiseLogError);
+
+  revalidatePath("/installs");
+  revalidatePath("/installs/mine");
+  revalidatePath("/merchants");
+  return {
+    error: null,
+    franchise: {
+      van_company: franchise.van_company ?? null,
+      open_date: franchise.open_date ?? null,
+      channel: franchise.channel ?? null,
+      reception_channel: franchise.reception_channel ?? null,
+    },
+  };
+}
