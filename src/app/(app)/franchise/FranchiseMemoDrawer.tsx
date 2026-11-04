@@ -216,6 +216,13 @@ export default function FranchiseMemoDrawer({
                       {formatEntryDate(entry.at)}
                       {" · "}
                       <span className="font-semibold text-blue-300">{entry.user || "-"}</span>
+                      {/* 고정한 항목은 날짜와 관계없이 맨 위에 온다 — 왜 위에 있는지 보이게 표시 */}
+                      {entry.pinned && (
+                        <span className="ml-1.5 inline-flex items-center gap-0.5 rounded bg-amber-900/60 px-1.5 py-0.5 text-xs font-semibold text-amber-300">
+                          <Pin size={11} className="fill-current" />
+                          고정
+                        </span>
+                      )}
                     </div>
                     <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
