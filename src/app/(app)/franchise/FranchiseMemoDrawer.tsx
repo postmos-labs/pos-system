@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pencil, Pin, Trash2, X } from "lucide-react";
 import HistoryIcon from "@/components/ui/HistoryIcon";
 import { formatKst } from "@/lib/date";
 import { useApprovalNoteHistory } from "@/lib/useApprovalNoteHistory";
 import { APPROVAL_NOTE_STAGE_LABEL, type ApprovalNote } from "@/lib/approvalNotes";
+import { createClient } from "@/lib/supabase/client";
+import { LinkedMemoItem, memoDedupeKey, parseMemoEntries } from "@/components/ui/MemoHistoryPanel";
 import type { FranchiseApplication } from "@/types";
 import { APPLICANT_TYPE_LABEL } from "@/types";
 
@@ -40,7 +42,16 @@ type TimelineItem =
       pinnedAt: string | null;
       entry: FranchiseMemoEntry;
     }
-  | { kind: "approval"; at: string; pinned: false; pinnedAt: null; note: ApprovalNote };
+  | { kind: "approval"; at: string; pinned: false; pinnedAt: null; note: ApprovalNote }
+  | {
+      kind: "linked";
+      at: string;
+      pinned: false;
+      pinnedAt: null;
+      key: string;
+      user: string;
+      text: string;
+    };
 
 export default function FranchiseMemoDrawer({
   row,
@@ -55,7 +66,40 @@ export default function FranchiseMemoDrawer({
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const approvalNotes = useApprovalNoteHistory(row.id);
+  // 기술지원(설치·택배) 탭에서 쓴 설치건 히스토리도 같이 보여 준다. 보기 전용.
+  const [installMemos, setInstallMemos] = useState<
+    { id: string; notes: string | null; created_at: string }[]
+  >([]);
+  useEffect(() => {
+    let cancelled = false;
+    createClient()
+      .from("installations")
+      .select("id, notes, created_at")
+      .eq("franchise_application_id", row.id)
+      .then(({ data }) => {
+        if (!cancelled) setInstallMemos(data ?? []);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [row.id]);
+  // 이관·연결 때 가맹접수 비고가 설치건 비고로 복사되므로, 이미 여기 있는 항목은 다시 보이지 않게 한다.
+  const ownMemoKeys = new Set(entries.map((entry) => memoDedupeKey(entry.text)));
+  const installItems: TimelineItem[] = installMemos.flatMap((install) =>
+    parseMemoEntries(install.notes, install.created_at)
+      .filter((entry) => !ownMemoKeys.has(memoDedupeKey(entry.text)))
+      .map((entry, i): TimelineItem => ({
+        kind: "linked",
+        at: entry.at,
+        pinned: false,
+        pinnedAt: null,
+        key: `${install.id}-${i}`,
+        user: entry.user,
+        text: entry.text,
+      })),
+  );
   const timelineItems: TimelineItem[] = [
+    ...installItems,
     ...entries.map((entry): TimelineItem => ({
       kind: "memo",
       at: entry.at,
@@ -136,6 +180,17 @@ export default function FranchiseMemoDrawer({
         ) : (
           <ul className="space-y-2.5">
             {sortedEntries.map((item) => {
+              if (item.kind === "linked") {
+                return (
+                  <LinkedMemoItem
+                    key={`install-memo-${item.key}`}
+                    at={item.at}
+                    user={item.user}
+                    text={item.text}
+                    source="기술지원"
+                  />
+                );
+              }
               if (item.kind === "approval") {
                 return (
                   <li key={`approval-note-${item.note.id}`} className="text-[15pt] text-amber-300">

@@ -52,6 +52,38 @@ function resolveLegacyYear(month: number, day: number, hour: number, minute: num
   return guess.getTime() > now.getTime() ? now.getFullYear() - 1 : now.getFullYear();
 }
 
+// 다른 탭(가맹접수 ↔ 기술지원)의 메모를 같이 보여줄 때, 이관·연결 때 복사돼 양쪽에 이미 있는 항목은 한 번만 보이게 비교하는 키
+export function memoDedupeKey(text: string): string {
+  return text.replace(/s+/g, " ").trim();
+}
+
+// 연결된 상대 탭 메모 한 줄. 보기 전용 — 수정·삭제·고정은 쓴 쪽 탭에서 한다.
+export function LinkedMemoItem({
+  at,
+  user,
+  text,
+  source,
+}: {
+  at: string;
+  user: string;
+  text: string;
+  source: string;
+}) {
+  return (
+    <li className="text-[15pt] text-teal-200">
+      <div className="text-slate-400">
+        {formatKst(at)}
+        {" · "}
+        <span className="font-semibold text-blue-300">{user || "-"}</span>
+        <span className="ml-1.5 rounded bg-teal-900/60 px-1.5 py-0.5 text-xs font-semibold text-teal-300">
+          {source}
+        </span>
+      </div>
+      <div className="whitespace-pre-wrap break-words">{text}</div>
+    </li>
+  );
+}
+
 export function parseMemoEntries(
   memo: string | undefined | null,
   fallbackAt: string,
@@ -134,6 +166,10 @@ export default function MemoHistoryPanel({
   const [value, setValue] = useState("");
   const [notifLogs, setNotifLogs] = useState<NotificationLog[]>([]);
   const [franchiseLogs, setFranchiseLogs] = useState<FranchiseLog[]>([]);
+  const [franchiseMemo, setFranchiseMemo] = useState<{
+    memo: string | null;
+    created_at: string;
+  } | null>(null);
   const approvalNotes = useApprovalNoteHistory(franchiseApplicationId);
   // 편집 대상이 잡힌 시점의 memo를 함께 저장해, 창이 다른 행으로 바뀌거나 memo가 바뀌면 편집 상태를 무시한다
   const [editing, setEditing] = useState<{ index: number; memo: string } | null>(null);
@@ -175,6 +211,31 @@ export default function MemoHistoryPanel({
     };
   }, [franchiseApplicationId]);
 
+  // 가맹접수 쪽 히스토리(가맹접수 비고)도 같이 보여 준다.
+  useEffect(() => {
+    if (!franchiseApplicationId) return;
+    let cancelled = false;
+    createClient()
+      .from("franchise_applications")
+      .select("memo, created_at")
+      .eq("id", franchiseApplicationId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setFranchiseMemo(data ?? null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [franchiseApplicationId]);
+
+  const ownMemoEntries = parseMemoEntries(memo, createdAt);
+  const ownMemoKeys = new Set(ownMemoEntries.map((entry) => memoDedupeKey(entry.text)));
+  const franchiseMemoEntries = franchiseMemo
+    ? parseMemoEntries(franchiseMemo.memo, franchiseMemo.created_at).filter(
+        (entry) => !ownMemoKeys.has(memoDedupeKey(entry.text)),
+      )
+    : [];
+
   function deleteMemoEntry(index: number) {
     if (!onDeleteMemo) return;
     if (!confirm("이 메모를 삭제하시겠습니까?")) return;
@@ -195,7 +256,7 @@ export default function MemoHistoryPanel({
   }
 
   const timeline = [
-    ...parseMemoEntries(memo, createdAt).map((entry, i) => ({
+    ...ownMemoEntries.map((entry, i) => ({
       at: entry.at,
       pinned: entry.pinned,
       pinnedAt: entry.pinnedAt,
@@ -285,6 +346,20 @@ export default function MemoHistoryPanel({
             <div>{entry.text}</div>
           )}
         </li>
+      ),
+    })),
+    ...franchiseMemoEntries.map((entry, i) => ({
+      at: entry.at,
+      pinned: false,
+      pinnedAt: null as string | null,
+      node: (
+        <LinkedMemoItem
+          key={`franchise-memo-${i}-${entry.at}`}
+          at={entry.at}
+          user={entry.user}
+          text={entry.text}
+          source="가맹접수"
+        />
       ),
     })),
     ...approvalNotes.map((note) => ({
