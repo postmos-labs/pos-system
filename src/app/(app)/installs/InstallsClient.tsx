@@ -159,6 +159,8 @@ export interface Installation {
     reception_channel?: string | null;
   } | null;
   franchise_application_id?: string;
+  /** 설치건 고유 번호 — 목록 No 칸. 필터·정렬과 무관하게 바뀌지 않는다 (supabase/159) */
+  install_no?: number | null;
   /** 가맹접수와 연결되지 않은 설치건의 인입경로 (supabase/156) */
   channel?: string | null;
   woo_customer_id?: string;
@@ -2134,6 +2136,7 @@ export default function InstallsClient({
       if (
         q &&
         !(
+          String(i.install_no ?? "") === q ||
           i.customer_name?.toLowerCase().includes(q) ||
           i.contact_name?.toLowerCase().includes(q) ||
           i.customer_phone?.toLowerCase().includes(q) ||
@@ -3357,7 +3360,7 @@ export default function InstallsClient({
                       />
                     </th>
                   )}
-                  {/* 순번 — 현장에서 "몇 번째 건" 으로 바로 부를 수 있게. 페이지를 넘겨도 이어서 센다 */}
+                  {/* 설치건 고유 번호 — 현장에서 "몇 번 건" 으로 부를 수 있게. 필터를 바꿔도 번호는 그대로 */}
                   <th className="px-1 py-3 text-center text-xs font-semibold text-slate-600">No</th>
                   <th className="px-1 py-3" />
                   {columns.map((col) => {
@@ -3380,7 +3383,7 @@ export default function InstallsClient({
                 </tr>
               </thead>
               <tbody>
-                {pagedInstalls.map((inst, rowIndex) => (
+                {pagedInstalls.map((inst) => (
                   <Fragment key={inst.id}>
                     <tr
                       id={`install-row-${inst.id}`}
@@ -3415,7 +3418,7 @@ export default function InstallsClient({
                         </td>
                       )}
                       <td className="px-1 py-3 text-center text-xs tabular-nums text-slate-500">
-                        {(page - 1) * PAGE_SIZE + rowIndex + 1}
+                        {inst.install_no ?? "-"}
                       </td>
                       <td
                         className={`px-1 py-3 text-slate-700 ${canReorder ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-30"}`}
