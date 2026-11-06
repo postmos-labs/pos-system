@@ -3331,6 +3331,7 @@ export default function InstallsClient({
             >
               <colgroup>
                 {canDelete && <col style={{ width: 32 }} />}
+                <col style={{ width: 40 }} />
                 <col style={{ width: 24 }} />
                 {columns.map((col) => (
                   <col
@@ -3356,6 +3357,8 @@ export default function InstallsClient({
                       />
                     </th>
                   )}
+                  {/* 순번 — 현장에서 "몇 번째 건" 으로 바로 부를 수 있게. 페이지를 넘겨도 이어서 센다 */}
+                  <th className="px-1 py-3 text-center text-xs font-semibold text-slate-600">No</th>
                   <th className="px-1 py-3" />
                   {columns.map((col) => {
                     const label =
@@ -3377,7 +3380,7 @@ export default function InstallsClient({
                 </tr>
               </thead>
               <tbody>
-                {pagedInstalls.map((inst) => (
+                {pagedInstalls.map((inst, rowIndex) => (
                   <Fragment key={inst.id}>
                     <tr
                       id={`install-row-${inst.id}`}
@@ -3411,6 +3414,9 @@ export default function InstallsClient({
                           )}
                         </td>
                       )}
+                      <td className="px-1 py-3 text-center text-xs tabular-nums text-slate-500">
+                        {(page - 1) * PAGE_SIZE + rowIndex + 1}
+                      </td>
                       <td
                         className={`px-1 py-3 text-slate-700 ${canReorder ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-30"}`}
                         draggable={canReorder}
