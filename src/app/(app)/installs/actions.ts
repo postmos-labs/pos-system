@@ -699,11 +699,12 @@ export async function requestInstallationStatusApproval(input: {
   const approverPositions = requestedByResponsible
     ? ["실장", "상무", "대표"]
     : ["팀장", "실장", "상무", "대표"];
+  // 1차(팀장) 대상은 기술지원 소속만, 최종(실장급 이상)은 소속 무관 — canApproveFirstBy/FinalBy와 같은 기준
   const { data: approvers } = await admin
     .from("profiles")
     .select("id")
     .in("position", approverPositions)
-    .in("role", [...INSTALL_APPROVER_ROLES])
+    .or(`role.in.(${INSTALL_APPROVER_ROLES.join(",")}),position.in.(실장,상무,대표)`)
     .neq("id", editor.user.id);
   const { error: notificationError } = approvers?.length
     ? await admin.from("notifications").insert(
@@ -832,7 +833,6 @@ export async function approveInstallationCompletion(installationId: string, note
     .from("profiles")
     .select("id")
     .in("position", ["실장", "상무", "대표"])
-    .in("role", [...INSTALL_APPROVER_ROLES])
     .neq("id", user.id);
   // 요청자 계정이 삭제되면 requested_by가 NULL이다. neq에 NULL을 넘기면 조건이 NULL로
   // 평가돼 대상이 0명이 되고 알림이 통째로 빠지므로, 값이 있을 때만 제외한다.

@@ -16,7 +16,7 @@
 
 ## 짝: 설치 단계 승인은 기술지원 소속만
 
-- 설치 단계 1차(팀장)·최종(실장 이상)·강제완료는 직급만 봐서 CS 팀장이 설치 1차를, 영업 상무가 설치 최종을 누를 수 있었다. 이관과 반대 방향의 같은 문제라 함께 막았다.
-- `installApproval.ts`의 `canApproveFirstBy`·`canApproveFinalBy`·`canForceCompleteBy`에 `role = tech` 조건 추가(관리자·마스터 안전망 유지). 화면·서버가 모두 이 함수를 써서 한 번에 맞춰진다. 승인 요청 알림 대상도 `INSTALL_APPROVER_ROLES`(tech·master·admin)로 제한.
-- 물품요청 결재(`canDecideSupplyRequest`)는 같은 함수를 빌려 쓰고 있었는데 소속 제한 대상이 아니라 직급 판정을 그대로 쓰도록 분리.
-- 기술지원 실장급은 현재 한 명(태효섭)이라, 부재 시 설치 최종 승인은 마스터가 푼다.
+- 설치 단계 1차(팀장)·강제완료는 직급만 봐서 CS 팀장이 설치 1차를 누를 수 있었다. 이관과 반대 방향의 같은 문제라 함께 막았다.
+- 최종 승인(실장 이상)은 "실장 승인은 실장이 다 할 수 있어야 한다"는 결정으로 소속 무관(실장·상무·대표). 처음엔 기술지원으로 묶었다가 되돌렸다.
+- `installApproval.ts`의 `canApproveFirstBy`·`canForceCompleteBy`에 `role = tech` 조건 추가(관리자·마스터 안전망 유지). 화면·서버가 모두 이 함수를 써서 한 번에 맞춰진다. 승인 요청 알림 대상도 `INSTALL_APPROVER_ROLES`(tech·master·admin)로 제한.
+- 물품요청 결재(`canDecideSupplyRequest`)는 직급 판정을 그대로 쓰도록 분리해 두었다(최종 승인 판정과 지금은 결과가 같다).

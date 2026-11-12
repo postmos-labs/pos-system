@@ -61,9 +61,10 @@ export function isApprovalOverrider(role?: string | null): boolean {
   return role === "master" || role === "admin";
 }
 
-// 설치 단계 승인·강제완료는 기술지원 소속만 한다(관리자 안전망은 그대로).
-// 직급만 보던 때는 CS 팀장이 설치 1차를, 영업 상무가 설치 최종을 누를 수 있었다.
+// 설치 1차 승인·강제완료는 기술지원 소속만 한다(관리자 안전망은 그대로).
+// 직급만 보던 때는 CS 팀장이 설치 1차를 누를 수 있었다.
 // 가맹접수 이관 최종 승인을 CS 팀장으로 묶은 것(transferApproval.ts)과 짝을 이룬다.
+// 최종 승인(실장급 이상)은 소속과 관계없이 실장급이면 한다 — 실장 승인은 실장이 다 할 수 있어야 한다.
 export const INSTALL_APPROVER_ROLES = ["tech", "master", "admin"] as const;
 
 function inTechTeam(role?: string | null): boolean {
@@ -72,9 +73,7 @@ function inTechTeam(role?: string | null): boolean {
 
 /** 최종 승인 권한자인지 — 직급 판정에 관리자 안전망을 더한 것. */
 export function canApproveFinalBy(actor: ApprovalActor): boolean {
-  return (
-    isApprovalOverrider(actor.role) || (inTechTeam(actor.role) && canApproveFinal(actor.position))
-  );
+  return isApprovalOverrider(actor.role) || canApproveFinal(actor.position);
 }
 
 /**
