@@ -12,6 +12,7 @@ import {
   canApproveFinalBy,
   skipsFirstApproval,
   canForceCompleteBy,
+  INSTALL_APPROVER_ROLES,
 } from "@/lib/auth/installApproval";
 import {
   formatDeliveryNoteLine,
@@ -702,6 +703,7 @@ export async function requestInstallationStatusApproval(input: {
     .from("profiles")
     .select("id")
     .in("position", approverPositions)
+    .in("role", [...INSTALL_APPROVER_ROLES])
     .neq("id", editor.user.id);
   const { error: notificationError } = approvers?.length
     ? await admin.from("notifications").insert(
@@ -830,6 +832,7 @@ export async function approveInstallationCompletion(installationId: string, note
     .from("profiles")
     .select("id")
     .in("position", ["실장", "상무", "대표"])
+    .in("role", [...INSTALL_APPROVER_ROLES])
     .neq("id", user.id);
   // 요청자 계정이 삭제되면 requested_by가 NULL이다. neq에 NULL을 넘기면 조건이 NULL로
   // 평가돼 대상이 0명이 되고 알림이 통째로 빠지므로, 값이 있을 때만 제외한다.
