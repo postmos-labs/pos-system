@@ -242,6 +242,8 @@ export default function PhotosClient({ profile, installs: initialInstalls }: Pro
                     <img
                       src={thumbUrl(url, 240)}
                       alt={inst.customer_name}
+                      loading="lazy"
+                      decoding="async"
                       className="w-full aspect-square object-cover rounded-lg border border-slate-200"
                     />
                   </a>
