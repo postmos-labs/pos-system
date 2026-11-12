@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSessionUser, getSessionProfile } from "@/lib/auth/session";
 import { canApproveFirstBy, canApproveFinalBy } from "@/lib/auth/installApproval";
+import { canFinalApproveTransferBy } from "@/lib/auth/transferApproval";
 import { redirect } from "next/navigation";
 import { AlertTriangle, ClipboardCheck } from "lucide-react";
 import TransferApprovalList from "./TransferApprovalList";
@@ -116,7 +117,7 @@ export default async function ApprovalsPage() {
       : null;
 
   const transferApprovalQuery =
-    p.approval_role === "cs_responsible" || p.approval_role === "team_lead"
+    p.approval_role === "cs_responsible" || canFinalApproveTransferBy(p)
       ? (() => {
           const query = supabase
             .from("franchise_transfer_approvals")

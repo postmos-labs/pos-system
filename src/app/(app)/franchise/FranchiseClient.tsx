@@ -97,6 +97,7 @@ import {
   notifyAndLogFranchiseStatus,
 } from "@/lib/franchiseStatusEffects";
 import { kstToday, kstDate, formatKst, kstWallClock } from "@/lib/date";
+import { canFinalApproveTransferBy } from "@/lib/auth/transferApproval";
 
 const DOC_CASE_LABEL: Record<DocCase, string> = {
   both: "대표자명+상호명",
@@ -1357,6 +1358,11 @@ export default function FranchiseClient({
   // 팀장은 "팀장 승인대기", CS책임은 "CS책임 승인대기" 배지가 붙은 건을 모두 본다.
   // 내가 직접 올린 건도 포함한다 — 본인 건은 다른 팀장이 승인해 승인 버튼은 안 보이지만, 진행 상황은 따라가야 한다.
   // 목록 필터와 탭 건수가 같은 판정을 써야 숫자와 목록이 어긋나지 않는다.
+  // 이관 최종 승인은 CS 팀장·마스터만 (서버 approveFranchiseTransfer와 같은 기준)
+  const canFinalTransfer = canFinalApproveTransferBy({
+    role: currentUserRole,
+    approval_role: currentUserApprovalRole,
+  });
   const isMyWork = useCallback(
     (row: FranchiseApplication) => {
       if (
@@ -1370,10 +1376,16 @@ export default function FranchiseClient({
       const state = resolveTransferState(approval.status, localLinkedInstalls[row.id]?.status);
       return (
         (currentUserApprovalRole === "cs_responsible" && state === "cs_waiting") ||
-        (currentUserApprovalRole === "team_lead" && state === "team_lead_waiting")
+        (canFinalTransfer && state === "team_lead_waiting")
       );
     },
-    [currentUserId, currentUserApprovalRole, transferApprovals, localLinkedInstalls],
+    [
+      currentUserId,
+      currentUserApprovalRole,
+      canFinalTransfer,
+      transferApprovals,
+      localLinkedInstalls,
+    ],
   );
 
   // 기술지원 반려: 이관이 끝났는데 기술지원이 설치건을 반려한 건. 화면 배지(tech_rejected)와 같은 판정이다.
@@ -2513,8 +2525,7 @@ export default function FranchiseClient({
     if (!approval) return;
     const isCsResponsibleApproval =
       currentUserApprovalRole === "cs_responsible" && approval.status === "requested";
-    const isTeamLeadApproval =
-      currentUserApprovalRole === "team_lead" && approval.status === "cs_responsible_approved";
+    const isTeamLeadApproval = canFinalTransfer && approval.status === "cs_responsible_approved";
     if (!isCsResponsibleApproval && !isTeamLeadApproval) {
       toast.warning("현재 승인 단계의 권한이 없습니다.");
       return;
@@ -3619,7 +3630,7 @@ export default function FranchiseClient({
                 (currentUserApprovalRole === "cs_responsible" &&
                   transferApprovals[row.id]?.status === "requested" &&
                   transferApprovals[row.id]?.requested_by !== currentUserId) ||
-                (currentUserApprovalRole === "team_lead" &&
+                (canFinalTransfer &&
                   transferApprovals[row.id]?.status === "cs_responsible_approved")
               }
               onRequestTransfer={() => requestTransferApproval(row)}

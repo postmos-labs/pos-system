@@ -8,6 +8,10 @@ import {
   type InstallationDeliveryType,
 } from "@/lib/installationDeliveryType";
 import { appendApprovalNote, parseApprovalNotes, validateApprovalNote } from "@/lib/approvalNotes";
+import {
+  TRANSFER_FINAL_APPROVER_ROLES,
+  canFinalApproveTransferBy,
+} from "@/lib/auth/transferApproval";
 
 async function getApprover(requiredRole: "cs_responsible" | "tech_responsible" | "team_lead") {
   const supabase = await createClient();
@@ -18,7 +22,7 @@ async function getApprover(requiredRole: "cs_responsible" | "tech_responsible" |
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, name, approval_role")
+    .select("id, name, role, approval_role")
     .eq("id", user.id)
     .single();
   if (!profile || profile.approval_role !== requiredRole) return { error: "승인 권한이 없습니다." };
@@ -167,11 +171,15 @@ export async function requestFranchiseTransfer(franchiseApplicationId: string, n
     return { error: "감사 로그 저장에 실패해 승인요청을 취소했습니다: " + logError.message };
   }
   const nextApprovalRole = skipsCsApproval ? "team_lead" : "cs_responsible";
-  const { data: approvers } = await admin
+  let nextApproverQuery = admin
     .from("profiles")
     .select("id")
     .eq("approval_role", nextApprovalRole)
     .neq("id", user.id);
+  // 최종 승인 알림은 이관 최종 승인 권한이 있는 팀장(CS·마스터)에게만 보낸다.
+  if (skipsCsApproval)
+    nextApproverQuery = nextApproverQuery.in("role", [...TRANSFER_FINAL_APPROVER_ROLES]);
+  const { data: approvers } = await nextApproverQuery;
   const { error: notificationError } = approvers?.length
     ? await admin.from("notifications").insert(
         approvers.map(({ id }) => ({
@@ -253,6 +261,7 @@ export async function approveCsResponsibleTransfer(franchiseApplicationId: strin
     .from("profiles")
     .select("id")
     .eq("approval_role", "team_lead")
+    .in("role", [...TRANSFER_FINAL_APPROVER_ROLES])
     .neq("id", approver.user.id);
   // 요청자 계정이 삭제되면 requested_by가 NULL이다. neq에 NULL을 넘기면 조건이 NULL로
   // 평가돼 대상이 0명이 되고 알림이 통째로 빠지므로, 값이 있을 때만 제외한다.
@@ -284,13 +293,13 @@ export async function rejectFranchiseTransfer(franchiseApplicationId: string, re
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name, approval_role")
+    .select("name, role, approval_role")
     .eq("id", user.id)
     .single();
   const expectedStatus =
     profile?.approval_role === "cs_responsible"
       ? "requested"
-      : profile?.approval_role === "team_lead"
+      : profile && canFinalApproveTransferBy(profile)
         ? "cs_responsible_approved"
         : null;
   if (!expectedStatus) return { error: "반려 권한이 없습니다." };
@@ -381,6 +390,9 @@ export async function approveFranchiseTransfer(
   if (validateApprovalNote(note) === null) return { error: "비고는 2,000자 이하로 입력해주세요." };
   const approver = await getApprover("team_lead");
   if ("error" in approver) return approver;
+  if (!canFinalApproveTransferBy(approver.profile)) {
+    return { error: "기술지원 이관 최종 승인은 CS 팀장만 할 수 있습니다." };
+  }
   if (!isInstallationDeliveryType(deliveryType)) {
     return { error: "최종 승인할 이관 구분을 선택해주세요." };
   }
