@@ -3685,14 +3685,13 @@ export default function InstallsClient({
                             const m = installMethodOf(inst);
                             if (!m) return null;
                             if (deliveryOnly) {
-                              // 택배발송 탭은 상태가 "택배발송"일 때만 어떤 방식으로 나갔는지 참고로 보여 준다.
+                              // 택배발송 탭은 방식 대신 상태가 "택배발송"일 때만 그 표시를 붙인다.
                               if (inst.status !== "delivery_sent") return null;
                               return (
                                 <span
-                                  title="택배발송 상태에서만 보여 줍니다."
-                                  className={`ml-1.5 text-xs font-medium rounded-lg border px-2 py-1 ${INSTALL_METHOD_BADGE[m]}`}
+                                  className={`ml-1.5 text-xs font-medium rounded-lg border px-2 py-1 ${DELIVERY_TYPE_BADGE_COLORS.delivery}`}
                                 >
-                                  {INSTALL_METHOD_LABEL[m]}
+                                  택배발송
                                 </span>
                               );
                             }
