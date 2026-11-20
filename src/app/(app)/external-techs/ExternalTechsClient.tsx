@@ -37,7 +37,8 @@ export default function ExternalTechsClient({
   initialTechs: ExternalTech[];
   currentUserRole: string;
 }) {
-  const canEdit = ["admin", "master", "cs"].includes(currentUserRole);
+  // 기술지원팀이 직접 외부기사를 등록·관리한다. RLS(supabase/161)와 같은 기준.
+  const canEdit = ["admin", "master", "cs", "tech"].includes(currentUserRole);
   const toast = useToast();
   const [techs, setTechs] = useState(initialTechs);
   const [search, setSearch] = useState("");
