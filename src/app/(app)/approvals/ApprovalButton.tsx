@@ -14,10 +14,8 @@ import {
   approveInstallationStatusByTeamLead,
   rejectInstallationStatusApproval,
 } from "../installs/actions";
-import {
-  INSTALLATION_DELIVERY_TYPE_OPTIONS,
-  type InstallationDeliveryType,
-} from "@/lib/installationDeliveryType";
+import type { InstallationDeliveryType } from "@/lib/installationDeliveryType";
+import { WORK_TYPE_OPTIONS, parseWorkType } from "@/lib/installMethod";
 import ApprovalNoteTimeline from "@/components/ui/ApprovalNoteTimeline";
 import type { ApprovalNote } from "@/lib/approvalNotes";
 import { AppSelect } from "@/components/ui/AppSelect";
@@ -42,7 +40,7 @@ export default function ApprovalButton({
   const [showApproval, setShowApproval] = useState(false);
   const [showReject, setShowReject] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
-  const [deliveryType, setDeliveryType] = useState<InstallationDeliveryType | "">("");
+  const [deliveryType, setDeliveryType] = useState<string>("");
   const [note, setNote] = useState("");
 
   function reject() {
@@ -67,6 +65,18 @@ export default function ApprovalButton({
     });
   }
 
+  // 이관 구분 + 방식 조합(WORK_TYPE_OPTIONS 값)을 풀어서 승인한다.
+  async function approveWorkType(transferId: string, workType: string, approvalNote: string) {
+    const parsed = parseWorkType(workType);
+    if (!parsed) return { error: "이관 구분을 선택해주세요." };
+    return approveFranchiseTransfer(
+      transferId,
+      parsed.deliveryType as InstallationDeliveryType,
+      approvalNote,
+      parsed.installMethod,
+    );
+  }
+
   function approve() {
     if (type === "transfer" && !deliveryType) return;
     startTransition(async () => {
@@ -77,7 +87,7 @@ export default function ApprovalButton({
             ? await approveInstallationStatusByTeamLead(id, note)
             : type === "cs_transfer"
               ? await approveCsResponsibleTransfer(id, note)
-              : await approveFranchiseTransfer(id, deliveryType as InstallationDeliveryType, note);
+              : await approveWorkType(id, deliveryType, note);
       if (result.error) {
         toast.error(`승인 실패: ${result.error}`);
         return;
@@ -202,12 +212,12 @@ export default function ApprovalButton({
                 </label>
                 <AppSelect
                   value={deliveryType}
-                  onValueChange={(value) => setDeliveryType(value as InstallationDeliveryType | "")}
+                  onValueChange={(value) => setDeliveryType(value)}
                   aria-label="이관 구분"
                   className="mt-1.5 h-10 w-full"
                   options={[
                     { value: "", label: "구분을 선택해주세요" },
-                    ...INSTALLATION_DELIVERY_TYPE_OPTIONS.map((option) => ({
+                    ...WORK_TYPE_OPTIONS.map((option) => ({
                       value: option.value,
                       label: option.label,
                     })),

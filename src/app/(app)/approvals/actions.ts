@@ -7,6 +7,11 @@ import {
   isInstallationDeliveryType,
   type InstallationDeliveryType,
 } from "@/lib/installationDeliveryType";
+import {
+  deliveryTypeForMethod,
+  isMissingInstallMethodColumn,
+  type InstallMethod,
+} from "@/lib/installMethod";
 import { appendApprovalNote, parseApprovalNotes, validateApprovalNote } from "@/lib/approvalNotes";
 import {
   TRANSFER_FINAL_APPROVER_ROLES,
@@ -386,6 +391,7 @@ export async function approveFranchiseTransfer(
   franchiseApplicationId: string,
   deliveryType: InstallationDeliveryType,
   note: string,
+  installMethod?: InstallMethod | null,
 ) {
   if (validateApprovalNote(note) === null) return { error: "비고는 2,000자 이하로 입력해주세요." };
   const approver = await getApprover("team_lead");
@@ -452,12 +458,16 @@ export async function approveFranchiseTransfer(
   // 사업자번호·상세주소·영업담당자·오픈일은 installations 컬럼/입력값에 없을 수 있으므로,
   // 101번 installations 트리거가 franchise_application_id로 원본 접수 행을 다시 조회한다.
   // 원본의 nullable 값은 NULL로 유지되고, merchants의 NOT NULL 필드는 미입력으로 보완된다.
-  const installValues = {
+  const installDeliveryType =
+    installMethod && ["install", "delivery", "transfer"].includes(deliveryType)
+      ? deliveryTypeForMethod(deliveryType, installMethod)
+      : deliveryType;
+  const baseInstallValues = {
     customer_name: franchise.business_name || franchise.owner_name || "미입력",
     customer_phone: franchise.phone || null,
     items: franchise.equipment_items ?? [],
     status: "received",
-    delivery_type: deliveryType,
+    delivery_type: installDeliveryType,
     notes: franchise.memo || null,
     franchise_application_id: franchise.id,
     address: franchise.address || null,
@@ -466,14 +476,24 @@ export async function approveFranchiseTransfer(
     sort_order: Date.now(),
     updated_at: approvedAt,
   };
-  const installResult = existingInstall
-    ? await admin
-        .from("installations")
-        .update(installValues)
-        .eq("id", existingInstall.id)
-        .select("id")
-        .single()
-    : await admin.from("installations").insert(installValues).select("id").single();
+  const saveInstall = (values: Record<string, unknown>) =>
+    existingInstall
+      ? admin
+          .from("installations")
+          .update(values)
+          .eq("id", existingInstall.id)
+          .select("id")
+          .single()
+      : admin.from("installations").insert(values).select("id").single();
+  let installResult = await saveInstall(
+    installMethod ? { ...baseInstallValues, install_method: installMethod } : baseInstallValues,
+  );
+  // 160 마이그레이션 전: 외부기사는 저장할 곳이 없어 실패로 두고(아래 롤백), 나머지는 방식 칸 없이 다시 시도한다.
+  let externalBlocked = false;
+  if (installMethod && isMissingInstallMethodColumn(installResult.error)) {
+    if (installMethod === "external") externalBlocked = true;
+    else installResult = await saveInstall(baseInstallValues);
+  }
   const { data: savedInstall, error: installError } = installResult;
   if (installError) {
     await admin
@@ -487,7 +507,11 @@ export async function approveFranchiseTransfer(
         approval_notes: approval.approval_notes,
       })
       .eq("franchise_application_id", franchiseApplicationId);
-    return { error: installError.message };
+    return {
+      error: externalBlocked
+        ? "외부기사 방식은 supabase/160 마이그레이션 후 승인할 수 있습니다."
+        : installError.message,
+    };
   }
 
   const { data: installActivity, error: installActivityError } = await admin
@@ -502,7 +526,7 @@ export async function approveFranchiseTransfer(
       details: {
         source: "franchise_transfer",
         franchise_application_id: franchise.id,
-        delivery_type: deliveryType,
+        delivery_type: installDeliveryType,
       },
     })
     .select("id")
@@ -536,14 +560,14 @@ export async function approveFranchiseTransfer(
       user_id: approver.user.id,
       from_status: "transfer_cs_responsible_approved",
       to_status: "transfer_team_lead_approved",
-      details: { delivery_type: deliveryType },
+      details: { delivery_type: installDeliveryType },
     },
     {
       franchise_application_id: franchise.id,
       user_id: approver.user.id,
       from_status: franchise.status,
       to_status: existingInstall ? "install_retransfer" : "install_transfer",
-      details: { delivery_type: deliveryType },
+      details: { delivery_type: installDeliveryType },
     },
   ]);
   if (logError) {

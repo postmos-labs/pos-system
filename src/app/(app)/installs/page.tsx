@@ -6,6 +6,7 @@ import { TOSS_ONLY_OTHER_PATTERN } from "@/lib/vanGroup";
 import type { Profile, VanGroup } from "@/types";
 import type { ApprovalNote } from "@/lib/approvalNotes";
 import { fetchAllRows } from "@/lib/fetchAllRows";
+import { fetchInstallMethodCounts } from "./methodCounts";
 
 interface Props {
   searchParams: Promise<{ id?: string; van?: string }>;
@@ -54,6 +55,7 @@ export default async function InstallsPage({ searchParams }: Props) {
     { count: tossVanCount },
     { count: kiccVanCount },
     { count: niceVanCount },
+    methodCounts,
   ] = await Promise.all([
     getSessionProfile(),
     applyVanFilter(
@@ -123,6 +125,7 @@ export default async function InstallsPage({ searchParams }: Props) {
         .neq("delivery_type", "delivery"),
       "nice",
     ),
+    fetchInstallMethodCounts(supabase),
   ]);
 
   const vanCounts = {
@@ -188,6 +191,7 @@ export default async function InstallsPage({ searchParams }: Props) {
       initialDeliveryStats={initialDeliveryStats}
       van={van}
       vanCounts={vanCounts}
+      methodCounts={methodCounts}
     />
   );
 }

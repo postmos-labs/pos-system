@@ -68,6 +68,17 @@ import type { MerchantEquipmentItem } from "../merchants/merchant360";
 import InstallDetailDrawer, { type InstallFranchiseDetail } from "./InstallDetailDrawer";
 import type { DeliveryChecklist } from "./deliveryChecklist";
 import DeliveryChecklistModal from "./DeliveryChecklistModal";
+import ShipmentModal from "./ShipmentModal";
+import {
+  INSTALL_METHODS,
+  INSTALL_METHOD_BADGE,
+  INSTALL_METHOD_LABEL,
+  flowDeliveryType,
+  installMethodOf,
+  isInstallMethod,
+  isShippingFlow,
+  type InstallMethod,
+} from "@/lib/installMethod";
 import {
   STATUS_LABELS,
   STATUS_COLORS,
@@ -159,6 +170,8 @@ export interface Installation {
     reception_channel?: string | null;
   } | null;
   franchise_application_id?: string;
+  /** 설치 방식 — 방문설치 / 자가설치 / 외부기사 (supabase/160). 비어 있으면 delivery_type으로 판단 */
+  install_method?: string | null;
   /** 설치건 고유 번호 — 목록 No 칸. 필터·정렬과 무관하게 바뀌지 않는다 (supabase/159) */
   install_no?: number | null;
   /** 가맹접수와 연결되지 않은 설치건의 인입경로 (supabase/156) */
@@ -193,6 +206,7 @@ interface Props {
     kicc: number | null;
     nice: number | null;
   };
+  methodCounts?: Record<InstallMethod, number>;
 }
 
 export type CompletionApproval = {
@@ -273,6 +287,7 @@ interface CreateFormProps {
     notes: string;
     items: { name: string; quantity: number }[];
     deliveryType: DeliveryType;
+    installMethod: InstallMethod | null;
     scheduledDate: string;
     scheduledTime: string;
   }) => Promise<void>;
@@ -307,8 +322,12 @@ const CreateForm = memo(function CreateForm({
     scheduledDate: "",
     scheduledTime: "",
   });
+  // 구분 "택배발송"은 없어졌다. 들어온 값이 delivery면 구분 설치 + 방식 자가설치로 해석한다.
   const [deliveryType, setDeliveryType] = useState<DeliveryType>(
-    initial?.deliveryType ?? (deliveryOnly ? "delivery" : "install"),
+    initial?.deliveryType === "delivery" ? "install" : (initial?.deliveryType ?? "install"),
+  );
+  const [method, setMethod] = useState<InstallMethod>(
+    initial?.deliveryType === "delivery" || deliveryOnly ? "self" : "visit",
   );
   const [cartProduct, setCartProduct] = useState(PRODUCT_CATALOG[0]);
   const [cartCustomName, setCartCustomName] = useState("");
@@ -339,6 +358,7 @@ const CreateForm = memo(function CreateForm({
       notes: form.notes,
       items: cartItems,
       deliveryType,
+      installMethod: ["install", "transfer"].includes(deliveryType) ? method : null,
       scheduledDate: form.scheduledDate,
       scheduledTime: form.scheduledTime,
     });
@@ -352,7 +372,8 @@ const CreateForm = memo(function CreateForm({
       scheduledDate: "",
       scheduledTime: "",
     });
-    setDeliveryType(deliveryOnly ? "delivery" : "install");
+    setDeliveryType("install");
+    setMethod(deliveryOnly ? "self" : "visit");
     setCartItems([]);
   }
 
@@ -365,7 +386,7 @@ const CreateForm = memo(function CreateForm({
       <form onSubmit={handleSubmit} className="space-y-4">
         {!deliveryOnly && (
           <div className="flex gap-2">
-            {(["install", "delivery", "name_change", "transfer", "as"] as const).map((t) => (
+            {(["install", "name_change", "transfer", "as"] as const).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -375,6 +396,23 @@ const CreateForm = memo(function CreateForm({
                 {DELIVERY_TYPE_LABELS[t]}
               </button>
             ))}
+          </div>
+        )}
+        {["install", "transfer"].includes(deliveryType) && (
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">설치 방식</label>
+            <div className="flex gap-2">
+              {INSTALL_METHODS.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMethod(m)}
+                  className={`text-xs font-semibold px-4 py-2 rounded-lg border transition-colors ${method === m ? INSTALL_METHOD_BADGE[m] : "bg-white text-slate-500 border-slate-200"}`}
+                >
+                  {INSTALL_METHOD_LABEL[m]}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         <div className="grid grid-cols-2 gap-4">
@@ -573,6 +611,7 @@ export default function InstallsClient({
   initialDeliveryStats = { total: 0, completed: 0 },
   van = "",
   vanCounts = { all: null, toss: null, kicc: null, nice: null },
+  methodCounts,
 }: Props) {
   const canEdit = ["tech", "cs", "admin", "master"].includes(profile.role);
   // 일정변경은 서버(requestInstallationStatusApproval)가 tech/admin/master만 받는다. cs는 버튼을 숨긴다.
@@ -612,6 +651,11 @@ export default function InstallsClient({
     items: { name: string; quantity: number }[];
     notes: string;
   } | null>(null);
+  const [shipmentInst, setShipmentInst] = useState<Installation | null>(null);
+  const [methodFilter, setMethodFilter] = useState<InstallMethod | null>(() => {
+    const value = searchParams.get("method");
+    return isInstallMethod(value) ? value : null;
+  });
   const [completeModal, setCompleteModal] = useState<{ id: string; notes: string } | null>(null);
   const completeNotesRef = useRef<HTMLTextAreaElement>(null);
   const [completePhotos, setCompletePhotos] = useState<File[]>([]);
@@ -820,7 +864,7 @@ export default function InstallsClient({
       ? "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications!inner(van_company, open_date, channel, reception_channel)"
       : "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications(van_company, open_date, channel, reception_channel)";
     let query = supabase.from("installations").select(installsSelect);
-    if (deliveryOnly) query = query.eq("delivery_type", "delivery");
+    if (deliveryOnly) query = query.in("delivery_type", ["delivery", "transfer"]);
     else query = query.neq("delivery_type", "delivery");
     if (van === "kicc") {
       query = query.ilike("franchise.van_company", "%KICC%");
@@ -989,6 +1033,28 @@ export default function InstallsClient({
     setCompositionEquipment([]);
   }
 
+  function handleInstallPatched(id: string, patch: Partial<Installation>) {
+    setInstalls((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+    if ("tracking_number" in patch) {
+      setDetailDraft((d) =>
+        detailInst?.id === id && d ? { ...d, tracking_number: patch.tracking_number ?? "" } : d,
+      );
+    }
+  }
+
+  function selectMethod(method: InstallMethod) {
+    if (method === "visit" && deliveryOnly) {
+      router.push("/installs?method=visit");
+      return;
+    }
+    if (method !== "visit" && !deliveryOnly) {
+      router.push(`/installs/delivery?method=${method}`);
+      return;
+    }
+    setMethodFilter((prev) => (prev === method ? null : method));
+    setPage(1);
+  }
+
   async function handleCreate(newInstall: {
     customerName: string;
     contactName: string;
@@ -998,6 +1064,7 @@ export default function InstallsClient({
     notes: string;
     items: { name: string; quantity: number }[];
     deliveryType: DeliveryType;
+    installMethod: InstallMethod | null;
     scheduledDate: string;
     scheduledTime: string;
   }) {
@@ -1012,6 +1079,7 @@ export default function InstallsClient({
       assignedTo: newInstall.assignedTo || null,
       notes: newInstall.notes || null,
       deliveryType: newInstall.deliveryType,
+      installMethod: newInstall.installMethod,
       scheduledDate: newInstall.scheduledDate || null,
       scheduledTime: newInstall.scheduledTime || null,
     });
@@ -1074,7 +1142,7 @@ export default function InstallsClient({
     }
     if (status === "preparing") {
       const inst = installs.find((i) => i.id === id);
-      if (inst?.delivery_type === "delivery") {
+      if (inst && isShippingFlow(inst)) {
         // 택배 건은 제품준비 전에 실제 발송 장비를 확정한다. 저장되면 이어서 승인요청으로 간다.
         if (completionApprovals[id]) {
           toast.warning("이미 승인 대기 중인 요청이 있습니다. 승인 처리 후 다시 시도해주세요.");
@@ -2011,7 +2079,7 @@ export default function InstallsClient({
         전화번호: i.customer_phone ?? "",
         주소: i.address ?? "",
         제품: i.items.map((it) => `${it.name} x${it.quantity}`).join(", "),
-        상태: statusLabel(i.status, i.delivery_type),
+        상태: statusLabel(i.status, flowDeliveryType(i)),
         담당자: (i.assignee as any)?.name ?? "",
         비고: i.notes ?? "",
         등록일: format(kstWallClock(i.created_at), "yyyy-MM-dd HH:mm", { locale: ko }),
@@ -2116,8 +2184,9 @@ export default function InstallsClient({
   const filteredInstalls = useMemo(() => {
     const q = search.trim().toLowerCase();
     return installs.filter((i) => {
-      if (!deliveryOnly && (i as any).delivery_type === "delivery") return false;
-      if (deliveryOnly && (i as any).delivery_type !== "delivery") return false;
+      if (!deliveryOnly && isShippingFlow(i)) return false;
+      if (deliveryOnly && !isShippingFlow(i)) return false;
+      if (methodFilter && installMethodOf(i) !== methodFilter) return false;
       if (
         !deliveryOnly &&
         deliveryTab !== "all" &&
@@ -2148,6 +2217,7 @@ export default function InstallsClient({
     });
   }, [
     installs,
+    methodFilter,
     search,
     statusFilter,
     pendingOnly,
@@ -2359,6 +2429,7 @@ export default function InstallsClient({
             handleFranchiseLinked(activeDetailInst.id, franchiseId, franchise, patch)
           }
           onFranchiseUnlinked={(patch) => handleFranchiseUnlinked(activeDetailInst.id, patch)}
+          onInstallPatched={(patch) => handleInstallPatched(activeDetailInst.id, patch)}
           onClose={closeInstallDetail}
         />
       )}
@@ -2467,6 +2538,19 @@ export default function InstallsClient({
             </div>
           </div>
         </div>
+      )}
+      {shipmentInst && (
+        <ShipmentModal
+          installation={shipmentInst}
+          onClose={() => setShipmentInst(null)}
+          onDone={(patch) => {
+            handleInstallPatched(shipmentInst.id, {
+              status: patch.status,
+              tracking_number: patch.tracking_number ?? undefined,
+            });
+            setShipmentInst(null);
+          }}
+        />
       )}
       {checklistModal &&
         (() => {
@@ -2881,6 +2965,27 @@ export default function InstallsClient({
         </button>
       </div>
 
+      {methodCounts && !mineOnly && (
+        <div className="grid grid-cols-3 gap-2.5">
+          {INSTALL_METHODS.map((method) => {
+            const active = methodFilter === method;
+            return (
+              <button
+                key={method}
+                type="button"
+                onClick={() => selectMethod(method)}
+                className={`flex flex-col gap-1 rounded-xl border-2 px-4 py-3 text-left transition-colors ${INSTALL_METHOD_BADGE[method]} ${active ? "ring-2 ring-current" : "opacity-70 hover:opacity-100"}`}
+              >
+                <span className="text-[13px] font-semibold">{INSTALL_METHOD_LABEL[method]}</span>
+                <span className="text-[26px] leading-none font-bold tabular-nums">
+                  {(methodCounts[method] ?? 0).toLocaleString()}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* 택배 발송·기사 페이지는 서버에서 van을 처리하지 않아 눌러도 아무 일이 없다.
           건수를 넘겨준 화면(설치관리 본 목록)에서만 보여준다. */}
       {vanCounts.all !== null && (
@@ -3111,6 +3216,16 @@ export default function InstallsClient({
                           </span>
                         )}
                         {(() => {
+                          const m = installMethodOf(inst);
+                          return m ? (
+                            <span
+                              className={`text-[10px] font-semibold border px-1.5 py-0.5 rounded-md shrink-0 ${INSTALL_METHOD_BADGE[m]}`}
+                            >
+                              {INSTALL_METHOD_LABEL[m]}
+                            </span>
+                          ) : null;
+                        })()}
+                        {(() => {
                           const { stored, tone, missingLabel } = installChannelSource(inst);
                           if (!stored && !tone.inferred) {
                             return (
@@ -3157,7 +3272,7 @@ export default function InstallsClient({
                       <span
                         className={`text-xs font-medium rounded-lg border px-2 py-1 whitespace-nowrap ${STATUS_COLORS[inst.status]}`}
                       >
-                        {statusLabel(inst.status, inst.delivery_type)}
+                        {statusLabel(inst.status, flowDeliveryType(inst))}
                       </span>
                       {canEdit && inst.status !== "in_transit" && inst.status !== "completed" && (
                         <span
@@ -3255,7 +3370,7 @@ export default function InstallsClient({
                               .split(" ")
                               .map((c) => `!${c}`)
                               .join(" ")}`}
-                            options={statusOptionsFor(inst.delivery_type, inst.status)}
+                            options={statusOptionsFor(flowDeliveryType(inst), inst.status)}
                           />
                           {!!approvalNoteHistory[inst.id]?.length && (
                             <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3">
@@ -3451,6 +3566,16 @@ export default function InstallsClient({
                               가맹이관
                             </span>
                           )}
+                          {(() => {
+                            const m = installMethodOf(inst);
+                            return m ? (
+                              <span
+                                className={`text-[10px] font-semibold border px-1.5 py-0.5 rounded-md shrink-0 ${INSTALL_METHOD_BADGE[m]}`}
+                              >
+                                {INSTALL_METHOD_LABEL[m]}
+                              </span>
+                            ) : null;
+                          })()}
                           {inst.woo_customer_id && (
                             <span className="text-[10px] font-semibold bg-teal-100 text-teal-600 border border-teal-200 px-1.5 py-0.5 rounded-md shrink-0">
                               우국상이관
@@ -3613,21 +3738,38 @@ export default function InstallsClient({
                         onClick={(e) => e.stopPropagation()}
                       >
                         {canEdit ? (
-                          <AppSelect
-                            value={inst.status}
-                            onValueChange={(value) => handleStatusChange(inst.id, value)}
-                            aria-label="상태"
-                            className={`h-auto text-xs font-medium py-1 ${STATUS_COLORS[inst.status]
-                              .split(" ")
-                              .map((c) => `!${c}`)
-                              .join(" ")}`}
-                            options={statusOptionsFor(inst.delivery_type, inst.status)}
-                          />
+                          <div className="flex items-center gap-1.5">
+                            <AppSelect
+                              value={inst.status}
+                              onValueChange={(value) => handleStatusChange(inst.id, value)}
+                              aria-label="상태"
+                              className={`h-auto text-xs font-medium py-1 ${STATUS_COLORS[
+                                inst.status
+                              ]
+                                .split(" ")
+                                .map((c) => `!${c}`)
+                                .join(" ")}`}
+                              options={statusOptionsFor(flowDeliveryType(inst), inst.status)}
+                            />
+                            {isShippingFlow(inst) &&
+                              !["completed", "canceled", "rejected"].includes(inst.status) && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShipmentInst(inst);
+                                  }}
+                                  className="shrink-0 rounded-lg bg-blue-600 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+                                >
+                                  택배발송
+                                </button>
+                              )}
+                          </div>
                         ) : (
                           <span
                             className={`text-xs font-medium rounded-lg border px-2 py-1 ${STATUS_COLORS[inst.status]}`}
                           >
-                            {statusLabel(inst.status, inst.delivery_type)}
+                            {statusLabel(inst.status, flowDeliveryType(inst))}
                           </span>
                         )}
                       </td>

@@ -2,6 +2,7 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendInstallStatusUpdate } from "@/lib/solapi";
+import { flowDeliveryType, isMissingInstallMethodColumn } from "@/lib/installMethod";
 
 type InstallationNotification = {
   id: string;
@@ -9,6 +10,7 @@ type InstallationNotification = {
   customer_name: string | null;
   customer_phone: string | null;
   delivery_type: string | null;
+  install_method?: string | null;
   status_token: string | null;
   scheduled_date: string | null;
   scheduled_time: string | null;
@@ -46,20 +48,30 @@ export async function sendApprovedInstallNotification({
   requireStatusMatch?: boolean;
 }) {
   const admin = createAdminClient();
-  const { data, error: lookupError } = await admin
+  const baseColumns =
+    "id, status, customer_name, customer_phone, delivery_type, status_token, scheduled_date, scheduled_time, tracking_number";
+  let { data, error: lookupError } = await admin
     .from("installations")
-    .select(
-      "id, status, customer_name, customer_phone, delivery_type, status_token, scheduled_date, scheduled_time, tracking_number",
-    )
+    .select(`${baseColumns}, install_method`)
     .eq("id", installationId)
     .single();
+  // 160 마이그레이션 전에는 install_method 칸이 없어 기존 칼럼으로 다시 조회한다.
+  if (isMissingInstallMethodColumn(lookupError)) {
+    ({ data, error: lookupError } = await admin
+      .from("installations")
+      .select(baseColumns)
+      .eq("id", installationId)
+      .single());
+  }
 
   if (lookupError || !data) return { error: lookupError?.message ?? "설치건을 찾을 수 없습니다." };
 
   const installation = data as InstallationNotification;
   if (requireStatusMatch && installation.status !== status)
     return { error: "현재 설치 상태와 알림톡 발송 상태가 다릅니다." };
-  const templateKey = notificationStatus(installation.delivery_type, status);
+  // 외부기사 설치는 고객 알림톡을 보내지 않는다.
+  if (installation.install_method === "external") return { error: null };
+  const templateKey = notificationStatus(flowDeliveryType(installation), status);
   if (!templateKey) return { error: null };
   if (!installation.customer_phone || !installation.customer_name) {
     const message = "고객명 또는 연락처가 없어 알림톡을 발송하지 못했습니다.";

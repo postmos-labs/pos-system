@@ -32,7 +32,7 @@ export function statusOrderFor(deliveryType?: string) {
 export function statusLabel(status: string, deliveryType?: string) {
   if (status === "in_transit" && deliveryType === "delivery") return "택배발송";
   if (status === "completed" && deliveryType === "as") return "AS완료";
-  if (status === "completed" && deliveryType === "delivery") return "완료";
+  if (status === "completed" && deliveryType === "delivery") return "발송완료";
   return STATUS_LABELS[status] ?? status;
 }
 

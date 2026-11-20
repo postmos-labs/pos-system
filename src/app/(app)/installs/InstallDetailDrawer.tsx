@@ -37,6 +37,8 @@ import {
 import type { Installation, CompletionApproval } from "./InstallsClient";
 import FranchiseLinkSection from "./FranchiseLinkSection";
 import FranchiseUnlinkButton from "./FranchiseUnlinkButton";
+import InstallMethodSection from "./InstallMethodSection";
+import { flowDeliveryType, isShippingFlow } from "@/lib/installMethod";
 import { installBadge, effectiveOpenDate, franchiseOpenDate } from "@/lib/openSchedule";
 
 // franchise_applications를 "*"로 select한 뒤 sales/cs 조인의 name만 붙인 결과 중,
@@ -122,6 +124,7 @@ interface Props {
     patch: { customer_name: string; notes: string | null },
   ) => void;
   onFranchiseUnlinked: (patch: { customer_name: string; notes: string | null }) => void;
+  onInstallPatched: (patch: Partial<Installation>) => void;
 }
 
 const inputClass =
@@ -259,6 +262,7 @@ export default function InstallDetailDrawer({
   onOpenWoo,
   onFranchiseLinked,
   onFranchiseUnlinked,
+  onInstallPatched,
 }: Props) {
   const [franchiseOpen, setFranchiseOpen] = useState(false);
 
@@ -273,7 +277,7 @@ export default function InstallDetailDrawer({
     canReschedule && installation.status !== "completed" && installation.status !== "rejected";
   const showChecklist =
     canReschedule &&
-    installation.delivery_type === "delivery" &&
+    isShippingFlow(installation) &&
     installation.status !== "completed" &&
     installation.status !== "rejected";
   // 표(데스크톱)에는 이 버튼과 동등한 단독 조작이 없다 — "이동중" 상태로 select를 바꾸면
@@ -300,7 +304,7 @@ export default function InstallDetailDrawer({
   const canForceComplete = canForceCompleteBy(profile);
   const approvalOnlyStatuses = new Set([...APPROVAL_TARGETS, "completed"]);
   // 현재 상태는 항상 옵션에 남긴다 — 현재 값이 목록에 없으면 select가 빈 칸으로 표시된다.
-  const statusOptions = statusOrderFor(installation.delivery_type)
+  const statusOptions = statusOrderFor(flowDeliveryType(installation))
     .filter((s) => {
       if (s === installation.status) return true;
       if (!approvalOnlyStatuses.has(s)) return true;
@@ -309,7 +313,7 @@ export default function InstallDetailDrawer({
     })
     .map((s) => ({
       value: s,
-      label: statusLabel(s, installation.delivery_type),
+      label: statusLabel(s, flowDeliveryType(installation)),
     }));
   // 취소는 진행 단계가 아니라 별도 선택지다. 이미 취소된 건도 드롭다운에 그대로 보이게 둔다.
   if (installation.status !== "completed") statusOptions.push({ value: "canceled", label: "취소" });
@@ -353,7 +357,7 @@ export default function InstallDetailDrawer({
             <span
               className={`inline-flex w-fit items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${STATUS_COLORS[installation.status]}`}
             >
-              {statusLabel(installation.status, installation.delivery_type)}
+              {statusLabel(installation.status, flowDeliveryType(installation))}
             </span>
             {(() => {
               const badge = installBadge(installation);
@@ -370,7 +374,7 @@ export default function InstallDetailDrawer({
           <div className="mt-4">
             <InstallStageProgress
               status={installation.status}
-              deliveryType={installation.delivery_type}
+              deliveryType={flowDeliveryType(installation)}
             />
           </div>
         </div>
@@ -420,7 +424,7 @@ export default function InstallDetailDrawer({
                   </Field>
                   <Field label="상태">
                     <ReadValue>
-                      {statusLabel(installation.status, installation.delivery_type)}
+                      {statusLabel(installation.status, flowDeliveryType(installation))}
                     </ReadValue>
                   </Field>
                 </div>
@@ -502,6 +506,12 @@ export default function InstallDetailDrawer({
               </div>
             </div>
 
+            <InstallMethodSection
+              installation={installation}
+              canEdit={canEdit}
+              onPatched={onInstallPatched}
+            />
+
             <div>
               <div className="text-foreground mb-2.5 text-[13px] font-bold">일정·담당</div>
               <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
@@ -579,7 +589,7 @@ export default function InstallDetailDrawer({
                     />
                   ) : (
                     <ReadValue>
-                      {statusLabel(installation.status, installation.delivery_type)}
+                      {statusLabel(installation.status, flowDeliveryType(installation))}
                     </ReadValue>
                   )}
                 </Field>
@@ -816,7 +826,7 @@ export default function InstallDetailDrawer({
           {approval && (
             <>
               <span className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700">
-                {statusLabel(approval.target_status, installation.delivery_type)}{" "}
+                {statusLabel(approval.target_status, flowDeliveryType(installation))}{" "}
                 {approval.status === "requested" ? "1차 승인대기" : "최종 승인대기"}
               </span>
               {/* 기사가 완료 전 확인한 체크리스트 — 승인자가 무엇을 확인하고 올렸는지 보고 판단한다. */}
@@ -878,7 +888,7 @@ export default function InstallDetailDrawer({
                     disabled={completing}
                     className="rounded-lg border border-green-600 bg-green-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50"
                   >
-                    {statusLabel(approval.target_status, installation.delivery_type)}{" "}
+                    {statusLabel(approval.target_status, flowDeliveryType(installation))}{" "}
                     {approval.status === "requested" ? "1차 승인" : "최종 승인"}
                   </button>
                 </>

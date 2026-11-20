@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import InstallsClient from "../InstallsClient";
 import type { Profile } from "@/types";
+import { fetchInstallMethodCounts } from "../methodCounts";
 
 export default async function InstallsDeliveryPage() {
   const supabase = await createClient();
@@ -13,14 +14,14 @@ export default async function InstallsDeliveryPage() {
   const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
   if (!profile) redirect("/dashboard");
 
-  const [{ data: installs }, { data: techUsers }, { data: completionApprovals }] =
+  const [{ data: installs }, { data: techUsers }, { data: completionApprovals }, methodCounts] =
     await Promise.all([
       supabase
         .from("installations")
         .select(
           "*, assignee:profiles!installations_assigned_to_fkey(name), creator:profiles!installations_created_by_fkey(name), franchise:franchise_applications(open_date, channel, reception_channel)",
         )
-        .eq("delivery_type", "delivery")
+        .in("delivery_type", ["delivery", "transfer"])
         .order("sort_order", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(300),
@@ -32,6 +33,7 @@ export default async function InstallsDeliveryPage() {
         )
         .in("status", ["requested", "responsible_approved"])
         .order("requested_at", { ascending: true }),
+      fetchInstallMethodCounts(supabase),
     ]);
 
   const pendingApprovals = (completionApprovals ?? []).filter((approval) =>
@@ -44,6 +46,7 @@ export default async function InstallsDeliveryPage() {
       techUsers={techUsers ?? []}
       initialInstalls={(installs as any) ?? []}
       deliveryOnly
+      methodCounts={methodCounts}
       initialCompletionApprovals={Object.fromEntries(
         pendingApprovals.map((approval) => [approval.installation_id, approval]),
       )}

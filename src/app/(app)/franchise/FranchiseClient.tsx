@@ -84,10 +84,8 @@ import FranchiseReceiptSurface, {
   type ColumnSortState,
 } from "./FranchiseReceiptSurface";
 import { resolveTransferState } from "./transferState";
-import {
-  INSTALLATION_DELIVERY_TYPE_OPTIONS,
-  type InstallationDeliveryType,
-} from "@/lib/installationDeliveryType";
+import type { InstallationDeliveryType } from "@/lib/installationDeliveryType";
+import { WORK_TYPE_OPTIONS, parseWorkType } from "@/lib/installMethod";
 import { appendApprovalNote, type ApprovalNote } from "@/lib/approvalNotes";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { CalendarPopoverButton } from "@/components/ui/DatePickerField";
@@ -1207,9 +1205,7 @@ export default function FranchiseClient({
   const [bulkTransferConfirmOpen, setBulkTransferConfirmOpen] = useState(false);
   const [bulkTransferring, setBulkTransferring] = useState(false);
   const [teamLeadTransferRow, setTeamLeadTransferRow] = useState<FranchiseApplication | null>(null);
-  const [teamLeadDeliveryType, setTeamLeadDeliveryType] = useState<InstallationDeliveryType | "">(
-    "",
-  );
+  const [teamLeadDeliveryType, setTeamLeadDeliveryType] = useState<string>("");
   const [teamLeadTransferNote, setTeamLeadTransferNote] = useState("");
   const [csApprovalRow, setCsApprovalRow] = useState<FranchiseApplication | null>(null);
   const [csApprovalNote, setCsApprovalNote] = useState("");
@@ -2608,9 +2604,16 @@ export default function FranchiseClient({
     const approval = row && transferApprovals[row.id];
     if (!row || !approval || !teamLeadDeliveryType) return;
     const note = teamLeadTransferNote.trim();
-    const deliveryType = teamLeadDeliveryType as InstallationDeliveryType;
+    const parsedWorkType = parseWorkType(teamLeadDeliveryType);
+    if (!parsedWorkType) return;
+    const deliveryType = parsedWorkType.deliveryType as InstallationDeliveryType;
     setTransferringId(row.id);
-    const result = await approveFranchiseTransfer(row.id, deliveryType, note);
+    const result = await approveFranchiseTransfer(
+      row.id,
+      deliveryType,
+      note,
+      parsedWorkType.installMethod,
+    );
     setTransferringId(null);
     if (result.error) {
       toast.error("승인 실패: " + result.error);
@@ -3105,14 +3108,12 @@ export default function FranchiseClient({
               </label>
               <AppSelect
                 value={teamLeadDeliveryType}
-                onValueChange={(value) =>
-                  setTeamLeadDeliveryType(value as InstallationDeliveryType | "")
-                }
+                onValueChange={(value) => setTeamLeadDeliveryType(value)}
                 aria-label="이관 구분"
                 className="h-10 w-full"
                 options={[
                   { value: "", label: "구분을 선택해주세요" },
-                  ...INSTALLATION_DELIVERY_TYPE_OPTIONS.map((option) => ({
+                  ...WORK_TYPE_OPTIONS.map((option) => ({
                     value: option.value,
                     label: option.label,
                   })),

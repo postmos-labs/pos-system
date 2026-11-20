@@ -8,6 +8,16 @@ import { sendApprovedInstallNotification } from "@/lib/installNotifications";
 import { appendApprovalNote, parseApprovalNotes, validateApprovalNote } from "@/lib/approvalNotes";
 import { recordDeletions } from "@/lib/deletionLog";
 import {
+  INSTALL_METHOD_LABEL,
+  deliveryTypeForMethod,
+  flowDeliveryType,
+  installMethodOf,
+  isInstallMethod,
+  isMissingInstallMethodColumn,
+  isShippingFlow,
+  type InstallMethod,
+} from "@/lib/installMethod";
+import {
   canApproveFirstBy,
   canApproveFinalBy,
   skipsFirstApproval,
@@ -281,6 +291,7 @@ export async function createInstallation(input: {
   deliveryType: string;
   scheduledDate?: string | null;
   scheduledTime?: string | null;
+  installMethod?: InstallMethod | null;
 }) {
   const editor = await getInstallationEditor();
   if ("error" in editor) return { error: editor.error, installation: null };
@@ -289,26 +300,47 @@ export async function createInstallation(input: {
     return { error: "잘못된 작업 유형입니다.", installation: null };
   }
 
+  const installMethod = isInstallMethod(input.installMethod) ? input.installMethod : null;
+  const deliveryType =
+    installMethod && ["install", "delivery", "transfer"].includes(input.deliveryType)
+      ? deliveryTypeForMethod(input.deliveryType, installMethod)
+      : input.deliveryType;
+
   const admin = createAdminClient();
-  const { data: installation, error: insertError } = await admin
+  const insertValues: Record<string, unknown> = {
+    customer_name: input.customerName.trim(),
+    contact_name: input.contactName?.trim() || null,
+    customer_phone: input.customerPhone,
+    address: input.address?.trim() || null,
+    assigned_to: input.assignedTo,
+    notes: input.notes,
+    items: input.items,
+    delivery_type: deliveryType,
+    scheduled_date: input.scheduledDate || null,
+    scheduled_time: input.scheduledTime || null,
+    created_by: editor.user.id,
+    status: "received",
+    sort_order: Date.now(),
+  };
+  let { data: installation, error: insertError } = await admin
     .from("installations")
-    .insert({
-      customer_name: input.customerName.trim(),
-      contact_name: input.contactName?.trim() || null,
-      customer_phone: input.customerPhone,
-      address: input.address?.trim() || null,
-      assigned_to: input.assignedTo,
-      notes: input.notes,
-      items: input.items,
-      delivery_type: input.deliveryType,
-      scheduled_date: input.scheduledDate || null,
-      scheduled_time: input.scheduledTime || null,
-      created_by: editor.user.id,
-      status: "received",
-      sort_order: Date.now(),
-    })
+    .insert(installMethod ? { ...insertValues, install_method: installMethod } : insertValues)
     .select("*")
     .single();
+  // 160 마이그레이션 전: 외부기사는 저장할 곳이 없어 막고, 나머지는 방식 칸 없이 다시 등록한다.
+  if (installMethod && isMissingInstallMethodColumn(insertError)) {
+    if (installMethod === "external") {
+      return {
+        error: "외부기사 방식은 supabase/160 마이그레이션 후 등록할 수 있습니다.",
+        installation: null,
+      };
+    }
+    ({ data: installation, error: insertError } = await admin
+      .from("installations")
+      .insert(insertValues)
+      .select("*")
+      .single());
+  }
   if (insertError || !installation)
     return { error: insertError?.message ?? "설치건 등록에 실패했습니다.", installation: null };
 
@@ -318,7 +350,7 @@ export async function createInstallation(input: {
     action: "created",
     to_status: "received",
     to_assigned_to: input.assignedTo,
-    details: { delivery_type: input.deliveryType },
+    details: { delivery_type: deliveryType },
   });
   if (logError) {
     await admin.from("installations").delete().eq("id", installation.id);
@@ -458,6 +490,185 @@ export async function changeInstallationStatus(input: {
   revalidatePath("/calendar");
   // 취소는 비고에 사유 줄을 덧붙이므로, 화면이 저장된 값을 그대로 반영하도록 돌려준다.
   return { error: null, notificationError: notification.error, notes: values.notes ?? null };
+}
+
+const SHIPMENT_REVALIDATE_PATHS = [
+  "/installs",
+  "/installs/delivery",
+  "/installs/mine",
+  "/calendar",
+];
+
+// 택배 흐름(자가설치·외부기사) 건의 [택배발송] — 승인 없이 바로 완료하고 재고를 차감한다.
+// 자가설치만 고객에게 택배발송 알림톡을 보내고, 외부기사는 보내지 않는다.
+export async function completeShipment(input: {
+  installationId: string;
+  trackingNumber?: string | null;
+}): Promise<{
+  error: string | null;
+  inventoryWarning?: string | null;
+  notificationError?: string | null;
+  trackingNumber?: string | null;
+}> {
+  const editor = await getInstallationEditor();
+  if ("error" in editor) return { error: editor.error ?? "권한이 없습니다." };
+
+  const admin = createAdminClient();
+  // 칼럼을 나열하면 160 적용 전에 오류가 나므로 전체를 조회한다.
+  const { data: row, error: lookupError } = await admin
+    .from("installations")
+    .select("*")
+    .eq("id", input.installationId)
+    .single();
+  if (lookupError || !row) return { error: lookupError?.message ?? "설치건을 찾을 수 없습니다." };
+
+  if (!isShippingFlow(row)) {
+    return { error: "택배로 보내는 건(자가설치·외부기사)만 택배발송 처리할 수 있습니다." };
+  }
+  if (row.status === "completed") return { error: "이미 택배발송 처리된 건입니다." };
+  if (row.status === "canceled") return { error: "취소된 건은 택배발송 처리할 수 없습니다." };
+  if (row.status === "rejected") return { error: "반려된 건은 택배발송 처리할 수 없습니다." };
+
+  const { data: pending, error: pendingError } = await admin
+    .from("installation_completion_approvals")
+    .select("id")
+    .eq("installation_id", input.installationId)
+    .in("status", ["requested", "responsible_approved"])
+    .limit(1);
+  if (pendingError) return { error: pendingError.message };
+  if (pending && pending.length > 0) {
+    return { error: "승인 대기 중인 요청이 있습니다. 승인 처리 후 다시 시도해주세요." };
+  }
+
+  const trackingNumber = input.trackingNumber?.trim() || row.tracking_number || null;
+  const { data: updated, error: updateError } = await admin
+    .from("installations")
+    .update({
+      status: "completed",
+      tracking_number: trackingNumber,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.installationId)
+    .eq("status", row.status)
+    .select("id");
+  if (updateError) return { error: updateError.message };
+  if (!updated || updated.length === 0) {
+    return { error: "다른 사람이 먼저 처리했습니다. 새로고침해 주세요." };
+  }
+
+  const { error: logError } = await admin.from("installation_activity_logs").insert({
+    installation_id: input.installationId,
+    user_id: editor.user.id,
+    action: "status_changed",
+    from_status: row.status,
+    to_status: "completed",
+    details: { source: "shipment", tracking_number: trackingNumber },
+  });
+  if (logError) {
+    await admin
+      .from("installations")
+      .update({
+        status: row.status,
+        tracking_number: row.tracking_number ?? null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.installationId)
+      .eq("status", "completed");
+    return { error: "감사 로그 저장에 실패해 택배발송 처리를 취소했습니다: " + logError.message };
+  }
+
+  // 전환 건도 택배 흐름이면 택배출고로 차감·기록되도록 구분값을 맞춰 넘긴다.
+  const inventoryWarning = await deductInventoryForCompletion(admin, {
+    ...row,
+    delivery_type: flowDeliveryType(row),
+  });
+
+  let notificationError: string | null = null;
+  if (installMethodOf(row) === "self" && trackingNumber) {
+    const notification = await sendApprovedInstallNotification({
+      installationId: input.installationId,
+      status: "delivery_sent",
+      userId: editor.user.id,
+      requireStatusMatch: false,
+    });
+    notificationError = notification.error;
+  }
+
+  for (const path of SHIPMENT_REVALIDATE_PATHS) revalidatePath(path);
+  return { error: null, inventoryWarning, notificationError, trackingNumber };
+}
+
+// 접수·제품준비 단계의 설치·전환 건에서 설치 방식(방문/자가/외부기사)을 바꾼다.
+export async function setInstallMethod(input: {
+  installationId: string;
+  method: InstallMethod;
+}): Promise<{ error: string | null; deliveryType?: string; installMethod?: InstallMethod }> {
+  const editor = await getInstallationEditor();
+  if ("error" in editor) return { error: editor.error ?? "권한이 없습니다." };
+  if (!isInstallMethod(input.method)) return { error: "잘못된 설치 방식입니다." };
+
+  const admin = createAdminClient();
+  const { data: row, error: lookupError } = await admin
+    .from("installations")
+    .select("*")
+    .eq("id", input.installationId)
+    .single();
+  if (lookupError || !row) return { error: lookupError?.message ?? "설치건을 찾을 수 없습니다." };
+
+  if (!["install", "delivery", "transfer"].includes(row.delivery_type ?? "install")) {
+    return { error: "설치·전환 건만 설치 방식을 바꿀 수 있습니다." };
+  }
+  if (!["received", "preparing"].includes(row.status)) {
+    return { error: "접수·제품준비 단계에서만 설치 방식을 바꿀 수 있습니다." };
+  }
+
+  const { data: pending, error: pendingError } = await admin
+    .from("installation_completion_approvals")
+    .select("id")
+    .eq("installation_id", input.installationId)
+    .in("status", ["requested", "responsible_approved"])
+    .limit(1);
+  if (pendingError) return { error: pendingError.message };
+  if (pending && pending.length > 0) {
+    return { error: "승인 대기 중인 요청이 있습니다. 승인 처리 후 다시 시도해주세요." };
+  }
+
+  const previousMethod = installMethodOf(row);
+  const newType = deliveryTypeForMethod(row.delivery_type ?? "install", input.method);
+  const { error: updateError } = await admin
+    .from("installations")
+    .update({ install_method: input.method, delivery_type: newType })
+    .eq("id", input.installationId);
+  if (updateError) {
+    if (isMissingInstallMethodColumn(updateError)) {
+      return { error: "설치 방식 칸이 아직 없습니다. supabase/160 마이그레이션을 실행해 주세요." };
+    }
+    return { error: updateError.message };
+  }
+
+  const { error: logError } = await admin.from("installation_activity_logs").insert({
+    installation_id: input.installationId,
+    user_id: editor.user.id,
+    action: "status_changed",
+    from_status: null,
+    to_status: null,
+    details: {
+      source: "install_method",
+      from: previousMethod,
+      to: input.method,
+      reason: `설치 방식 변경: ${previousMethod ? INSTALL_METHOD_LABEL[previousMethod] : "없음"} → ${INSTALL_METHOD_LABEL[input.method]}`,
+    },
+  });
+  if (logError) {
+    await admin
+      .from("installations")
+      .update({ install_method: row.install_method ?? null, delivery_type: row.delivery_type })
+      .eq("id", input.installationId);
+    return { error: "감사 로그 저장에 실패해 설치 방식 변경을 취소했습니다: " + logError.message };
+  }
+
+  for (const path of SHIPMENT_REVALIDATE_PATHS) revalidatePath(path);
+  return { error: null, deliveryType: newType, installMethod: input.method };
 }
 
 export async function sendInstallTransitNotice(installationId: string, eta?: string) {
