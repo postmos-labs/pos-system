@@ -63,6 +63,7 @@ import {
   requestInstallationStatusApproval,
   rescheduleInstallationByTeamLead,
   sendInstallTransitNotice,
+  setInstallMethod,
 } from "./actions";
 import type { MerchantEquipmentItem } from "../merchants/merchant360";
 import InstallDetailDrawer, { type InstallFranchiseDetail } from "./InstallDetailDrawer";
@@ -263,7 +264,7 @@ const MAIN_COLUMNS = [
 const DEFAULT_WIDTHS: Record<string, number> = {
   name: 140,
   channel: 160,
-  delivery_type: 90,
+  delivery_type: 190,
   scheduled_date: 126,
   open_date: 116,
   phone: 120,
@@ -1040,6 +1041,26 @@ export default function InstallsClient({
         detailInst?.id === id && d ? { ...d, tracking_number: patch.tracking_number ?? "" } : d,
       );
     }
+  }
+
+  // 목록 구분 칸의 설치 방식 드롭다운. 서버(setInstallMethod)가 단계·승인 대기를 다시 확인한다.
+  async function changeInstallMethod(inst: Installation, value: string) {
+    if (!isInstallMethod(value) || value === installMethodOf(inst)) return;
+    const result = await setInstallMethod({ installationId: inst.id, method: value });
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    handleInstallPatched(inst.id, {
+      install_method: value,
+      delivery_type: result.deliveryType ?? inst.delivery_type,
+    });
+    const movedTab = isShippingFlow(inst) !== (value !== "visit");
+    toast.success(
+      movedTab
+        ? `${INSTALL_METHOD_LABEL[value]}(으)로 바꿨습니다. ${value === "visit" ? "설치관리" : "택배발송"} 탭에서 확인하세요.`
+        : `${INSTALL_METHOD_LABEL[value]}(으)로 바꿨습니다.`,
+    );
   }
 
   function selectMethod(method: InstallMethod) {
@@ -3566,16 +3587,6 @@ export default function InstallsClient({
                               가맹이관
                             </span>
                           )}
-                          {(() => {
-                            const m = installMethodOf(inst);
-                            return m ? (
-                              <span
-                                className={`text-[10px] font-semibold border px-1.5 py-0.5 rounded-md shrink-0 ${INSTALL_METHOD_BADGE[m]}`}
-                              >
-                                {INSTALL_METHOD_LABEL[m]}
-                              </span>
-                            ) : null;
-                          })()}
                           {inst.woo_customer_id && (
                             <span className="text-[10px] font-semibold bg-teal-100 text-teal-600 border border-teal-200 px-1.5 py-0.5 rounded-md shrink-0">
                               우국상이관
@@ -3632,30 +3643,71 @@ export default function InstallsClient({
                         className="px-2 py-3 whitespace-nowrap"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {canEdit ? (
-                          <AppSelect
-                            value={deliveryTypeOf(inst.delivery_type)}
-                            onValueChange={(value) =>
-                              saveInstallField(inst.id, "delivery_type", value)
+                        <div className="flex items-center">
+                          {canEdit ? (
+                            <AppSelect
+                              value={deliveryTypeOf(inst.delivery_type)}
+                              onValueChange={(value) =>
+                                saveInstallField(inst.id, "delivery_type", value)
+                              }
+                              aria-label="구분"
+                              className={`h-auto text-xs font-medium py-1 ${DELIVERY_TYPE_BADGE_COLORS[
+                                deliveryTypeOf(inst.delivery_type)
+                              ]
+                                .split(" ")
+                                .map((c) => `!${c}`)
+                                .join(" ")}`}
+                              options={(
+                                ["install", "delivery", "name_change", "transfer", "as"] as const
+                              ).map((t) => ({ value: t, label: DELIVERY_TYPE_LABELS[t] }))}
+                            />
+                          ) : (
+                            <span
+                              className={`text-xs font-medium rounded-lg border px-2 py-1 ${DELIVERY_TYPE_BADGE_COLORS[deliveryTypeOf(inst.delivery_type)]}`}
+                            >
+                              {DELIVERY_TYPE_LABELS[deliveryTypeOf(inst.delivery_type)]}
+                            </span>
+                          )}
+                          {/* 설치 방식 — 바꿀 수 있는 단계(접수·제품준비, 승인 대기 없음)면 드롭다운, 아니면 배지 */}
+                          {(() => {
+                            const m = installMethodOf(inst);
+                            if (!m) return null;
+                            const blockedReason = !canEdit
+                              ? "수정 권한이 없습니다."
+                              : !["received", "preparing"].includes(inst.status)
+                                ? "접수·제품준비 단계에서만 바꿀 수 있습니다."
+                                : completionApprovals[inst.id]
+                                  ? "승인 대기 중에는 바꿀 수 없습니다."
+                                  : null;
+                            if (blockedReason) {
+                              return (
+                                <span
+                                  title={blockedReason}
+                                  className={`ml-1.5 text-xs font-medium rounded-lg border px-2 py-1 ${INSTALL_METHOD_BADGE[m]}`}
+                                >
+                                  {INSTALL_METHOD_LABEL[m]}
+                                </span>
+                              );
                             }
-                            aria-label="구분"
-                            className={`h-auto text-xs font-medium py-1 ${DELIVERY_TYPE_BADGE_COLORS[
-                              deliveryTypeOf(inst.delivery_type)
-                            ]
-                              .split(" ")
-                              .map((c) => `!${c}`)
-                              .join(" ")}`}
-                            options={(
-                              ["install", "delivery", "name_change", "transfer", "as"] as const
-                            ).map((t) => ({ value: t, label: DELIVERY_TYPE_LABELS[t] }))}
-                          />
-                        ) : (
-                          <span
-                            className={`text-xs font-medium rounded-lg border px-2 py-1 ${DELIVERY_TYPE_BADGE_COLORS[deliveryTypeOf(inst.delivery_type)]}`}
-                          >
-                            {DELIVERY_TYPE_LABELS[deliveryTypeOf(inst.delivery_type)]}
-                          </span>
-                        )}
+                            return (
+                              <AppSelect
+                                value={m}
+                                onValueChange={(value) => changeInstallMethod(inst, value)}
+                                aria-label="설치 방식"
+                                className={`ml-1.5 h-auto text-xs font-medium py-1 ${INSTALL_METHOD_BADGE[
+                                  m
+                                ]
+                                  .split(" ")
+                                  .map((c) => `!${c}`)
+                                  .join(" ")}`}
+                                options={INSTALL_METHODS.map((value) => ({
+                                  value,
+                                  label: INSTALL_METHOD_LABEL[value],
+                                }))}
+                              />
+                            );
+                          })()}
+                        </div>
                       </td>
                       {/* 설치예정일 — 기사가 현장에 나가는 날. D-day 칩은 이 축에만 붙인다. */}
                       <td className="px-4 py-3 whitespace-nowrap">
