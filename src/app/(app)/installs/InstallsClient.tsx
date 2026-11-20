@@ -3685,13 +3685,11 @@ export default function InstallsClient({
                             const m = installMethodOf(inst);
                             if (!m) return null;
                             if (deliveryOnly) {
-                              // 택배발송 탭은 방식 대신 상태가 "택배발송"일 때만 그 표시를 붙인다.
+                              // 택배발송 탭은 상태가 "택배발송"이면 그 아래에 발송완료 표시를 붙인다.
                               if (inst.status !== "delivery_sent") return null;
                               return (
-                                <span
-                                  className={`ml-1.5 text-xs font-medium rounded-lg border px-2 py-1 ${DELIVERY_TYPE_BADGE_COLORS.delivery}`}
-                                >
-                                  택배발송
+                                <span className="ml-1.5 text-xs font-medium rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 font-semibold text-emerald-700">
+                                  발송완료
                                 </span>
                               );
                             }
