@@ -2421,6 +2421,7 @@ export default function InstallsClient({
           canEdit={canEdit}
           canReschedule={canReschedule}
           canDelete={canDelete}
+          deliveryOnly={deliveryOnly}
           profile={profile}
           draft={detailDraft}
           onDraftChange={(patch) => setDetailDraft((d) => (d ? { ...d, ...patch } : d))}
@@ -3247,7 +3248,7 @@ export default function InstallsClient({
                             </span>
                           ) : null;
                         })()}
-                        {isShippingFlow(inst) && inst.shipment_completed_at && (
+                        {!deliveryOnly && isShippingFlow(inst) && inst.shipment_completed_at && (
                           <span className="text-[10px] font-semibold border border-emerald-200 bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-md shrink-0">
                             발송완료
                           </span>
@@ -3301,7 +3302,8 @@ export default function InstallsClient({
                       >
                         {statusLabel(inst.status, flowDeliveryType(inst))}
                       </span>
-                      {canEdit &&
+                      {!deliveryOnly &&
+                        canEdit &&
                         !inst.shipment_completed_at &&
                         inst.status !== "in_transit" &&
                         inst.status !== "completed" && (
@@ -3677,10 +3679,21 @@ export default function InstallsClient({
                               {DELIVERY_TYPE_LABELS[deliveryTypeOf(inst.delivery_type)]}
                             </span>
                           )}
-                          {/* 설치 방식 — 바꿀 수 있는 단계(접수·제품준비, 승인 대기 없음)면 드롭다운, 아니면 배지 */}
+                          {/* 설치 방식 — 택배발송 탭은 상태 승인으로만 처리하므로 배지로만 보여 준다.
+                              설치관리 탭은 바꿀 수 있는 단계(접수·제품준비, 승인 대기 없음)면 드롭다운. */}
                           {(() => {
                             const m = installMethodOf(inst);
                             if (!m) return null;
+                            if (deliveryOnly) {
+                              return (
+                                <span
+                                  title="택배발송 탭에서는 상태 승인으로 처리합니다."
+                                  className={`ml-1.5 text-xs font-medium rounded-lg border px-2 py-1 ${INSTALL_METHOD_BADGE[m]}`}
+                                >
+                                  {INSTALL_METHOD_LABEL[m]}
+                                </span>
+                              );
+                            }
                             const blockedReason = !canEdit
                               ? "수정 권한이 없습니다."
                               : inst.shipment_completed_at
@@ -3718,7 +3731,7 @@ export default function InstallsClient({
                               />
                             );
                           })()}
-                          {isShippingFlow(inst) && inst.shipment_completed_at && (
+                          {!deliveryOnly && isShippingFlow(inst) && inst.shipment_completed_at && (
                             <span className="ml-1.5 shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
                               발송완료
                             </span>
@@ -3819,7 +3832,8 @@ export default function InstallsClient({
                                 .join(" ")}`}
                               options={statusOptionsFor(flowDeliveryType(inst), inst.status)}
                             />
-                            {isShippingFlow(inst) &&
+                            {!deliveryOnly &&
+                              isShippingFlow(inst) &&
                               !inst.shipment_completed_at &&
                               !["completed", "canceled", "rejected"].includes(inst.status) && (
                                 <button

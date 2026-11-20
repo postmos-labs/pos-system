@@ -79,6 +79,8 @@ interface Props {
   canEdit: boolean;
   canReschedule: boolean;
   canDelete: boolean;
+  /** 택배발송 탭에서 열린 드로어인지 — 방식 선택·[택배발송]을 숨기고 상태 승인만 쓴다. */
+  deliveryOnly?: boolean;
   profile: Profile;
   draft: InstallDetailDraft | null;
   onDraftChange: (patch: Partial<InstallDetailDraft>) => void;
@@ -233,6 +235,7 @@ export default function InstallDetailDrawer({
   canEdit,
   canReschedule,
   canDelete,
+  deliveryOnly,
   profile,
   draft,
   onDraftChange,
@@ -506,11 +509,13 @@ export default function InstallDetailDrawer({
               </div>
             </div>
 
-            <InstallMethodSection
-              installation={installation}
-              canEdit={canEdit}
-              onPatched={onInstallPatched}
-            />
+            {!deliveryOnly && (
+              <InstallMethodSection
+                installation={installation}
+                canEdit={canEdit}
+                onPatched={onInstallPatched}
+              />
+            )}
 
             <div>
               <div className="text-foreground mb-2.5 text-[13px] font-bold">일정·담당</div>
