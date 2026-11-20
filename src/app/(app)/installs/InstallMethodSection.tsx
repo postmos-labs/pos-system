@@ -46,7 +46,7 @@ export default function InstallMethodSection({ installation, canEdit, onPatched 
       toast.error(result.error);
       return;
     }
-    onPatched({ install_method: method, delivery_type: result.deliveryType });
+    onPatched({ install_method: method });
   }
 
   const shipping = isShippingFlow(installation);

@@ -6,11 +6,24 @@
 
 - 구분(delivery_type: 설치·AS·명변·전환)과 별개로 `installations.install_method`(visit/self/external) 칸 추가(160). 구분에 값을 더하는 안은 택배 흐름 판단 36곳을 다 바꿔야 하고 "전환+자가설치" 조합을 못 만들어 버렸다.
 - 기존 데이터는 건드리지 않는다. 칸이 비면 delivery_type으로 판단: 택배발송 → 자가설치, 설치·전환 → 방문설치. 판단은 `src/lib/installMethod.ts` 한 곳.
-- 저장: 설치 건은 자가·외부기사면 delivery_type을 `delivery`로 둬 기존 택배 흐름·택배발송 탭을 그대로 탄다. 전환 건은 `transfer` 유지, install_method로만 택배 흐름을 구분(`isShippingFlow` / `flowDeliveryType`).
+- 저장: 방식은 `install_method`에만 적고 `delivery_type`은 그대로 둔다. 설치관리에서 자가·외부기사로 바꿔도 탭이 옮겨지지 않고 그 자리에 남는다. 택배 흐름 여부만 `isShippingFlow` / `flowDeliveryType`으로 판단한다.
 - 자가설치·외부기사는 [택배발송] 한 번(`completeShipment`)으로 끝: 승인 없음, 송장번호 선택, 바로 `completed`("발송완료" 라벨) + 재고 차감. 원래 재고는 완료 시에만 차감돼 "택배발송으로 끝"이면 재고가 안 빠지는 문제가 있어 이 시점에 차감한다.
 - 알림톡: 자가설치 + 송장번호 있을 때만 송장 안내. 외부기사는 보내지 않음(`installNotifications`에서도 막음). 외부기사 이름은 기록하지 않는다(요청).
-- 방식 변경은 접수·제품준비 단계, 승인 대기 없을 때만(`setInstallMethod`). 설치는 방문↔택배에 따라 delivery_type도 install↔delivery로 바뀐다.
-- 화면: 목록 상호명 옆 방식 배지, 설치관리·택배발송 위에 방식별 진행 중 건수 카드(누르면 그 방식만, 다른 탭 방식이면 그 탭으로 이동), 택배 흐름 건 상태 옆 [택배발송] 버튼, 상세 드로어 "설치 방식" 칸. 전환+택배는 택배발송 탭에 나온다(택배발송 탭은 delivery·transfer를 읽고 화면에서 거른다).
+- 방식 변경은 접수·제품준비 단계, 승인 대기 없을 때만(`setInstallMethod`). `delivery_type`은 바뀌지 않아 설치관리 목록에서 바꾼 건은 그 탭에 남는다.
+- 화면: 목록 상호명 옆 방식 배지, 설치관리·택배발송 위에 방식별 진행 중 건수 카드(두 탭 모두 그 방식만 거르는 필터), 택배 흐름 건 상태 옆 [택배발송] 버튼, 상세 드로어 "설치 방식" 칸. 탭 소속은 `delivery_type`이 정한다.
 - 고르는 곳: 설치건 등록(구분 "택배발송" 버튼 대신 방식 버튼), 이관 최종 승인(승인함·가맹접수) "구분+방식" 조합 select(`WORK_TYPE_OPTIONS`).
 - 160 적용 전: 자가설치는 delivery로 저장돼 동작, 외부기사 등록·방식 변경만 안내와 함께 실패.
 - 남은 것: 캘린더는 칼럼 나열 select라 전환+택배 건을 설치로 본다. 가맹점 360도 delivery_type 기준 그대로.
+
+## 변경 이력
+
+### 2026-11-20 — 방식 변경이 탭을 옮기지 않게
+
+처음에는 방식 변경 시 `delivery_type`까지 바꿔 택배발송 탭으로 넘겼다. 설치관리에서 자가설치로 바꾸면 보던 목록에서 행이 사라지고 토스트로만 안내해, 넘어간 건을 찾기 어렵다는 지적이 있었다.
+
+- `setInstallMethod`는 `install_method`만 저장하고 `delivery_type`은 그대로 둔다.
+- 탭 소속은 `delivery_type`으로만 결정한다. 두 탭의 목록 필터에서 `isShippingFlow` 제외를 없앴다.
+- 방식별 카드도 두 탭 모두 필터만 건다(탭 이동 없음).
+- 구분 셀렉트로 `delivery_type`을 바꾸면 `install_method`도 맞춰 저장한다(택배발송→자가설치, 설치→방문설치, AS·명변은 비움). 두 칸이 어긋나면 행이 양쪽 탭에서 다 걸러져 사라진다.
+- 이전 동작으로 이미 택배발송으로 넘어간 건은 `supabase/162_install_method_stay_in_installs.sql`로 되돌린다.
+- 등록 폼·이관 승인은 아직 `deliveryTypeForMethod`로 delivery를 저장한다(생성 시점 규칙은 그대로). 설치관리에서 등록한 자가설치 건은 지금도 택배발송 탭에 생긴다.

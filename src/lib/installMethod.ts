@@ -7,8 +7,9 @@
 // install_method가 비어 있는 기존 건은 delivery_type으로 대신 판단한다 — 기존 데이터는 건드리지 않는다.
 //   택배발송(delivery) → 자가설치, 설치(install)·전환(transfer) → 방문설치, AS·명변 → 방식 없음
 //
-// 저장 규칙: 설치 건은 자가·외부기사면 delivery_type을 "delivery"로 둔다(기존 택배 흐름·택배발송 탭을 그대로 탄다).
-// 전환 건은 delivery_type "transfer"를 유지하고 install_method로만 택배 흐름을 구분한다.
+// 저장 규칙: 방식은 install_method에만 적는다. delivery_type은 만들 때 정한 값(설치·전환)을 그대로 두어
+// 설치관리에서 방식을 자가·외부기사로 바꿔도 탭이 옮겨지지 않고 보던 자리에 남는다.
+// 설치관리·택배발송 탭의 소속은 delivery_type이 정하고, install_method는 흐름(택배 여부)만 정한다.
 
 export const INSTALL_METHODS = ["visit", "self", "external"] as const;
 export type InstallMethod = (typeof INSTALL_METHODS)[number];
@@ -53,7 +54,7 @@ export function flowDeliveryType(row: MethodSource): string {
   return isShippingFlow(row) ? "delivery" : (row.delivery_type ?? "install");
 }
 
-/** 방식을 바꿀 때 delivery_type을 어떻게 둘지. 전환은 그대로, 설치는 방문 ↔ 택배를 오간다. */
+/** 방식을 바꿀 때 delivery_type을 어떻게 둘지. 등록 폼·이관 승인에서 쓴다(변경 액션은 delivery_type을 건드리지 않는다). */
 export function deliveryTypeForMethod(currentType: string, method: InstallMethod): string {
   if (currentType === "transfer") return "transfer";
   return method === "visit" ? "install" : "delivery";

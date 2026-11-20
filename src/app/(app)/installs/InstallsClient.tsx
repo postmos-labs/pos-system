@@ -77,6 +77,7 @@ import {
   flowDeliveryType,
   installMethodOf,
   isInstallMethod,
+  isMissingInstallMethodColumn,
   isShippingFlow,
   type InstallMethod,
 } from "@/lib/installMethod";
@@ -1044,6 +1045,7 @@ export default function InstallsClient({
   }
 
   // 목록 구분 칸의 설치 방식 드롭다운. 서버(setInstallMethod)가 단계·승인 대기를 다시 확인한다.
+  // 방식만 바뀌고 delivery_type은 그대로라 보던 탭·보던 자리에서 움직이지 않는다.
   async function changeInstallMethod(inst: Installation, value: string) {
     if (!isInstallMethod(value) || value === installMethodOf(inst)) return;
     const result = await setInstallMethod({ installationId: inst.id, method: value });
@@ -1051,27 +1053,12 @@ export default function InstallsClient({
       toast.error(result.error);
       return;
     }
-    handleInstallPatched(inst.id, {
-      install_method: value,
-      delivery_type: result.deliveryType ?? inst.delivery_type,
-    });
-    const movedTab = isShippingFlow(inst) !== (value !== "visit");
-    toast.success(
-      movedTab
-        ? `${INSTALL_METHOD_LABEL[value]}(으)로 바꿨습니다. ${value === "visit" ? "설치관리" : "택배발송"} 탭에서 확인하세요.`
-        : `${INSTALL_METHOD_LABEL[value]}(으)로 바꿨습니다.`,
-    );
+    handleInstallPatched(inst.id, { install_method: value });
+    toast.success(`${INSTALL_METHOD_LABEL[value]}(으)로 바꿨습니다.`);
   }
 
+  // 방식별 건수 카드 — 탭과 무관하게 그 방식만 걸러 본다.
   function selectMethod(method: InstallMethod) {
-    if (method === "visit" && deliveryOnly) {
-      router.push("/installs?method=visit");
-      return;
-    }
-    if (method !== "visit" && !deliveryOnly) {
-      router.push(`/installs/delivery?method=${method}`);
-      return;
-    }
     setMethodFilter((prev) => (prev === method ? null : method));
     setPage(1);
   }
@@ -1918,16 +1905,29 @@ export default function InstallsClient({
     if (field === "notes") return saveNotes(id, value);
     const saveValue =
       field === "customer_phone" ? (value ? formatPhone(value) : null) : value || null;
-    const { error } = await supabase
-      .from("installations")
-      .update({ [field]: saveValue })
-      .eq("id", id);
+    // 구분을 바꾸면 방식도 같이 맞춘다. 구분(탭 소속)과 방식(설치 방법)이 어긋나면
+    // 행이 어느 탭에도 걸리지 않아 사라진 것처럼 보인다.
+    const patch: Record<string, string | null> = { [field]: saveValue };
+    if (field === "delivery_type") {
+      if (saveValue === "delivery") patch.install_method = "self";
+      else if (saveValue === "install") patch.install_method = "visit";
+      else if (saveValue === "as" || saveValue === "name_change") patch.install_method = null;
+    }
+    let { error } = await supabase.from("installations").update(patch).eq("id", id);
+    // 160 마이그레이션 전에는 install_method 칸이 없어 구분만 저장한다(예전과 같은 동작).
+    if (error && "install_method" in patch && isMissingInstallMethodColumn(error)) {
+      ({ error } = await supabase
+        .from("installations")
+        .update({ [field]: saveValue })
+        .eq("id", id));
+      delete patch.install_method;
+    }
     if (error) {
       toast.error("수정 실패: " + error.message);
       return false;
     }
     setInstalls((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, [field]: saveValue ?? undefined } : i)),
+      prev.map((i) => (i.id === id ? ({ ...i, ...patch } as Installation) : i)),
     );
     return true;
   }
@@ -2205,8 +2205,7 @@ export default function InstallsClient({
   const filteredInstalls = useMemo(() => {
     const q = search.trim().toLowerCase();
     return installs.filter((i) => {
-      if (!deliveryOnly && isShippingFlow(i)) return false;
-      if (deliveryOnly && !isShippingFlow(i)) return false;
+      // 탭 소속은 delivery_type이 정한다. 방식(자가·외부기사)을 바꿔도 행은 보던 탭에 그대로 남는다.
       if (methodFilter && installMethodOf(i) !== methodFilter) return false;
       if (
         !deliveryOnly &&

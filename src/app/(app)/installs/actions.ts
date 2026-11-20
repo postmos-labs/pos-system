@@ -599,10 +599,12 @@ export async function completeShipment(input: {
 }
 
 // 접수·제품준비 단계의 설치·전환 건에서 설치 방식(방문/자가/외부기사)을 바꾼다.
+// 방식은 install_method에만 적는다. delivery_type은 그대로 두어 설치관리에서 바꾼 건이
+// 택배발송 탭으로 넘어가지 않고 보던 자리에 남게 한다(탭 소속은 delivery_type이 정한다).
 export async function setInstallMethod(input: {
   installationId: string;
   method: InstallMethod;
-}): Promise<{ error: string | null; deliveryType?: string; installMethod?: InstallMethod }> {
+}): Promise<{ error: string | null; installMethod?: InstallMethod }> {
   const editor = await getInstallationEditor();
   if ("error" in editor) return { error: editor.error ?? "권한이 없습니다." };
   if (!isInstallMethod(input.method)) return { error: "잘못된 설치 방식입니다." };
@@ -634,10 +636,9 @@ export async function setInstallMethod(input: {
   }
 
   const previousMethod = installMethodOf(row);
-  const newType = deliveryTypeForMethod(row.delivery_type ?? "install", input.method);
   const { error: updateError } = await admin
     .from("installations")
-    .update({ install_method: input.method, delivery_type: newType })
+    .update({ install_method: input.method })
     .eq("id", input.installationId);
   if (updateError) {
     if (isMissingInstallMethodColumn(updateError)) {
@@ -662,13 +663,13 @@ export async function setInstallMethod(input: {
   if (logError) {
     await admin
       .from("installations")
-      .update({ install_method: row.install_method ?? null, delivery_type: row.delivery_type })
+      .update({ install_method: row.install_method ?? null })
       .eq("id", input.installationId);
     return { error: "감사 로그 저장에 실패해 설치 방식 변경을 취소했습니다: " + logError.message };
   }
 
   for (const path of SHIPMENT_REVALIDATE_PATHS) revalidatePath(path);
-  return { error: null, deliveryType: newType, installMethod: input.method };
+  return { error: null, installMethod: input.method };
 }
 
 export async function sendInstallTransitNotice(installationId: string, eta?: string) {
