@@ -32,6 +32,7 @@ export default function InstallMethodSection({ installation, canEdit, onPatched 
   const type = installation.delivery_type ?? "install";
   let disabledReason = "";
   if (!canEdit) disabledReason = "수정 권한이 없습니다.";
+  else if (installation.shipment_completed_at) disabledReason = "이미 발송완료된 건입니다.";
   else if (status !== "received" && status !== "preparing")
     disabledReason = "접수·제품준비 단계에서만 바꿀 수 있습니다.";
   else if (!["install", "delivery", "transfer"].includes(type))
@@ -50,7 +51,11 @@ export default function InstallMethodSection({ installation, canEdit, onPatched 
   }
 
   const shipping = isShippingFlow(installation);
-  const canShip = shipping && canEdit && !["completed", "canceled", "rejected"].includes(status);
+  const canShip =
+    shipping &&
+    canEdit &&
+    !installation.shipment_completed_at &&
+    !["completed", "canceled", "rejected"].includes(status);
 
   return (
     <div className="border-border space-y-2 border-t pt-4">
@@ -85,11 +90,11 @@ export default function InstallMethodSection({ installation, canEdit, onPatched 
           택배발송
         </button>
       )}
-      {shipping && status === "completed" && (
-        <p className="text-sm text-slate-700">
-          ✅ 발송완료
+      {shipping && installation.shipment_completed_at && (
+        <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+          발송완료
           {installation.tracking_number ? ` · 송장번호 ${installation.tracking_number}` : ""}
-        </p>
+        </span>
       )}
       {shipmentOpen && (
         <ShipmentModal
@@ -98,8 +103,8 @@ export default function InstallMethodSection({ installation, canEdit, onPatched 
           onDone={(patch) => {
             setShipmentOpen(false);
             onPatched({
-              status: patch.status,
               tracking_number: patch.tracking_number ?? undefined,
+              shipment_completed_at: patch.shipment_completed_at ?? undefined,
             });
           }}
         />

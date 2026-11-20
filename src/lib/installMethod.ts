@@ -70,6 +70,16 @@ export function isMissingInstallMethodColumn(error: { code?: string; message?: s
   );
 }
 
+/** shipment_completed_at 칸이 아직 없을 때(163 미적용) 나는 오류인지. */
+export function isMissingShipmentColumn(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return (
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /shipment_completed_at/i.test(error.message ?? "")
+  );
+}
+
 /**
  * 이관 최종 승인·설치건 등록에서 고르는 "구분 + 방식" 조합.
  * 값은 `${delivery_type}:${install_method}` 또는 방식이 없는 구분은 delivery_type만.

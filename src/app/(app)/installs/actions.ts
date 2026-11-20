@@ -14,6 +14,7 @@ import {
   installMethodOf,
   isInstallMethod,
   isMissingInstallMethodColumn,
+  isMissingShipmentColumn,
   isShippingFlow,
   type InstallMethod,
 } from "@/lib/installMethod";
@@ -90,8 +91,20 @@ async function deductInventoryForCompletion(
     items: unknown;
     notes?: string | null;
   },
+  // 발송완료 시점에 이미 깎은 건은 상태만 완료로 넘길 때 또 깎지 않는다.
+  options?: { skipIfAlreadyShipped?: boolean },
 ): Promise<string | null> {
   let inventoryWarning: string | null = null;
+
+  if (options?.skipIfAlreadyShipped) {
+    const { data: shipped, error: shippedError } = await admin
+      .from("installations")
+      .select("shipment_completed_at")
+      .eq("id", installation.id)
+      .maybeSingle();
+    // 163 적용 전에는 칸이 없어 오류가 난다. 그때는 그냥 차감한다.
+    if (!shippedError && shipped?.shipment_completed_at) return null;
+  }
 
   const { data: merchantRow } = installation.franchise_application_id
     ? await admin
@@ -499,7 +512,8 @@ const SHIPMENT_REVALIDATE_PATHS = [
   "/calendar",
 ];
 
-// 택배 흐름(자가설치·외부기사) 건의 [택배발송] — 승인 없이 바로 완료하고 재고를 차감한다.
+// 택배 흐름(자가설치·외부기사) 건의 [택배발송] — 발송완료 표시만 남기고 재고를 차감한다.
+// 상태는 그대로 두고 shipment_completed_at만 찍어, 목록의 방식 옆에 "발송완료" 표시가 붙게 한다.
 // 자가설치만 고객에게 택배발송 알림톡을 보내고, 외부기사는 보내지 않는다.
 export async function completeShipment(input: {
   installationId: string;
@@ -509,6 +523,7 @@ export async function completeShipment(input: {
   inventoryWarning?: string | null;
   notificationError?: string | null;
   trackingNumber?: string | null;
+  shipmentCompletedAt?: string | null;
 }> {
   const editor = await getInstallationEditor();
   if ("error" in editor) return { error: editor.error ?? "권한이 없습니다." };
@@ -525,7 +540,8 @@ export async function completeShipment(input: {
   if (!isShippingFlow(row)) {
     return { error: "택배로 보내는 건(자가설치·외부기사)만 택배발송 처리할 수 있습니다." };
   }
-  if (row.status === "completed") return { error: "이미 택배발송 처리된 건입니다." };
+  if (row.shipment_completed_at) return { error: "이미 발송완료 처리된 건입니다." };
+  if (row.status === "completed") return { error: "이미 완료된 건입니다." };
   if (row.status === "canceled") return { error: "취소된 건은 택배발송 처리할 수 없습니다." };
   if (row.status === "rejected") return { error: "반려된 건은 택배발송 처리할 수 없습니다." };
 
@@ -541,17 +557,26 @@ export async function completeShipment(input: {
   }
 
   const trackingNumber = input.trackingNumber?.trim() || row.tracking_number || null;
+  const shippedAt = new Date().toISOString();
   const { data: updated, error: updateError } = await admin
     .from("installations")
     .update({
-      status: "completed",
       tracking_number: trackingNumber,
-      updated_at: new Date().toISOString(),
+      shipment_completed_at: shippedAt,
+      updated_at: shippedAt,
     })
     .eq("id", input.installationId)
     .eq("status", row.status)
+    .is("shipment_completed_at", null)
     .select("id");
-  if (updateError) return { error: updateError.message };
+  if (updateError) {
+    if (isMissingShipmentColumn(updateError)) {
+      return {
+        error: "발송완료 표시 칸이 아직 없습니다. supabase/163 마이그레이션을 실행해 주세요.",
+      };
+    }
+    return { error: updateError.message };
+  }
   if (!updated || updated.length === 0) {
     return { error: "다른 사람이 먼저 처리했습니다. 새로고침해 주세요." };
   }
@@ -561,19 +586,22 @@ export async function completeShipment(input: {
     user_id: editor.user.id,
     action: "status_changed",
     from_status: row.status,
-    to_status: "completed",
-    details: { source: "shipment", tracking_number: trackingNumber },
+    to_status: row.status,
+    details: {
+      source: "shipment",
+      tracking_number: trackingNumber,
+      shipment_completed_at: shippedAt,
+    },
   });
   if (logError) {
     await admin
       .from("installations")
       .update({
-        status: row.status,
         tracking_number: row.tracking_number ?? null,
+        shipment_completed_at: row.shipment_completed_at ?? null,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", input.installationId)
-      .eq("status", "completed");
+      .eq("id", input.installationId);
     return { error: "감사 로그 저장에 실패해 택배발송 처리를 취소했습니다: " + logError.message };
   }
 
@@ -595,7 +623,13 @@ export async function completeShipment(input: {
   }
 
   for (const path of SHIPMENT_REVALIDATE_PATHS) revalidatePath(path);
-  return { error: null, inventoryWarning, notificationError, trackingNumber };
+  return {
+    error: null,
+    inventoryWarning,
+    notificationError,
+    trackingNumber,
+    shipmentCompletedAt: shippedAt,
+  };
 }
 
 // 접수·제품준비 단계의 설치·전환 건에서 설치 방식(방문/자가/외부기사)을 바꾼다.
@@ -1228,14 +1262,18 @@ export async function approveInstallationStatusByTeamLead(installationId: string
   if (approval.target_status === "completed") {
     const items = installation.items;
     if (Array.isArray(items) && items.length > 0) {
-      inventoryWarning = await deductInventoryForCompletion(admin, {
-        id: installationId,
-        customer_name: installation.customer_name,
-        delivery_type: installation.delivery_type,
-        franchise_application_id: installation.franchise_application_id,
-        items,
-        notes: installation.notes,
-      });
+      inventoryWarning = await deductInventoryForCompletion(
+        admin,
+        {
+          id: installationId,
+          customer_name: installation.customer_name,
+          delivery_type: installation.delivery_type,
+          franchise_application_id: installation.franchise_application_id,
+          items,
+          notes: installation.notes,
+        },
+        { skipIfAlreadyShipped: true },
+      );
     }
   }
 
@@ -1339,14 +1377,18 @@ export async function completeInstallationByTeamLead(installationId: string, not
   let inventoryWarning: string | null = null;
   const items = installation.items;
   if (Array.isArray(items) && items.length > 0) {
-    inventoryWarning = await deductInventoryForCompletion(admin, {
-      id: installationId,
-      customer_name: installation.customer_name,
-      delivery_type: installation.delivery_type,
-      franchise_application_id: installation.franchise_application_id,
-      items,
-      notes: installation.notes,
-    });
+    inventoryWarning = await deductInventoryForCompletion(
+      admin,
+      {
+        id: installationId,
+        customer_name: installation.customer_name,
+        delivery_type: installation.delivery_type,
+        franchise_application_id: installation.franchise_application_id,
+        items,
+        notes: installation.notes,
+      },
+      { skipIfAlreadyShipped: true },
+    );
   }
 
   // 승인 절차를 건너뛰고 마무리하는 경로라 고객 알림톡은 보내지 않는다.

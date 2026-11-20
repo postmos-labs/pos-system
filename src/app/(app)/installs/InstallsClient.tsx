@@ -174,6 +174,8 @@ export interface Installation {
   franchise_application_id?: string;
   /** 설치 방식 — 방문설치 / 자가설치 / 외부기사 (supabase/160). 비어 있으면 delivery_type으로 판단 */
   install_method?: string | null;
+  /** 발송완료 표시 시각 (supabase/163). 상태는 그대로 두고 방식 옆에 표시만 붙인다 */
+  shipment_completed_at?: string | null;
   /** 설치건 고유 번호 — 목록 No 칸. 필터·정렬과 무관하게 바뀌지 않는다 (supabase/159) */
   install_no?: number | null;
   /** 가맹접수와 연결되지 않은 설치건의 인입경로 (supabase/156) */
@@ -2565,8 +2567,8 @@ export default function InstallsClient({
           onClose={() => setShipmentInst(null)}
           onDone={(patch) => {
             handleInstallPatched(shipmentInst.id, {
-              status: patch.status,
               tracking_number: patch.tracking_number ?? undefined,
+              shipment_completed_at: patch.shipment_completed_at ?? undefined,
             });
             setShipmentInst(null);
           }}
@@ -3245,6 +3247,11 @@ export default function InstallsClient({
                             </span>
                           ) : null;
                         })()}
+                        {isShippingFlow(inst) && inst.shipment_completed_at && (
+                          <span className="text-[10px] font-semibold border border-emerald-200 bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-md shrink-0">
+                            발송완료
+                          </span>
+                        )}
                         {(() => {
                           const { stored, tone, missingLabel } = installChannelSource(inst);
                           if (!stored && !tone.inferred) {
@@ -3294,18 +3301,21 @@ export default function InstallsClient({
                       >
                         {statusLabel(inst.status, flowDeliveryType(inst))}
                       </span>
-                      {canEdit && inst.status !== "in_transit" && inst.status !== "completed" && (
-                        <span
-                          role="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleStatusChange(inst.id, "in_transit");
-                          }}
-                          className="text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 px-3 py-2 rounded-lg whitespace-nowrap"
-                        >
-                          이동중
-                        </span>
-                      )}
+                      {canEdit &&
+                        !inst.shipment_completed_at &&
+                        inst.status !== "in_transit" &&
+                        inst.status !== "completed" && (
+                          <span
+                            role="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStatusChange(inst.id, "in_transit");
+                            }}
+                            className="text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 px-3 py-2 rounded-lg whitespace-nowrap"
+                          >
+                            이동중
+                          </span>
+                        )}
                       <ChevronDown
                         size={16}
                         className={`text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`}
@@ -3673,11 +3683,13 @@ export default function InstallsClient({
                             if (!m) return null;
                             const blockedReason = !canEdit
                               ? "수정 권한이 없습니다."
-                              : !["received", "preparing"].includes(inst.status)
-                                ? "접수·제품준비 단계에서만 바꿀 수 있습니다."
-                                : completionApprovals[inst.id]
-                                  ? "승인 대기 중에는 바꿀 수 없습니다."
-                                  : null;
+                              : inst.shipment_completed_at
+                                ? "이미 발송완료된 건입니다."
+                                : !["received", "preparing"].includes(inst.status)
+                                  ? "접수·제품준비 단계에서만 바꿀 수 있습니다."
+                                  : completionApprovals[inst.id]
+                                    ? "승인 대기 중에는 바꿀 수 없습니다."
+                                    : null;
                             if (blockedReason) {
                               return (
                                 <span
@@ -3706,6 +3718,11 @@ export default function InstallsClient({
                               />
                             );
                           })()}
+                          {isShippingFlow(inst) && inst.shipment_completed_at && (
+                            <span className="ml-1.5 shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+                              발송완료
+                            </span>
+                          )}
                         </div>
                       </td>
                       {/* 설치예정일 — 기사가 현장에 나가는 날. D-day 칩은 이 축에만 붙인다. */}
@@ -3803,6 +3820,7 @@ export default function InstallsClient({
                               options={statusOptionsFor(flowDeliveryType(inst), inst.status)}
                             />
                             {isShippingFlow(inst) &&
+                              !inst.shipment_completed_at &&
                               !["completed", "canceled", "rejected"].includes(inst.status) && (
                                 <button
                                   type="button"

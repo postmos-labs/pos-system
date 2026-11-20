@@ -10,10 +10,10 @@ import type { Installation } from "./InstallsClient";
 interface Props {
   installation: Installation;
   onClose: () => void;
-  onDone: (patch: { status: "completed"; tracking_number: string | null }) => void;
+  onDone: (patch: { tracking_number: string | null; shipment_completed_at: string | null }) => void;
 }
 
-// 자가설치·외부기사 건의 [택배발송] — 승인 없이 한 번으로 완료한다. 송장번호는 비워도 된다.
+// 자가설치·외부기사 건의 [택배발송] — 상태는 그대로 두고 발송완료 표시만 남긴다. 송장번호는 비워도 된다.
 export default function ShipmentModal({ installation, onClose, onDone }: Props) {
   const toast = useToast();
   const [trackingNumber, setTrackingNumber] = useState(installation.tracking_number ?? "");
@@ -36,8 +36,8 @@ export default function ShipmentModal({ installation, onClose, onDone }: Props) 
       if (result.inventoryWarning) toast.warning(result.inventoryWarning);
       if (result.notificationError) toast.warning(`알림톡 발송 실패: ${result.notificationError}`);
       onDone({
-        status: "completed",
         tracking_number: result.trackingNumber ?? (trackingNumber.trim() || null),
+        shipment_completed_at: result.shipmentCompletedAt ?? new Date().toISOString(),
       });
     } finally {
       setSubmitting(false);
